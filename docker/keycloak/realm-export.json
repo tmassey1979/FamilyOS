@@ -1,0 +1,93 @@
+{
+  "realm": "familyos",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "clients": [
+    {
+      "clientId": "familyos-mobile",
+      "name": "Family OS Mobile",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "exp://localhost:8081",
+      "baseUrl": "/",
+      "redirectUris": [
+        "exp://*",
+        "familyos://*",
+        "http://localhost:*",
+        "http://127.0.0.1:*"
+      ],
+      "webOrigins": ["*"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "fullScopeAllowed": true,
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+    },
+    {
+      "clientId": "familyos-api",
+      "name": "Family OS API",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "familyos-api-secret-change-in-prod",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "bearerOnly": true
+    }
+  ],
+  "users": [
+    {
+      "username": "terry.owner",
+      "email": "terry@familyos.local",
+      "firstName": "Terry",
+      "lastName": "Owner",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+    },
+    {
+      "username": "michelle.adult",
+      "email": "michelle@familyos.local",
+      "firstName": "Michelle",
+      "lastName": "Adult",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+    },
+    {
+      "username": "mia.teen",
+      "email": "mia@familyos.local",
+      "firstName": "Mia",
+      "lastName": "Teen",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+    },
+    {
+      "username": "eli.child",
+      "email": "eli@familyos.local",
+      "firstName": "Eli",
+      "lastName": "Child",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+    }
+  ],
+  "roles": {
+    "realm": [{ "name": "user", "description": "Standard Family OS user" }]
+  }
+}
