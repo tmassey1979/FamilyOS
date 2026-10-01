@@ -14,6 +14,11 @@ fi
 
 export VERSION="${VERSION:-0.1.0}"
 
+if [ -f "$ROOT/scripts/expand-migrations.py" ]; then
+  echo "==> Expanding EF migrations from bundle"
+  python3 "$ROOT/scripts/expand-migrations.py"
+fi
+
 echo "==> Building and starting Postgres, RabbitMQ, Keycloak, API (v$VERSION)"
 docker compose up --build -d
 

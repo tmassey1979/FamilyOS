@@ -23,6 +23,13 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Expand EF migrations
+        run: python3 scripts/expand-migrations.py
+
       - name: Compute version
         id: ver
         run: |
@@ -70,5 +77,5 @@ jobs:
         if: always()
         run: |
           echo "## CI" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Version: \`${{ steps.ver.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Informational: \`${{ steps.ver.outputs.info }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: `${{ steps.ver.outputs.version }}`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Informational: `${{ steps.ver.outputs.info }}`" >> "$GITHUB_STEP_SUMMARY"

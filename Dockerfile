@@ -15,6 +15,10 @@ RUN dotnet restore src/FamilyOS.Api/FamilyOS.Api.csproj
 
 COPY src/ src/
 COPY tests/ tests/
+COPY scripts/ scripts/
+
+# Expand gzip+base64 EF migrations into Infrastructure (keeps repo blobs small)
+RUN python3 scripts/expand-migrations.py
 
 ARG VERSION=0.1.0
 RUN dotnet publish src/FamilyOS.Api/FamilyOS.Api.csproj -c Release -o /app/publish \
