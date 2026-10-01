@@ -1,9 +1,12 @@
 using System.Text.Json.Serialization;
 using FamilyOS.Api.Middleware;
+using FamilyOS.Application.Interfaces;
 using FamilyOS.Application.Tasks;
 using FamilyOS.Infrastructure;
+using FamilyOS.Infrastructure.Identity;
 using FamilyOS.Infrastructure.Persistence;
 using FamilyOS.Infrastructure.Seed;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +54,13 @@ try
             Scheme = "bearer",
             BearerFormat = "JWT"
         });
+        c.AddSecurityDefinition("DevBypass", new OpenApiSecurityScheme
+        {
+            Description = "Dev only: X-Dev-User header (e.g. terry.owner).",
+            Name = DevAuthenticationHandler.HeaderName,
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.ApiKey
+        });
         c.AddSecurityRequirement(new OpenApiSecurityRequirement
         {
             {
@@ -66,21 +76,53 @@ try
     var keycloakAuthority = builder.Configuration["Keycloak:Authority"]
         ?? "http://localhost:8080/realms/familyos";
 
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
+    var useDevBypass = builder.Environment.IsDevelopment()
+        || string.Equals(builder.Configuration["Auth:UseDevBypass"], "true", StringComparison.OrdinalIgnoreCase);
+
+    var authBuilder = builder.Services.AddAuthentication(options =>
+    {
+        if (useDevBypass)
         {
-            options.Authority = keycloakAuthority;
-            options.RequireHttpsMetadata = false;
-            options.TokenValidationParameters = new TokenValidationParameters
+            options.DefaultAuthenticateScheme = "Smart";
+            options.DefaultChallengeScheme = "Smart";
+        }
+        else
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        }
+    });
+
+    authBuilder.AddJwtBearer(options =>
+    {
+        options.Authority = keycloakAuthority;
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = keycloakAuthority,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            NameClaimType = "preferred_username"
+        };
+    });
+
+    if (useDevBypass)
+    {
+        authBuilder.AddScheme<AuthenticationSchemeOptions, DevAuthenticationHandler>(
+            DevAuthenticationHandler.SchemeName, _ => { });
+
+        authBuilder.AddPolicyScheme("Smart", "JWT or DevBypass", options =>
+        {
+            options.ForwardDefaultSelector = context =>
             {
-                ValidateIssuer = true,
-                ValidIssuer = keycloakAuthority,
-                ValidateAudience = false,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                NameClaimType = "preferred_username"
+                if (context.Request.Headers.ContainsKey(DevAuthenticationHandler.HeaderName))
+                    return DevAuthenticationHandler.SchemeName;
+                return JwtBearerDefaults.AuthenticationScheme;
             };
         });
+    }
 
     builder.Services.AddAuthorization();
     builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -112,6 +154,7 @@ try
 
     app.UseCors();
     app.UseAuthentication();
+    app.UseMiddleware<FamilyContextMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
 
@@ -126,6 +169,22 @@ try
     });
 
     app.MapGet("/", () => Results.Redirect("/swagger"));
+
+    // Dev helper: who am I (family context)
+    app.MapGet("/api/me", async (ICurrentUserService current) =>
+    {
+        await current.EnsureLoadedAsync();
+        if (!current.IsAuthenticated)
+            return Results.Unauthorized();
+        return Results.Ok(new
+        {
+            current.ExternalIdentityId,
+            current.UserId,
+            current.FamilyId,
+            current.MemberId,
+            Role = current.Role?.ToString()
+        });
+    }).RequireAuthorization();
 
     var seedEnabled = app.Environment.IsDevelopment()
         || string.Equals(app.Configuration["Seed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
