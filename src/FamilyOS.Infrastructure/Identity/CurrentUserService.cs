@@ -57,4 +57,12 @@ public class CurrentUserService : ICurrentUserService
             _role = member?.Role;
         }
     }
+
+    public async Task<(Guid FamilyId, Guid MemberId, FamilyRole Role)> RequireFamilyAsync(CancellationToken ct = default)
+    {
+        await EnsureLoadedAsync(ct);
+        if (!IsAuthenticated || !FamilyId.HasValue || !MemberId.HasValue)
+            throw new FamilyOS.Application.Common.ForbiddenException("Not a family member.");
+        return (FamilyId.Value, MemberId.Value, Role ?? FamilyRole.Child);
+    }
 }

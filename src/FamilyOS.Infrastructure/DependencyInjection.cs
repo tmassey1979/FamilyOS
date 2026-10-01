@@ -21,7 +21,9 @@ public static class DependencyInjection
         services.AddScoped<IFamilyOsDbContext>(sp => sp.GetRequiredService<FamilyOsDbContext>());
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddHttpContextAccessor();
+        services.AddFamilyAuthorization();
 
+        // MassTransit + RabbitMQ
         services.AddMassTransit(x =>
         {
             x.UsingRabbitMq((context, cfg) =>
