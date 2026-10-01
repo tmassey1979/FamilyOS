@@ -1,6 +1,7 @@
 using FamilyOS.Application.Tasks;
 using FamilyOS.Domain.Common;
 using MediatR;
+using FamilyOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +9,7 @@ namespace FamilyOS.Api.Controllers;
 
 [ApiController]
 [Route("api/tasks")]
-[Authorize]
+[Authorize(Policy = FamilyAuthPolicies.FamilyMember)]
 public class TasksController : ControllerBase
 {
     private readonly IMediator _mediator;
