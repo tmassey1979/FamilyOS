@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\FamilyOS.Application\FamilyOS.Application.csproj" />
+    <ProjectReference Include="..\FamilyOS.Infrastructure\FamilyOS.Infrastructure.csproj" />
+    <ProjectReference Include="..\FamilyOS.Domain\FamilyOS.Domain.csproj" />
+    <ProjectReference Include="..\FamilyOS.Contracts\FamilyOS.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>
