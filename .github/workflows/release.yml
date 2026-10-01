@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       bump:
@@ -11,6 +9,9 @@ on:
         default: patch
         type: choice
         options: [patch, minor, major]
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -23,13 +24,11 @@ jobs:
   release:
     name: Version, build, release
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -39,23 +38,24 @@ jobs:
       - name: Compute next version
         id: version
         run: |
-          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          LATEST=${LATEST#v}
-          IFS=. read -r MAJOR MINOR PATCH <<< "$LATEST"
-          MAJOR=${MAJOR:-0}
-          MINOR=${MINOR:-0}
-          PATCH=${PATCH:-0}
-          BUMP="${{ github.event.inputs.bump }}"
-          if [ -z "$BUMP" ]; then BUMP=patch; fi
-          case "$BUMP" in
-            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-            *)     PATCH=$((PATCH+1)) ;;
-          esac
-          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            LATEST=${LATEST#v}
+            IFS=. read -r MAJOR MINOR PATCH <<< "$LATEST"
+            MAJOR=${MAJOR:-0}; MINOR=${MINOR:-0}; PATCH=${PATCH:-0}
+            BUMP="${{ github.event.inputs.bump }}"
+            BUMP=${BUMP:-patch}
+            case "$BUMP" in
+              major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+              *)     PATCH=$((PATCH+1)) ;;
+            esac
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Next version: v$VERSION (from $LATEST, bump=$BUMP)"
 
       - name: Restore & build
         run: |
@@ -63,33 +63,13 @@ jobs:
           dotnet build FamilyOS.sln -c Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        run: |
-          dotnet test FamilyOS.sln -c Release --no-build --verbosity minimal
-
-      - name: Publish API
-        run: |
-          dotnet publish src/FamilyOS.Api/FamilyOS.Api.csproj \
-            -c Release --no-build \
-            -p:Version=${{ steps.version.outputs.version }} \
-            -o ./publish/api
-
-      - name: Package
-        run: |
-          cd publish && zip -r ../FamilyOS-api-v${{ steps.version.outputs.version }}.zip api
+        run: dotnet test FamilyOS.sln -c Release --no-build --verbosity minimal
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Family OS ${{ steps.version.outputs.tag }}
-          body: |
-            ## Family OS ${{ steps.version.outputs.tag }}
-
-            Automated release from `main`.
-
-            ### Artifacts
-            - `FamilyOS-api-v${{ steps.version.outputs.version }}.zip` — published API
-          files: FamilyOS-api-v${{ steps.version.outputs.version }}.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

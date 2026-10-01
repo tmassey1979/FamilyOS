@@ -46,9 +46,10 @@ jobs:
           name: coverage
           path: coverage/**
           retention-days: 14
+          if-no-files-found: ignore
 
       - name: Coverage summary
         if: always()
         run: |
           echo "## Test coverage" >> $GITHUB_STEP_SUMMARY
-          find coverage -name "coverage.cobertura.xml" -print -exec head -c 500 {} \; || echo "No cobertura files yet"
+          find coverage -name "coverage.cobertura.xml" 2>/dev/null | head -5 || echo "No cobertura files"
