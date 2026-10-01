@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Family OS",
+    "slug": "familyos",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "familyos",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.familyos.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.familyos.app"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
