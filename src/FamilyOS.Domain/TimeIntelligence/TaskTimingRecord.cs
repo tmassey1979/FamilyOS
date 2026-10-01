@@ -1,53 +1,46 @@
 namespace FamilyOS.Domain.TimeIntelligence;
 
 /// <summary>
-/// Historical timing data for learning how long tasks actually take.
-/// "Family OS doesn't guess how long things take. It learns from reality."
+/// Planned vs actual timing summary for a task (never overwrites planned with actual).
 /// </summary>
 public class TaskTimingRecord
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
-    public Guid FamilyId { get; private set; }
-    public string TaskCategory { get; private set; } = string.Empty;
-    public string? TaskTitleNormalized { get; private set; }
-    public int DurationMinutes { get; private set; }
-    public Guid CompletedByMemberId { get; private set; }
-    public Guid? SourceTaskId { get; private set; }
-    public DateTime RecordedAtUtc { get; private set; } = DateTime.UtcNow;
+    public Guid TaskId { get; private set; }
+    public int? PlannedMinutes { get; private set; }
+    public int? ActualMinutes { get; private set; }
+    public DateTime? PlannedStartUtc { get; private set; }
+    public DateTime? PlannedEndUtc { get; private set; }
+    public DateTime? ActualStartUtc { get; private set; }
+    public DateTime? ActualEndUtc { get; private set; }
 
     private TaskTimingRecord() { }
 
-    public static TaskTimingRecord Create(
-        Guid familyId,
-        string category,
-        int durationMinutes,
-        Guid completedByMemberId,
-        string? titleNormalized = null,
-        Guid? sourceTaskId = null)
+    public static TaskTimingRecord FromTask(
+        Guid taskId,
+        int? plannedMinutes,
+        int? actualMinutes,
+        DateTime? plannedStart = null,
+        DateTime? plannedEnd = null,
+        DateTime? actualStart = null,
+        DateTime? actualEnd = null)
     {
         return new TaskTimingRecord
         {
-            FamilyId = familyId,
-            TaskCategory = category,
-            TaskTitleNormalized = titleNormalized?.ToLowerInvariant().Trim(),
-            DurationMinutes = durationMinutes,
-            CompletedByMemberId = completedByMemberId,
-            SourceTaskId = sourceTaskId
+            TaskId = taskId,
+            PlannedMinutes = plannedMinutes,
+            ActualMinutes = actualMinutes,
+            PlannedStartUtc = plannedStart,
+            PlannedEndUtc = plannedEnd,
+            ActualStartUtc = actualStart,
+            ActualEndUtc = actualEnd
         };
     }
 }
 
 public class TaskTimingSummary
 {
-    public string Category { get; set; } = string.Empty;
-    public string? TitleNormalized { get; set; }
-    public double AverageMinutes { get; set; }
-    public int SampleCount { get; set; }
-    public string Confidence => SampleCount switch
-    {
-        >= 20 => "High",
-        >= 5 => "Medium",
-        >= 2 => "Low",
-        _ => "Insufficient"
-    };
+    public int TaskCount { get; init; }
+    public double? AveragePlannedMinutes { get; init; }
+    public double? AverageActualMinutes { get; init; }
+    public double? AverageVarianceMinutes { get; init; }
 }
