@@ -124,7 +124,6 @@ try
         });
     }
 
-    builder.Services.AddAuthorization();
     builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
         p.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin()));
     builder.Services.AddSignalR();
@@ -184,7 +183,7 @@ try
             current.MemberId,
             Role = current.Role?.ToString()
         });
-    }).RequireAuthorization();
+    }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
 
     var seedEnabled = app.Environment.IsDevelopment()
         || string.Equals(app.Configuration["Seed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
