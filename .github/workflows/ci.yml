@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore FamilyOS.sln
+
+      - name: Build
+        run: dotnet build FamilyOS.sln --configuration Release --no-restore
+
+      - name: Test with coverage
+        run: >
+          dotnet test FamilyOS.sln
+          --configuration Release
+          --no-build
+          --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/**
+          retention-days: 14
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## Test coverage" >> $GITHUB_STEP_SUMMARY
+          find coverage -name "coverage.cobertura.xml" -print -exec head -c 500 {} \; || echo "No cobertura files yet"
