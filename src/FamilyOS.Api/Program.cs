@@ -1,8 +1,13 @@
 using System.Text.Json.Serialization;
+using FamilyOS.Api.Middleware;
 using FamilyOS.Application.Tasks;
 using FamilyOS.Infrastructure;
+using FamilyOS.Infrastructure.Persistence;
 using FamilyOS.Infrastructure.Seed;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -18,6 +23,7 @@ try
     builder.Host.UseSerilog((ctx, cfg) => cfg
         .ReadFrom.Configuration(ctx.Configuration)
         .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "FamilyOS.Api")
         .WriteTo.Console());
 
     builder.Services.AddInfrastructure(builder.Configuration);
@@ -80,10 +86,23 @@ try
     builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
         p.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin()));
     builder.Services.AddSignalR();
-    builder.Services.AddHealthChecks();
+
+    builder.Services.AddHealthChecks()
+        .AddCheck("self", () => HealthCheckResult.Healthy("API process is running"))
+        .AddCheck<PostgresHealthCheck>("postgres");
 
     var app = builder.Build();
-    app.UseSerilogRequestLogging();
+
+    app.UseMiddleware<CorrelationIdMiddleware>();
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseSerilogRequestLogging(opts =>
+    {
+        opts.EnrichDiagnosticContext = (diag, http) =>
+        {
+            diag.Set("RequestHost", http.Request.Host.Value);
+            diag.Set("UserAgent", http.Request.Headers.UserAgent.ToString());
+        };
+    });
 
     if (app.Environment.IsDevelopment())
     {
@@ -95,7 +114,17 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
-    app.MapHealthChecks("/health");
+
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        Predicate = r => r.Name == "self",
+        ResponseWriter = WriteMinimalHealth
+    });
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        ResponseWriter = WriteDetailedHealth
+    });
+
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
     var seedEnabled = app.Environment.IsDevelopment()
@@ -115,6 +144,57 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+static Task WriteMinimalHealth(HttpContext ctx, HealthReport report)
+{
+    ctx.Response.ContentType = "text/plain";
+    return ctx.Response.WriteAsync(report.Status == HealthStatus.Healthy ? "Healthy" : report.Status.ToString());
+}
+
+static async Task WriteDetailedHealth(HttpContext ctx, HealthReport report)
+{
+    ctx.Response.ContentType = "application/json";
+    var payload = new
+    {
+        status = report.Status.ToString(),
+        totalDurationMs = report.TotalDuration.TotalMilliseconds,
+        entries = report.Entries.ToDictionary(
+            e => e.Key,
+            e => new
+            {
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                durationMs = e.Value.Duration.TotalMilliseconds
+            })
+    };
+    await ctx.Response.WriteAsJsonAsync(payload);
+}
+
+/// <summary>Checks Postgres connectivity via EF Core.</summary>
+file sealed class PostgresHealthCheck : IHealthCheck
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public PostgresHealthCheck(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
+
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<FamilyOsDbContext>();
+            var canConnect = await db.Database.CanConnectAsync(cancellationToken);
+            return canConnect
+                ? HealthCheckResult.Healthy("Postgres reachable")
+                : HealthCheckResult.Unhealthy("Postgres not reachable");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Postgres check failed", ex);
+        }
+    }
 }
 
 public partial class Program { }
