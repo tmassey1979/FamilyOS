@@ -20,8 +20,7 @@ public static class SeedData
         var db = scope.ServiceProvider.GetRequiredService<FamilyOsDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<FamilyOsDbContext>>();
 
-        try { await db.Database.MigrateAsync(); }
-        catch { await db.Database.EnsureCreatedAsync(); }
+        await db.Database.MigrateAsync();
 
         if (await db.Families.AnyAsync())
         {
@@ -55,9 +54,7 @@ public static class SeedData
         eliUser.AssignToFamily(family.Id, eli.Id);
         await db.SaveChangesAsync();
 
-        foreach (var reason in family.DeclineReasons)
-            db.DeclineReasons.Add(reason);
-        await db.SaveChangesAsync();
+        // Decline reasons are created in Family.Create and cascade via HasMany — do not re-Add.
 
         db.ApprovalPolicies.Add(ApprovalPolicy.Create(
             family.Id, "Default Purchase Policy", ApprovalMode.PolicyDetermined,
