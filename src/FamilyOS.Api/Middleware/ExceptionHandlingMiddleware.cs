@@ -57,6 +57,9 @@ public sealed class ExceptionHandlingMiddleware
             ["traceId"] = context.TraceIdentifier
         };
 
+        if (ex is ValidationException ve && ve.Errors is { Count: > 0 })
+            problem["errors"] = ve.Errors;
+
         if (_env.IsDevelopment())
             problem["exception"] = ex.GetType().Name;
 
