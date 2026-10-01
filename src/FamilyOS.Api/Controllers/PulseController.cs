@@ -1,5 +1,6 @@
 using FamilyOS.Application.Pulse;
 using MediatR;
+using FamilyOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +8,7 @@ namespace FamilyOS.Api.Controllers;
 
 [ApiController]
 [Route("api/pulse")]
-[Authorize]
+[Authorize(Policy = FamilyAuthPolicies.FamilyMember)]
 public class PulseController : ControllerBase
 {
     private readonly IMediator _mediator;

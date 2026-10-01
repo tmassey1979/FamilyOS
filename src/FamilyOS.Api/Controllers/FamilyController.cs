@@ -1,5 +1,6 @@
 using FamilyOS.Application.Family;
 using MediatR;
+using FamilyOS.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +8,7 @@ namespace FamilyOS.Api.Controllers;
 
 [ApiController]
 [Route("api/family")]
-[Authorize]
+[Authorize(Policy = FamilyAuthPolicies.FamilyMember)]
 public class FamilyController : ControllerBase
 {
     private readonly IMediator _mediator;
