@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Version bump type"
+        description: "Semver bump"
         required: true
         default: patch
         type: choice
@@ -22,7 +22,7 @@ env:
 
 jobs:
   release:
-    name: Version, build, release
+    name: Version, test, publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Compute next version
+      - name: Compute version
         id: version
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
@@ -52,21 +52,24 @@ jobs:
             esac
             VERSION="${MAJOR}.${MINOR}.${PATCH}"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Restore & build
         run: |
           dotnet restore FamilyOS.sln
           dotnet build FamilyOS.sln -c Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
-      - name: Test if available
+      - name: Test
+        run: dotnet test FamilyOS.sln -c Release --no-build --verbosity minimal
+
+      - name: Publish API
         run: |
-          if grep -q Domain.Tests FamilyOS.sln && [ -f src/FamilyOS.Domain/Tasks/TaskItem.cs ]; then
-            dotnet test FamilyOS.sln -c Release --no-build --verbosity minimal
-          else
-            echo "Skipping tests in release (domain/tests not fully present)"
-          fi
+          dotnet publish src/FamilyOS.Api/FamilyOS.Api.csproj \
+            -c Release --no-build \
+            -p:Version=${{ steps.version.outputs.version }} \
+            -o ./publish/api
+          (cd publish && zip -r "../FamilyOS-api-v${{ steps.version.outputs.version }}.zip" api)
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -74,5 +77,6 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Family OS ${{ steps.version.outputs.tag }}
           generate_release_notes: true
+          files: FamilyOS-api-v${{ steps.version.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

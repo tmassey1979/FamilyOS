@@ -16,29 +16,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
+      - name: Compute version
+        id: ver
+        run: |
+          if TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
+            VERSION=${TAG#v}
+          else
+            VERSION=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props || echo "0.1.0")
+          fi
+          SHORT=$(git rev-parse --short HEAD)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "info=$VERSION+$SHORT" >> "$GITHUB_OUTPUT"
+          echo "Using version $VERSION (info $VERSION+$SHORT)"
+
       - name: Restore
         run: dotnet restore FamilyOS.sln
 
       - name: Build
-        run: dotnet build FamilyOS.sln --configuration Release --no-restore
+        run: >
+          dotnet build FamilyOS.sln
+          --configuration Release
+          --no-restore
+          -p:Version=${{ steps.ver.outputs.version }}
+          -p:InformationalVersion=${{ steps.ver.outputs.info }}
 
-      - name: Test (when test project is in solution and present)
-        run: |
-          if grep -q "FamilyOS.Domain.Tests" FamilyOS.sln && [ -f tests/FamilyOS.Domain.Tests/FamilyOS.Domain.Tests.csproj ]; then
-            if [ -f src/FamilyOS.Domain/Tasks/TaskItem.cs ]; then
-              dotnet test FamilyOS.sln --configuration Release --no-build --verbosity normal \
-                --collect:"XPlat Code Coverage" --results-directory ./coverage
-            else
-              echo "Domain sources incomplete — build OK; tests deferred until TaskItem.cs is present"
-            fi
-          else
-            echo "Test project not in solution yet — build-only CI (green)"
-          fi
+      - name: Test
+        run: >
+          dotnet test FamilyOS.sln
+          --configuration Release
+          --no-build
+          --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -48,3 +65,10 @@ jobs:
           path: coverage/**
           retention-days: 14
           if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: \`${{ steps.ver.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Informational: \`${{ steps.ver.outputs.info }}\`" >> "$GITHUB_STEP_SUMMARY"
