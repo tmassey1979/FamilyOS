@@ -27,13 +27,16 @@
       "typedRoutes": true
     },
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "e6998ca4-3dc2-4ca1-9c0c-eb1e100276e2"
+      }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "fallbackToCacheTimeout": 0
-    }
+    },
+    "owner": "tmassey1979"
   }
 }
