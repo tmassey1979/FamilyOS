@@ -4,11 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Semver bump"
+        description: "Semver bump when not triggered by a tag"
         required: true
         default: patch
         type: choice
         options: [patch, minor, major]
+      eas_platforms:
+        description: "EAS platforms to build"
+        required: true
+        default: all
+        type: choice
+        options: [all, android, ios]
   push:
     tags:
       - "v*"
@@ -21,9 +27,12 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  release:
-    name: Version, test, publish
+  release-api:
+    name: Version, test, publish API
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +41,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Expand EF migrations
+        run: python3 scripts/expand-migrations.py
 
       - name: Compute version
         id: version
@@ -54,6 +70,7 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: v$VERSION"
 
       - name: Restore & build
         run: |
@@ -71,6 +88,12 @@ jobs:
             -o ./publish/api
           (cd publish && zip -r "../FamilyOS-api-v${{ steps.version.outputs.version }}.zip" api)
 
+      - name: Upload API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-zip
+          path: FamilyOS-api-v${{ steps.version.outputs.version }}.zip
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -78,5 +101,113 @@ jobs:
           name: Family OS ${{ steps.version.outputs.tag }}
           generate_release_notes: true
           files: FamilyOS-api-v${{ steps.version.outputs.version }}.zip
+          body: |
+            ## Family OS ${{ steps.version.outputs.tag }}
+
+            ### API
+            ```bash
+            docker compose up --build -d
+            ```
+            API: http://localhost:5080/swagger
+
+            ### Mobile
+            EAS production builds are triggered by this release workflow when `EXPO_TOKEN` is configured.
+            See the **EAS build** job logs for Android / iOS artifact links on expo.dev.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  mobile-typecheck:
+    name: Mobile typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Typecheck
+        run: npm run typecheck
+
+  eas-build:
+    name: EAS build
+    needs: [release-api, mobile-typecheck]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Setup Expo / EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Sync app version from release tag
+        run: |
+          VERSION="${{ needs.release-api.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const p = 'app.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            j.expo.version = process.env.VERSION;
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+            console.log('Set expo.version to', process.env.VERSION);
+          "
+        env:
+          VERSION: ${{ needs.release-api.outputs.version }}
+
+      - name: Check EAS project linkage
+        id: eas_ready
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::EXPO_TOKEN secret is not set. Skipping EAS build. Create a token at https://expo.dev/settings/access-tokens and add repo secret EXPO_TOKEN. Then run: cd mobile && npx eas-cli init"
+            exit 0
+          fi
+          if ! grep -q '"projectId"' app.json 2>/dev/null; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No EAS projectId in app.json. Run locally: cd mobile && npx eas-cli login && npx eas-cli init — then commit the projectId."
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: EAS build (production)
+        if: steps.eas_ready.outputs.ready == 'true'
+        run: |
+          PLATFORMS="${{ github.event.inputs.eas_platforms }}"
+          PLATFORMS=${PLATFORMS:-all}
+          echo "Building platforms: $PLATFORMS"
+          eas build \
+            --profile production \
+            --platform "$PLATFORMS" \
+            --non-interactive \
+            --message "Family OS ${{ needs.release-api.outputs.tag }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## EAS build" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: \`${{ needs.release-api.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ready: \`${{ steps.eas_ready.outputs.ready }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Builds: https://expo.dev (project **familyos**)" >> "$GITHUB_STEP_SUMMARY"
