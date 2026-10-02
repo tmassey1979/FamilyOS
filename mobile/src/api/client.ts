@@ -162,3 +162,52 @@ export const familyApi = {
       '/api/family/members',
     ),
 };
+
+export type RequestDto = {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  summary?: string;
+  amount?: number;
+  neededByUtc?: string;
+  requesterMemberId: string;
+  requesterName: string;
+  currentApproverMemberId?: string;
+  denialReason?: string;
+  createdAtUtc: string;
+  answers?: Record<string, unknown>;
+};
+
+export type RequestTypeDto = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  questions: Array<{ key: string; prompt: string; required?: boolean }>;
+};
+
+export const requestsApi = {
+  types: () => api<RequestTypeDto[]>('/api/requests/types'),
+  mine: () => api<RequestDto[]>('/api/requests/mine'),
+  approvalQueue: () => api<RequestDto[]>('/api/requests/approval-queue'),
+  get: (id: string) => api<RequestDto>(`/api/requests/${id}`),
+  create: (body: {
+    type: string;
+    title: string;
+    answers?: Record<string, unknown>;
+    amount?: number;
+    neededBy?: string;
+  }) => api<RequestDto>('/api/requests', { method: 'POST', body: JSON.stringify(body) }),
+  submit: (id: string) => api<RequestDto>(`/api/requests/${id}/submit`, { method: 'POST' }),
+  approve: (id: string, conditional = false) =>
+    api<RequestDto>(`/api/requests/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ conditional }),
+    }),
+  deny: (id: string, reason: string) =>
+    api<RequestDto>(`/api/requests/${id}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+};
