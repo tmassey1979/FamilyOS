@@ -211,3 +211,40 @@ export const requestsApi = {
       body: JSON.stringify({ reason }),
     }),
 };
+
+export type ProcurementItemDto = {
+  id: string;
+  name: string;
+  brand?: string;
+  size?: string;
+  category?: string;
+  quantity?: number;
+  estimatedPrice?: number;
+  actualPrice?: number;
+  preferredStore?: string;
+  status: string;
+  createdAtUtc: string;
+};
+
+export type CartDto = {
+  id: string;
+  storeName: string;
+  items: ProcurementItemDto[];
+  isActive: boolean;
+};
+
+export const procurementApi = {
+  queue: () => api<ProcurementItemDto[]>('/api/procurement/queue'),
+  carts: () => api<CartDto[]>('/api/procurement/carts'),
+  createCart: (storeName: string) =>
+    api<CartDto>('/api/procurement/carts', {
+      method: 'POST',
+      body: JSON.stringify({ storeName }),
+    }),
+  hold: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/hold`, { method: 'POST' }),
+  purchase: (id: string, actualPrice: number, store?: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ actualPrice, store }),
+    }),
+};
