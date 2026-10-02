@@ -14,6 +14,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
       },
       "package": "com.familyos.app",
@@ -31,6 +32,15 @@
         "projectId": "e6998ca4-3dc2-4ca1-9c0c-eb1e100276e2"
       }
     },
-    "owner": "tmassey1979"
+    "owner": "tmassey1979",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
   }
 }
