@@ -1,6 +1,7 @@
 /**
  * Typed API client for Family OS.
- * Token is injected from SecureStore by auth layer (not AsyncStorage).
+ * - Production: JWT via setAccessToken (Keycloak PKCE)
+ * - Development: setDevUser('terry.owner') → X-Dev-User header (API DevBypass)
  */
 
 const DEFAULT_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5080';
@@ -8,6 +9,9 @@ const DEFAULT_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5080';
 export type ApiError = { error: string; status: number };
 
 let accessToken: string | null = null;
+/** Dev-only: seed external id, e.g. terry.owner | michelle.adult | mia.teen | eli.child */
+let devUser: string | null =
+  process.env.EXPO_PUBLIC_DEV_USER ?? (typeof __DEV__ !== 'undefined' && __DEV__ ? 'terry.owner' : null);
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
@@ -15,6 +19,14 @@ export function setAccessToken(token: string | null) {
 
 export function getAccessToken() {
   return accessToken;
+}
+
+export function setDevUser(externalId: string | null) {
+  devUser = externalId;
+}
+
+export function getDevUser() {
+  return devUser;
 }
 
 export async function api<T>(
@@ -28,6 +40,8 @@ export async function api<T>(
   };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
+  } else if (devUser) {
+    headers['X-Dev-User'] = devUser;
   }
 
   const res = await fetch(`${DEFAULT_BASE}${path}`, {
@@ -39,7 +53,7 @@ export async function api<T>(
     let message = res.statusText;
     try {
       const body = await res.json();
-      message = body.error ?? message;
+      message = body.detail ?? body.error ?? body.title ?? message;
     } catch {
       /* ignore */
     }
@@ -79,7 +93,19 @@ export type PulseDto = {
     requestsAwaitingApproval: number;
     tasksDueToday: number;
     tasksNeedingAcceptance: number;
+    nextShoppingTrip?: string;
   };
+  procurement?: {
+    approvedItems: number;
+    readyForStore: number;
+    primaryStore?: string;
+  };
+  conditions?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    relatedTitle?: string;
+  }>;
 };
 
 export type TaskDto = {
@@ -96,6 +122,18 @@ export type TaskDto = {
   category?: string;
 };
 
+export type MeDto = {
+  externalIdentityId?: string;
+  userId?: string;
+  familyId?: string;
+  memberId?: string;
+  role?: string;
+};
+
+export const meApi = {
+  get: () => api<MeDto>('/api/me'),
+};
+
 export const pulseApi = {
   get: () => api<PulseDto>('/api/pulse'),
 };
@@ -107,10 +145,20 @@ export const tasksApi = {
   get: (id: string) => api<TaskDto>(`/api/tasks/${id}`),
   accept: (id: string) => api<TaskDto>(`/api/tasks/${id}/accept`, { method: 'POST' }),
   start: (id: string) => api<TaskDto>(`/api/tasks/${id}/start`, { method: 'POST' }),
+  pause: (id: string) => api<TaskDto>(`/api/tasks/${id}/pause`, { method: 'POST' }),
+  resume: (id: string) => api<TaskDto>(`/api/tasks/${id}/resume`, { method: 'POST' }),
   complete: (id: string) => api<TaskDto>(`/api/tasks/${id}/complete`, { method: 'POST' }),
   decline: (id: string, body?: { reasonId?: string; note?: string }) =>
     api<TaskDto>(`/api/tasks/${id}/decline`, {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     }),
+};
+
+export const familyApi = {
+  get: () => api<{ id: string; name: string; timeZone?: string; currency?: string }>('/api/family'),
+  members: () =>
+    api<Array<{ id: string; userId: string; displayName: string; role: string; isActive: boolean }>>(
+      '/api/family/members',
+    ),
 };

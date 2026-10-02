@@ -1,9 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 
+/**
+ * Family Pulse — "What matters to me right now?"
+ * Uses live API when authenticated; falls back to demo shell offline.
+ */
 export default function HomeScreen() {
   const [pulse, setPulse] = useState<PulseDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +20,10 @@ export default function HomeScreen() {
       const data = await pulseApi.get();
       setPulse(data);
     } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'error' in e ? String((e as { error: string }).error) : 'Unable to load Pulse';
+      const msg =
+        e && typeof e === 'object' && 'error' in e
+          ? String((e as { error: string }).error)
+          : 'Unable to load Pulse';
       setError(msg);
       setPulse({
         greeting: 'Welcome to Family OS',
@@ -28,22 +35,30 @@ export default function HomeScreen() {
           primaryAction: 'Start',
           dueLabel: 'Due today',
         },
-        needsAttention: [{
-          kind: 'Request',
-          entityId: 'demo-req',
-          title: "Mia's ride request",
-          reason: 'Waiting for your review',
-          actionLabel: 'Review',
-        }],
+        needsAttention: [
+          {
+            kind: 'Request',
+            entityId: 'demo-req',
+            title: "Mia's ride request",
+            reason: 'Waiting for your review',
+            actionLabel: 'Review',
+          },
+        ],
         comingUp: [],
-        household: { requestsAwaitingApproval: 2, tasksDueToday: 3, tasksNeedingAcceptance: 1 },
+        household: {
+          requestsAwaitingApproval: 2,
+          tasksDueToday: 3,
+          tasksNeedingAcceptance: 1,
+        },
       });
     } finally {
       setRefreshing(false);
     }
   }, []);
 
-  useState(() => { void load(); });
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <ScrollView
@@ -62,7 +77,9 @@ export default function HomeScreen() {
       {pulse?.nextAction ? (
         <Card style={styles.cardGap}>
           <Text style={typography.heading}>{pulse.nextAction.title}</Text>
-          {pulse.nextAction.subtitle ? <Text style={typography.caption}>{pulse.nextAction.subtitle}</Text> : null}
+          {pulse.nextAction.subtitle ? (
+            <Text style={typography.caption}>{pulse.nextAction.subtitle}</Text>
+          ) : null}
           <View style={styles.row}>
             <Badge label={pulse.nextAction.kind} />
             {pulse.nextAction.dueLabel ? <Badge label={pulse.nextAction.dueLabel} tone="warning" /> : null}
@@ -88,9 +105,13 @@ export default function HomeScreen() {
 
       <SectionTitle>Household</SectionTitle>
       <Card>
-        <Text style={typography.body}>{pulse?.household.requestsAwaitingApproval ?? 0} requests awaiting approval</Text>
+        <Text style={typography.body}>
+          {pulse?.household.requestsAwaitingApproval ?? 0} requests awaiting approval
+        </Text>
         <Text style={typography.body}>{pulse?.household.tasksDueToday ?? 0} tasks due today</Text>
-        <Text style={typography.body}>{pulse?.household.tasksNeedingAcceptance ?? 0} tasks need acceptance</Text>
+        <Text style={typography.body}>
+          {pulse?.household.tasksNeedingAcceptance ?? 0} tasks need acceptance
+        </Text>
       </Card>
     </ScrollView>
   );
