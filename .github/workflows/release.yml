@@ -111,8 +111,8 @@ jobs:
             API: http://localhost:5080/swagger
 
             ### Mobile
-            EAS production builds are triggered by this release workflow when `EXPO_TOKEN` is configured.
-            See the **EAS build** job logs for Android / iOS artifact links on expo.dev.
+            Production builds from EAS are attached to this release when the **EAS build** job succeeds
+            (Android APK / iOS IPA). Also listed on https://expo.dev/accounts/tmassey1979/projects/familyos/builds
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -186,23 +186,99 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: EAS build (production)
+        id: eas
         if: steps.eas_ready.outputs.ready == 'true'
+        working-directory: mobile
         run: |
+          set -euo pipefail
           PLATFORMS="${{ github.event.inputs.eas_platforms }}"
           PLATFORMS=${PLATFORMS:-all}
           echo "Building platforms: $PLATFORMS"
+
+          # JSON output (array when multi-platform)
           eas build \
             --profile production \
             --platform "$PLATFORMS" \
             --non-interactive \
-            --message "Family OS ${{ needs.release-api.outputs.tag }}"
+            --wait \
+            --json \
+            --message "Family OS ${{ needs.release-api.outputs.tag }}" \
+            > /tmp/eas-build-result.json
+
+          cat /tmp/eas-build-result.json
+
+          mkdir -p /tmp/eas-artifacts
+          python3 << 'PY'
+          import json, os, sys, urllib.request
+
+          raw = open("/tmp/eas-build-result.json").read().strip()
+          data = json.loads(raw)
+          builds = data if isinstance(data, list) else [data]
+
+          downloaded = []
+          for b in builds:
+              status = (b.get("status") or "").upper()
+              platform = (b.get("platform") or "unknown").lower()
+              bid = b.get("id") or "unknown"
+              arts = b.get("artifacts") or {}
+              url = arts.get("applicationArchiveUrl") or arts.get("buildUrl")
+              if status not in ("FINISHED", "COMPLETE", "COMPLETED") and not url:
+                  print(f"::warning::Build {bid} status={status} has no artifact URL")
+                  continue
+              if not url:
+                  print(f"::warning::Build {bid} missing artifact URL")
+                  continue
+              ext = ".apk" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
+              # Prefer aab name if URL suggests it
+              if ".aab" in url:
+                  ext = ".aab"
+              name = f"FamilyOS-{platform}-v{os.environ['VERSION']}{ext}"
+              path = f"/tmp/eas-artifacts/{name}"
+              print(f"Downloading {platform} artifact -> {name}")
+              req = urllib.request.Request(url)
+              with urllib.request.urlopen(req, timeout=300) as r, open(path, "wb") as out:
+                  out.write(r.read())
+              size = os.path.getsize(path)
+              print(f"  saved {size} bytes")
+              downloaded.append(path)
+
+          if not downloaded:
+              print("::error::No EAS artifacts downloaded")
+              sys.exit(1)
+
+          open("/tmp/eas-artifact-list.txt", "w").write("\n".join(downloaded) + "\n")
+          print("files=" + ";".join(downloaded))
+          PY
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          VERSION: ${{ needs.release-api.outputs.version }}
+
+      - name: Upload mobile artifacts to GitHub Release
+        if: steps.eas_ready.outputs.ready == 'true' && steps.eas.outcome == 'success'
+        working-directory: mobile
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-api.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ls -la /tmp/eas-artifacts/
+          # Attach each file to the existing release for this tag
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "Uploading $f to release $TAG"
+            gh release upload "$TAG" "$f" --clobber --repo "${{ github.repository }}"
+          done < /tmp/eas-artifact-list.txt
+          echo "Attached mobile artifacts to https://github.com/${{ github.repository }}/releases/tag/$TAG"
 
       - name: Summary
         if: always()
         run: |
           echo "## EAS build" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${{ needs.release-api.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ needs.release-api.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Ready: \`${{ steps.eas_ready.outputs.ready }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Builds: https://expo.dev/accounts/tmassey1979/projects/familyos/builds" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/eas-artifact-list.txt ]; then
+            echo "- Artifacts:" >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r f; do echo "  - \`$(basename "$f")\`" >> "$GITHUB_STEP_SUMMARY"; done < /tmp/eas-artifact-list.txt
+          fi
