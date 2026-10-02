@@ -111,8 +111,9 @@ jobs:
             API: http://localhost:5080/swagger
 
             ### Mobile
-            Production builds from EAS are attached to this release when the **EAS build** job succeeds
-            (Android APK / iOS IPA). Also listed on https://expo.dev/accounts/tmassey1979/projects/familyos/builds
+            EAS production builds (Android AAB for Play Store / APK for sideload when configured)
+            are attached to this release when the **EAS build** job succeeds.
+            Builds: https://expo.dev/accounts/tmassey1979/projects/familyos/builds
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -188,14 +189,12 @@ jobs:
       - name: EAS build (production)
         id: eas
         if: steps.eas_ready.outputs.ready == 'true'
-        working-directory: mobile
         run: |
           set -euo pipefail
           PLATFORMS="${{ github.event.inputs.eas_platforms }}"
           PLATFORMS=${PLATFORMS:-all}
           echo "Building platforms: $PLATFORMS"
 
-          # JSON output (array when multi-platform)
           eas build \
             --profile production \
             --platform "$PLATFORMS" \
@@ -206,11 +205,12 @@ jobs:
             > /tmp/eas-build-result.json
 
           cat /tmp/eas-build-result.json
-
           mkdir -p /tmp/eas-artifacts
+
           python3 << 'PY'
           import json, os, sys, urllib.request
 
+          token = os.environ.get("EXPO_TOKEN", "")
           raw = open("/tmp/eas-build-result.json").read().strip()
           data = json.loads(raw)
           builds = data if isinstance(data, list) else [data]
@@ -222,24 +222,53 @@ jobs:
               bid = b.get("id") or "unknown"
               arts = b.get("artifacts") or {}
               url = arts.get("applicationArchiveUrl") or arts.get("buildUrl")
-              if status not in ("FINISHED", "COMPLETE", "COMPLETED") and not url:
-                  print(f"::warning::Build {bid} status={status} has no artifact URL")
-                  continue
               if not url:
-                  print(f"::warning::Build {bid} missing artifact URL")
+                  print(f"::warning::Build {bid} status={status} missing artifact URL")
                   continue
-              ext = ".apk" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
-              # Prefer aab name if URL suggests it
-              if ".aab" in url:
+              if status not in ("FINISHED", "COMPLETE", "COMPLETED"):
+                  print(f"::warning::Build {bid} status={status}")
+
+              # AAB for Play Store production; APK otherwise
+              if ".aab" in url or "application/octet" in url:
+                  ext = ".aab" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
+              else:
+                  ext = ".apk" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
+              if platform == "android" and "app-bundle" in str(b.get("buildProfile", "")):
                   ext = ".aab"
+              # Prefer aab for production android when unknown
+              if platform == "android" and ext == ".apk":
+                  # still may be apk from profile; keep extension from URL path
+                  from urllib.parse import urlparse
+                  path = urlparse(url).path.lower()
+                  if path.endswith(".aab"):
+                      ext = ".aab"
+                  elif path.endswith(".apk"):
+                      ext = ".apk"
+                  else:
+                      # production profile is app-bundle
+                      ext = ".aab"
+
               name = f"FamilyOS-{platform}-v{os.environ['VERSION']}{ext}"
               path = f"/tmp/eas-artifacts/{name}"
-              print(f"Downloading {platform} artifact -> {name}")
-              req = urllib.request.Request(url)
-              with urllib.request.urlopen(req, timeout=300) as r, open(path, "wb") as out:
-                  out.write(r.read())
+              print(f"Downloading {platform} -> {name}")
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {token}",
+                  "User-Agent": "FamilyOS-Release-CI",
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=300) as r, open(path, "wb") as out:
+                      out.write(r.read())
+              except Exception as e:
+                  # Some artifact URLs are pre-signed and reject Authorization
+                  print(f"Auth download failed ({e}); retrying without Authorization header")
+                  req2 = urllib.request.Request(url, headers={"User-Agent": "FamilyOS-Release-CI"})
+                  with urllib.request.urlopen(req2, timeout=300) as r, open(path, "wb") as out:
+                      out.write(r.read())
               size = os.path.getsize(path)
               print(f"  saved {size} bytes")
+              if size < 1000:
+                  print("::error::Artifact too small — likely an error page")
+                  sys.exit(1)
               downloaded.append(path)
 
           if not downloaded:
@@ -247,7 +276,6 @@ jobs:
               sys.exit(1)
 
           open("/tmp/eas-artifact-list.txt", "w").write("\n".join(downloaded) + "\n")
-          print("files=" + ";".join(downloaded))
           PY
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -255,14 +283,12 @@ jobs:
 
       - name: Upload mobile artifacts to GitHub Release
         if: steps.eas_ready.outputs.ready == 'true' && steps.eas.outcome == 'success'
-        working-directory: mobile
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.release-api.outputs.tag }}
         run: |
           set -euo pipefail
           ls -la /tmp/eas-artifacts/
-          # Attach each file to the existing release for this tag
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             echo "Uploading $f to release $TAG"

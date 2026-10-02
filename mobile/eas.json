@@ -15,13 +15,18 @@
       "android": { "buildType": "apk" }
     },
     "production": {
-      "android": { "buildType": "apk" },
+      "android": { "buildType": "app-bundle" },
       "env": {
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }
