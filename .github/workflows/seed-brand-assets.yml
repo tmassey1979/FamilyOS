@@ -1,0 +1,80 @@
+name: Seed Brand Assets (EAS critical)
+
+# Ensures icon/adaptive-icon/splash-icon/favicon exist for Expo prebuild.
+# 1) Tries expand from mobile/assets/brand-source (preferred)
+# 2) Falls back to scripts/seed-brand-assets.py (embedded brand PNGs)
+# Optionally commits expanded PNGs to the branch so subsequent builds are faster.
+on:
+  workflow_dispatch:
+    inputs:
+      commit_pngs:
+        description: "Commit expanded PNGs to main after seeding"
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  seed:
+    name: Seed + verify brand PNGs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Expand from brand-source (preferred)
+        id: expand
+        continue-on-error: true
+        run: python3 scripts/expand-assets.py
+
+      - name: Fallback — assemble + seed embedded brand PNGs
+        if: steps.expand.outcome != 'success'
+        run: |
+          set -euo pipefail
+          if [[ -f scripts/assemble-seed-brand.py ]]; then
+            python3 scripts/assemble-seed-brand.py --run
+          elif [[ -f scripts/seed-brand-assets.py ]]; then
+            python3 scripts/seed-brand-assets.py
+          else
+            echo "::error::No expand sources and no seed script"
+            exit 1
+          fi
+
+      - name: Verify critical PNGs
+        run: |
+          set -euo pipefail
+          for f in mobile/assets/icon.png mobile/assets/adaptive-icon.png mobile/assets/splash-icon.png mobile/assets/favicon.png; do
+            [[ -f "$f" ]] || { echo "::error::Missing $f"; exit 1; }
+            bytes=$(wc -c < "$f")
+            echo "OK $f ($bytes bytes)"
+            [[ "$bytes" -ge 100 ]] || { echo "::error::$f too small"; exit 1; }
+            sig=$(head -c 8 "$f" | xxd -p)
+            [[ "$sig" == "89504e470d0a1a0a" ]] || { echo "::error::$f not PNG"; exit 1; }
+          done
+          {
+            echo "## Brand assets OK"
+            ls -la mobile/assets/icon.png mobile/assets/adaptive-icon.png mobile/assets/splash-icon.png mobile/assets/favicon.png
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit PNGs to branch
+        if: github.event_name == 'workflow_dispatch' && inputs.commit_pngs == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/assets/icon.png mobile/assets/adaptive-icon.png mobile/assets/splash-icon.png mobile/assets/favicon.png
+          if git diff --cached --quiet; then
+            echo "No PNG changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(mobile): seed EAS-critical brand PNGs (icon/adaptive/splash/favicon)"
+          git push origin HEAD:${{ github.ref_name }}
