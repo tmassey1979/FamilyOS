@@ -23,8 +23,7 @@
     "path": "splash-icon.png",
     "sources": [
       "brand-source/splash-icon.png.part0.b64",
-      "brand-source/splash-icon.png.part1.b64",
-      "brand-source/splash-icon.png.part2.b64"
+      "brand-source/splash-icon.png.part1.b64"
     ],
     "bytes": 37109
   },
@@ -34,66 +33,5 @@
       "brand-source/favicon.png.b64"
     ],
     "bytes": 4429
-  },
-  {
-    "path": "brand/logo-lockup-light.png",
-    "sources": [
-      "brand-source/brand__logo-lockup-light.png.part0.b64",
-      "brand-source/brand__logo-lockup-light.png.part1.b64",
-      "brand-source/brand__logo-lockup-light.png.part2.b64"
-    ],
-    "bytes": 40432
-  },
-  {
-    "path": "brand/logo-wordmark-navy.png",
-    "sources": [
-      "brand-source/brand__logo-wordmark-navy.png.part0.b64",
-      "brand-source/brand__logo-wordmark-navy.png.part1.b64",
-      "brand-source/brand__logo-wordmark-navy.png.part2.b64",
-      "brand-source/brand__logo-wordmark-navy.png.part3.b64"
-    ],
-    "bytes": 47201
-  },
-  {
-    "path": "brand/logo-wordmark-black.png",
-    "sources": [
-      "brand-source/brand__logo-wordmark-black.png.part0.b64",
-      "brand-source/brand__logo-wordmark-black.png.part1.b64",
-      "brand-source/brand__logo-wordmark-black.png.part2.b64"
-    ],
-    "bytes": 36505
-  },
-  {
-    "path": "brand/icon-app-1024.png",
-    "sources": [
-      "brand-source/brand__icon-app-1024.png.part0.b64",
-      "brand-source/brand__icon-app-1024.png.part1.b64"
-    ],
-    "bytes": 16089
-  },
-  {
-    "path": "brand/icon-mark-48.png",
-    "sources": [
-      "brand-source/brand__icon-mark-48.png.b64"
-    ],
-    "bytes": 1324
-  },
-  {
-    "path": "brand/play-icon-512.png",
-    "sources": [
-      "brand-source/brand__play-icon-512.png.part0.b64",
-      "brand-source/brand__play-icon-512.png.part1.b64"
-    ],
-    "bytes": 19912
-  },
-  {
-    "path": "brand/play-feature-graphic-1024x500.png",
-    "sources": [
-      "brand-source/brand__play-feature-graphic-1024x500.png.part0.b64",
-      "brand-source/brand__play-feature-graphic-1024x500.png.part1.b64",
-      "brand-source/brand__play-feature-graphic-1024x500.png.part2.b64",
-      "brand-source/brand__play-feature-graphic-1024x500.png.part3.b64"
-    ],
-    "bytes": 54859
   }
 ]
