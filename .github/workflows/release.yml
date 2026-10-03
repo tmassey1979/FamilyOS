@@ -125,6 +125,12 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Expand brand assets
+        working-directory: .
+        run: python3 scripts/expand-assets.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -142,6 +148,14 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Expand brand assets
+        working-directory: .
+        run: python3 scripts/expand-assets.py
 
       - uses: actions/setup-node@v4
         with:
@@ -228,16 +242,13 @@ jobs:
               if status not in ("FINISHED", "COMPLETE", "COMPLETED"):
                   print(f"::warning::Build {bid} status={status}")
 
-              # AAB for Play Store production; APK otherwise
               if ".aab" in url or "application/octet" in url:
                   ext = ".aab" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
               else:
                   ext = ".apk" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
               if platform == "android" and "app-bundle" in str(b.get("buildProfile", "")):
                   ext = ".aab"
-              # Prefer aab for production android when unknown
               if platform == "android" and ext == ".apk":
-                  # still may be apk from profile; keep extension from URL path
                   from urllib.parse import urlparse
                   path = urlparse(url).path.lower()
                   if path.endswith(".aab"):
@@ -245,7 +256,6 @@ jobs:
                   elif path.endswith(".apk"):
                       ext = ".apk"
                   else:
-                      # production profile is app-bundle
                       ext = ".aab"
 
               name = f"FamilyOS-{platform}-v{os.environ['VERSION']}{ext}"
@@ -259,7 +269,6 @@ jobs:
                   with urllib.request.urlopen(req, timeout=300) as r, open(path, "wb") as out:
                       out.write(r.read())
               except Exception as e:
-                  # Some artifact URLs are pre-signed and reject Authorization
                   print(f"Auth download failed ({e}); retrying without Authorization header")
                   req2 = urllib.request.Request(url, headers={"User-Agent": "FamilyOS-Release-CI"})
                   with urllib.request.urlopen(req2, timeout=300) as r, open(path, "wb") as out:
