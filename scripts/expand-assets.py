@@ -9,6 +9,7 @@ MOBILE = ROOT / "mobile"
 SRC = MOBILE / "assets" / "brand-source"
 DEST = MOBILE / "assets"
 
+
 def main() -> int:
     manifest = SRC / "manifest.json"
     if not manifest.exists():
@@ -17,18 +18,26 @@ def main() -> int:
     items = json.loads(manifest.read_text())
     for item in items:
         rel = item["path"]
-        src = SRC / Path(item["source"]).name
-        if not src.exists():
-            src = MOBILE / "assets" / item["source"]
-        if not src.exists():
-            print(f"missing {src}", file=sys.stderr)
-            return 1
+        sources = item.get("sources")
+        if not sources:
+            single = item.get("source")
+            sources = [single] if single else []
+        chunks: list[str] = []
+        for s in sources:
+            if not s:
+                continue
+            src = SRC / Path(s).name
+            if not src.exists():
+                print(f"missing {src}", file=sys.stderr)
+                return 1
+            chunks.append(src.read_text().strip())
+        data = base64.b64decode("".join(chunks))
         out = DEST / rel
         out.parent.mkdir(parents=True, exist_ok=True)
-        data = base64.b64decode(src.read_text().strip())
         out.write_bytes(data)
         print(f"expanded {rel} ({len(data)} bytes)")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
