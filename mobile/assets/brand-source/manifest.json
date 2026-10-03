@@ -1,57 +1,108 @@
 [
   {
     "path": "icon.png",
-    "source": "brand-source/icon.png.b64",
+    "sources": [
+      "brand-source/icon.png.part0.b64",
+      "brand-source/icon.png.part1.b64",
+      "brand-source/icon.png.part2.b64",
+      "brand-source/icon.png.part3.b64",
+      "brand-source/icon.png.part4.b64",
+      "brand-source/icon.png.part5.b64"
+    ],
     "bytes": 57233
   },
   {
     "path": "adaptive-icon.png",
-    "source": "brand-source/adaptive-icon.png.b64",
+    "sources": [
+      "brand-source/adaptive-icon.png.part0.b64",
+      "brand-source/adaptive-icon.png.part1.b64",
+      "brand-source/adaptive-icon.png.part2.b64",
+      "brand-source/adaptive-icon.png.part3.b64",
+      "brand-source/adaptive-icon.png.part4.b64",
+      "brand-source/adaptive-icon.png.part5.b64"
+    ],
     "bytes": 57233
   },
   {
     "path": "splash-icon.png",
-    "source": "brand-source/splash-icon.png.b64",
+    "sources": [
+      "brand-source/splash-icon.png.part0.b64",
+      "brand-source/splash-icon.png.part1.b64",
+      "brand-source/splash-icon.png.part2.b64",
+      "brand-source/splash-icon.png.part3.b64"
+    ],
     "bytes": 37109
   },
   {
     "path": "favicon.png",
-    "source": "brand-source/favicon.png.b64",
-    "bytes": 1625
+    "sources": [
+      "brand-source/favicon.png.b64"
+    ],
+    "bytes": 4429
   },
   {
     "path": "brand/logo-lockup-light.png",
-    "source": "brand-source/brand__logo-lockup-light.png.b64",
+    "sources": [
+      "brand-source/brand__logo-lockup-light.png.part0.b64",
+      "brand-source/brand__logo-lockup-light.png.part1.b64",
+      "brand-source/brand__logo-lockup-light.png.part2.b64",
+      "brand-source/brand__logo-lockup-light.png.part3.b64"
+    ],
     "bytes": 40432
   },
   {
     "path": "brand/logo-wordmark-navy.png",
-    "source": "brand-source/brand__logo-wordmark-navy.png.b64",
+    "sources": [
+      "brand-source/brand__logo-wordmark-navy.png.part0.b64",
+      "brand-source/brand__logo-wordmark-navy.png.part1.b64",
+      "brand-source/brand__logo-wordmark-navy.png.part2.b64",
+      "brand-source/brand__logo-wordmark-navy.png.part3.b64",
+      "brand-source/brand__logo-wordmark-navy.png.part4.b64"
+    ],
     "bytes": 47201
   },
   {
     "path": "brand/logo-wordmark-black.png",
-    "source": "brand-source/brand__logo-wordmark-black.png.b64",
+    "sources": [
+      "brand-source/brand__logo-wordmark-black.png.part0.b64",
+      "brand-source/brand__logo-wordmark-black.png.part1.b64",
+      "brand-source/brand__logo-wordmark-black.png.part2.b64",
+      "brand-source/brand__logo-wordmark-black.png.part3.b64"
+    ],
     "bytes": 36505
   },
   {
     "path": "brand/icon-app-1024.png",
-    "source": "brand-source/brand__icon-app-1024.png.b64",
+    "sources": [
+      "brand-source/brand__icon-app-1024.png.part0.b64",
+      "brand-source/brand__icon-app-1024.png.part1.b64"
+    ],
     "bytes": 16089
   },
   {
     "path": "brand/icon-mark-48.png",
-    "source": "brand-source/brand__icon-mark-48.png.b64",
+    "sources": [
+      "brand-source/brand__icon-mark-48.png.b64"
+    ],
     "bytes": 1324
   },
   {
     "path": "brand/play-icon-512.png",
-    "source": "brand-source/brand__play-icon-512.png.b64",
+    "sources": [
+      "brand-source/brand__play-icon-512.png.part0.b64",
+      "brand-source/brand__play-icon-512.png.part1.b64"
+    ],
     "bytes": 19912
   },
   {
     "path": "brand/play-feature-graphic-1024x500.png",
-    "source": "brand-source/brand__play-feature-graphic-1024x500.png.b64",
-    "bytes": 65274
+    "sources": [
+      "brand-source/brand__play-feature-graphic-1024x500.png.part0.b64",
+      "brand-source/brand__play-feature-graphic-1024x500.png.part1.b64",
+      "brand-source/brand__play-feature-graphic-1024x500.png.part2.b64",
+      "brand-source/brand__play-feature-graphic-1024x500.png.part3.b64",
+      "brand-source/brand__play-feature-graphic-1024x500.png.part4.b64"
+    ],
+    "bytes": 54859
   }
 ]

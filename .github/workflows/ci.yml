@@ -89,6 +89,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Expand brand assets
+        working-directory: .
+        run: python3 scripts/expand-assets.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
