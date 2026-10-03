@@ -95,7 +95,22 @@ jobs:
 
       - name: Expand brand assets
         working-directory: .
+        id: expand_brand
+        continue-on-error: true
         run: python3 scripts/expand-assets.py
+
+      - name: Seed brand PNGs if expand failed
+        working-directory: .
+        if: steps.expand_brand.outcome != 'success'
+        run: |
+          if [[ -f scripts/assemble-seed-brand.py ]]; then
+            python3 scripts/assemble-seed-brand.py --run
+          elif [[ -f scripts/seed-brand-assets.py ]]; then
+            python3 scripts/seed-brand-assets.py
+          else
+            echo "::error::Brand expand failed and no seed fallback present"
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
