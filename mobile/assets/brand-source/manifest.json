@@ -5,9 +5,7 @@
       "brand-source/icon.png.part0.b64",
       "brand-source/icon.png.part1.b64",
       "brand-source/icon.png.part2.b64",
-      "brand-source/icon.png.part3.b64",
-      "brand-source/icon.png.part4.b64",
-      "brand-source/icon.png.part5.b64"
+      "brand-source/icon.png.part3.b64"
     ],
     "bytes": 57233
   },
@@ -17,9 +15,7 @@
       "brand-source/adaptive-icon.png.part0.b64",
       "brand-source/adaptive-icon.png.part1.b64",
       "brand-source/adaptive-icon.png.part2.b64",
-      "brand-source/adaptive-icon.png.part3.b64",
-      "brand-source/adaptive-icon.png.part4.b64",
-      "brand-source/adaptive-icon.png.part5.b64"
+      "brand-source/adaptive-icon.png.part3.b64"
     ],
     "bytes": 57233
   },
@@ -28,8 +24,7 @@
     "sources": [
       "brand-source/splash-icon.png.part0.b64",
       "brand-source/splash-icon.png.part1.b64",
-      "brand-source/splash-icon.png.part2.b64",
-      "brand-source/splash-icon.png.part3.b64"
+      "brand-source/splash-icon.png.part2.b64"
     ],
     "bytes": 37109
   },
@@ -45,8 +40,7 @@
     "sources": [
       "brand-source/brand__logo-lockup-light.png.part0.b64",
       "brand-source/brand__logo-lockup-light.png.part1.b64",
-      "brand-source/brand__logo-lockup-light.png.part2.b64",
-      "brand-source/brand__logo-lockup-light.png.part3.b64"
+      "brand-source/brand__logo-lockup-light.png.part2.b64"
     ],
     "bytes": 40432
   },
@@ -56,8 +50,7 @@
       "brand-source/brand__logo-wordmark-navy.png.part0.b64",
       "brand-source/brand__logo-wordmark-navy.png.part1.b64",
       "brand-source/brand__logo-wordmark-navy.png.part2.b64",
-      "brand-source/brand__logo-wordmark-navy.png.part3.b64",
-      "brand-source/brand__logo-wordmark-navy.png.part4.b64"
+      "brand-source/brand__logo-wordmark-navy.png.part3.b64"
     ],
     "bytes": 47201
   },
@@ -66,8 +59,7 @@
     "sources": [
       "brand-source/brand__logo-wordmark-black.png.part0.b64",
       "brand-source/brand__logo-wordmark-black.png.part1.b64",
-      "brand-source/brand__logo-wordmark-black.png.part2.b64",
-      "brand-source/brand__logo-wordmark-black.png.part3.b64"
+      "brand-source/brand__logo-wordmark-black.png.part2.b64"
     ],
     "bytes": 36505
   },
@@ -100,8 +92,7 @@
       "brand-source/brand__play-feature-graphic-1024x500.png.part0.b64",
       "brand-source/brand__play-feature-graphic-1024x500.png.part1.b64",
       "brand-source/brand__play-feature-graphic-1024x500.png.part2.b64",
-      "brand-source/brand__play-feature-graphic-1024x500.png.part3.b64",
-      "brand-source/brand__play-feature-graphic-1024x500.png.part4.b64"
+      "brand-source/brand__play-feature-graphic-1024x500.png.part3.b64"
     ],
     "bytes": 54859
   }
