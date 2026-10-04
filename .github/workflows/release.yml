@@ -111,8 +111,10 @@ jobs:
             API: http://localhost:5080/swagger
 
             ### Mobile
-            EAS production builds (Android AAB for Play Store / APK for sideload when configured)
-            are attached to this release when the **EAS build** job succeeds.
+            Every release builds **both**:
+            - `FamilyOS-android-vX.Y.Z.aab` — Play Store (AAB)
+            - `FamilyOS-android-vX.Y.Z.apk` — sideload / direct install
+            Artifacts attach to this release when the EAS build job succeeds.
             Builds: https://expo.dev/accounts/tmassey1979/projects/familyos/builds
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -230,40 +232,117 @@ jobs:
           fi
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
-      - name: EAS build (production)
+      - name: EAS build (AAB + APK)
         id: eas
         if: steps.eas_ready.outputs.ready == 'true'
         run: |
           set -euo pipefail
           PLATFORMS="${{ github.event.inputs.eas_platforms }}"
           PLATFORMS=${PLATFORMS:-all}
-          echo "Building platforms: $PLATFORMS"
-
-          eas build \
-            --profile production \
-            --platform "$PLATFORMS" \
-            --non-interactive \
-            --wait \
-            --json \
-            --message "Family OS ${{ needs.release-api.outputs.tag }}" \
-            > /tmp/eas-build-result.json
-
-          cat /tmp/eas-build-result.json
+          TAG_MSG="Family OS ${{ needs.release-api.outputs.tag }}"
           mkdir -p /tmp/eas-artifacts
+          : > /tmp/eas-all-builds.json
+
+          # Android: always build both AAB (Play Store) and APK (sideload)
+          # iOS: single production profile when requested
+          if [[ "$PLATFORMS" == "all" || "$PLATFORMS" == "android" ]]; then
+            echo "==> EAS Android AAB (production)"
+            eas build \
+              --profile production \
+              --platform android \
+              --non-interactive \
+              --wait \
+              --json \
+              --message "$TAG_MSG (AAB)" \
+              >> /tmp/eas-all-builds.json
+            echo "" >> /tmp/eas-all-builds.json
+
+            echo "==> EAS Android APK (production-apk)"
+            eas build \
+              --profile production-apk \
+              --platform android \
+              --non-interactive \
+              --wait \
+              --json \
+              --message "$TAG_MSG (APK)" \
+              >> /tmp/eas-all-builds.json
+            echo "" >> /tmp/eas-all-builds.json
+          fi
+
+          if [[ "$PLATFORMS" == "all" || "$PLATFORMS" == "ios" ]]; then
+            echo "==> EAS iOS (production)"
+            eas build \
+              --profile production \
+              --platform ios \
+              --non-interactive \
+              --wait \
+              --json \
+              --message "$TAG_MSG (iOS)" \
+              >> /tmp/eas-all-builds.json
+            echo "" >> /tmp/eas-all-builds.json
+          fi
+
+          cat /tmp/eas-all-builds.json
 
           python3 << 'PY'
           import json, os, sys, urllib.request
+          from urllib.parse import urlparse
 
           token = os.environ.get("EXPO_TOKEN", "")
-          raw = open("/tmp/eas-build-result.json").read().strip()
-          data = json.loads(raw)
-          builds = data if isinstance(data, list) else [data]
+          version = os.environ.get("VERSION", "0.0.0")
+          raw = open("/tmp/eas-all-builds.json").read().strip()
+          builds = []
+          buf = ""
+          depth = 0
+          in_str = False
+          esc = False
+          for ch in raw:
+              buf += ch
+              if in_str:
+                  if esc:
+                      esc = False
+                  elif ch == "\\":
+                      esc = True
+                  elif ch == '"':
+                      in_str = False
+                  continue
+              if ch == '"':
+                  in_str = True
+              elif ch == "{":
+                  depth += 1
+              elif ch == "}":
+                  depth -= 1
+                  if depth == 0 and buf.strip():
+                      try:
+                          obj = json.loads(buf.strip())
+                          if isinstance(obj, list):
+                              builds.extend(obj)
+                          else:
+                              builds.append(obj)
+                      except json.JSONDecodeError as e:
+                          print(f"::warning::skip bad json chunk: {e}")
+                      buf = ""
+          if buf.strip():
+              try:
+                  obj = json.loads(buf.strip())
+                  if isinstance(obj, list):
+                      builds.extend(obj)
+                  else:
+                      builds.append(obj)
+              except json.JSONDecodeError:
+                  pass
+
+          if not builds:
+              print("::error::No EAS build results parsed")
+              sys.exit(1)
 
           downloaded = []
+          used_names = set()
           for b in builds:
               status = (b.get("status") or "").upper()
               platform = (b.get("platform") or "unknown").lower()
               bid = b.get("id") or "unknown"
+              profile = str(b.get("buildProfile") or b.get("profile") or "")
               arts = b.get("artifacts") or {}
               url = arts.get("applicationArchiveUrl") or arts.get("buildUrl")
               if not url:
@@ -272,25 +351,25 @@ jobs:
               if status not in ("FINISHED", "COMPLETE", "COMPLETED"):
                   print(f"::warning::Build {bid} status={status}")
 
-              if ".aab" in url or "application/octet" in url:
-                  ext = ".aab" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
-              else:
-                  ext = ".apk" if platform == "android" else (".ipa" if platform == "ios" else ".bin")
-              if platform == "android" and "app-bundle" in str(b.get("buildProfile", "")):
-                  ext = ".aab"
-              if platform == "android" and ext == ".apk":
-                  from urllib.parse import urlparse
-                  path = urlparse(url).path.lower()
-                  if path.endswith(".aab"):
-                      ext = ".aab"
-                  elif path.endswith(".apk"):
+              path_lower = urlparse(url).path.lower()
+              if platform == "android":
+                  if path_lower.endswith(".apk") or "production-apk" in profile or profile.endswith("apk"):
                       ext = ".apk"
+                  elif path_lower.endswith(".aab") or "app-bundle" in profile or profile == "production":
+                      ext = ".aab"
                   else:
                       ext = ".aab"
+              elif platform == "ios":
+                  ext = ".ipa"
+              else:
+                  ext = ".bin"
 
-              name = f"FamilyOS-{platform}-v{os.environ['VERSION']}{ext}"
+              name = f"FamilyOS-{platform}-v{version}{ext}"
+              if name in used_names:
+                  name = f"FamilyOS-{platform}-{profile or 'extra'}-v{version}{ext}"
+              used_names.add(name)
               path = f"/tmp/eas-artifacts/{name}"
-              print(f"Downloading {platform} -> {name}")
+              print(f"Downloading {platform}/{profile or 'default'} -> {name}")
               req = urllib.request.Request(url, headers={
                   "Authorization": f"Bearer {token}",
                   "User-Agent": "FamilyOS-Release-CI",
@@ -315,6 +394,7 @@ jobs:
               sys.exit(1)
 
           open("/tmp/eas-artifact-list.txt", "w").write("\n".join(downloaded) + "\n")
+          print(f"Downloaded {len(downloaded)} artifact(s)")
           PY
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
