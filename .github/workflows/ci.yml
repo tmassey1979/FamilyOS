@@ -93,15 +93,28 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Expand brand assets
+      - name: Expand EAS brand bundle (real PNGs)
+        working-directory: .
+        id: expand_eas_brand
+        continue-on-error: true
+        run: |
+          if [[ -f scripts/expand-eas-brand-bundle.py ]]; then
+            python3 scripts/expand-eas-brand-bundle.py
+          else
+            echo "No expand-eas-brand-bundle.py — skip"
+            exit 1
+          fi
+
+      - name: Expand brand assets (brand-source b64)
         working-directory: .
         id: expand_brand
         continue-on-error: true
+        if: steps.expand_eas_brand.outcome != 'success'
         run: python3 scripts/expand-assets.py
 
       - name: Seed brand PNGs if expand failed
         working-directory: .
-        if: steps.expand_brand.outcome != 'success'
+        if: steps.expand_eas_brand.outcome != 'success' && steps.expand_brand.outcome != 'success'
         run: |
           if [[ -f scripts/assemble-seed-brand.py ]]; then
             python3 scripts/assemble-seed-brand.py --run
