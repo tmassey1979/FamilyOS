@@ -18,7 +18,9 @@ COPY tests/ tests/
 COPY scripts/ scripts/
 
 # Expand gzip+base64 EF migrations into Infrastructure (keeps repo blobs small)
-RUN python3 scripts/expand-migrations.py
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && python3 scripts/expand-migrations.py \
+    && apt-get purge -y python3 && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 ARG VERSION=0.1.0
 RUN dotnet publish src/FamilyOS.Api/FamilyOS.Api.csproj -c Release -o /app/publish \
