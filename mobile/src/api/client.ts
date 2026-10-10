@@ -222,6 +222,116 @@ export const familyApi = {
       '/api/family/members',
     ),
   declineReasons: () => api<DeclineReasonDto[]>('/api/family/decline-reasons'),
+  addMember: (body: {
+    email: string;
+    displayName: string;
+    role: string;
+    externalIdentityId?: string;
+    firstName?: string;
+    lastName?: string;
+  }) =>
+    api<{ id: string; userId: string; displayName: string; role: string; isActive: boolean }>(
+      '/api/family/members',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  changeRole: (memberId: string, role: string) =>
+    api<{ id: string; userId: string; displayName: string; role: string; isActive: boolean }>(
+      `/api/family/members/${memberId}/change-role`,
+      { method: 'POST', body: JSON.stringify({ role }) },
+    ),
+  deactivate: (memberId: string) =>
+    api<{ id: string; userId: string; displayName: string; role: string; isActive: boolean }>(
+      `/api/family/members/${memberId}/deactivate`,
+      { method: 'POST' },
+    ),
+};
+
+export type CalendarEventDto = {
+  id: string;
+  title: string;
+  description?: string;
+  startUtc: string;
+  endUtc?: string;
+  allDay: boolean;
+  location?: string;
+  linkedTaskId?: string;
+  linkedRequestId?: string;
+};
+
+export const calendarApi = {
+  upcoming: (days = 14) => api<CalendarEventDto[]>(`/api/calendar/upcoming?days=${days}`),
+  create: (body: {
+    title: string;
+    startUtc: string;
+    endUtc?: string;
+    allDay?: boolean;
+    location?: string;
+    description?: string;
+    linkedTaskId?: string;
+    linkedRequestId?: string;
+  }) =>
+    api<CalendarEventDto>('/api/calendar', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: body.title,
+        startUtc: body.startUtc,
+        endUtc: body.endUtc ?? null,
+        allDay: body.allDay ?? false,
+        location: body.location ?? null,
+        description: body.description ?? null,
+        linkedTaskId: body.linkedTaskId ?? null,
+        linkedRequestId: body.linkedRequestId ?? null,
+      }),
+    }),
+  cancel: (id: string) => api<void>(`/api/calendar/${id}/cancel`, { method: 'POST' }),
+};
+
+export type ConditionDto = {
+  id: string;
+  requestId?: string | null;
+  taskId?: string | null;
+  name: string;
+  description?: string | null;
+  type: string;
+  status: string;
+  logicGroup: string;
+  groupOrder: number;
+  deadlineUtc?: string | null;
+  satisfiedByMemberId?: string | null;
+  satisfiedAtUtc?: string | null;
+};
+
+export const conditionsApi = {
+  pending: () => api<ConditionDto[]>('/api/conditions/pending'),
+  byRequest: (requestId: string) => api<ConditionDto[]>(`/api/conditions/by-request/${requestId}`),
+  create: (body: {
+    name: string;
+    type: string;
+    requestId?: string;
+    taskId?: string;
+    description?: string;
+    deadlineUtc?: string;
+  }) =>
+    api<ConditionDto>('/api/conditions', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: body.name,
+        type: body.type,
+        requestId: body.requestId ?? null,
+        taskId: body.taskId ?? null,
+        description: body.description ?? null,
+        deadlineUtc: body.deadlineUtc ?? null,
+        logicGroup: 'All',
+        groupOrder: 0,
+      }),
+    }),
+  satisfy: (id: string) => api<ConditionDto>(`/api/conditions/${id}/satisfy`, { method: 'POST' }),
+  fail: (id: string, reason?: string) =>
+    api<ConditionDto>(`/api/conditions/${id}/fail`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  cancel: (id: string) => api<ConditionDto>(`/api/conditions/${id}/cancel`, { method: 'POST' }),
 };
 
 export type PendingQuestionDto = {

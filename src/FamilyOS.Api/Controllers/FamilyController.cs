@@ -55,6 +55,17 @@ public class FamilyController : ControllerBase
         return CreatedAtAction(nameof(Members), dto);
     }
 
+
+    [HttpPost("members/{id:guid}/change-role")]
+    [Authorize(Policy = FamilyAuthPolicies.OwnerOnly)]
+    public async Task<ActionResult<MemberDto>> ChangeRole(Guid id, [FromBody] ChangeRoleBody body, CancellationToken ct)
+        => Ok(await _mediator.Send(new ChangeMemberRoleCommand(id, body.Role), ct));
+
+    [HttpPost("members/{id:guid}/deactivate")]
+    [Authorize(Policy = FamilyAuthPolicies.OwnerOnly)]
+    public async Task<ActionResult<MemberDto>> Deactivate(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new DeactivateMemberCommand(id), ct));
+
     [HttpGet("decline-reasons")]
     [Authorize(Policy = FamilyAuthPolicies.FamilyMember)]
     public async Task<ActionResult<List<DeclineReasonDto>>> DeclineReasons(CancellationToken ct)

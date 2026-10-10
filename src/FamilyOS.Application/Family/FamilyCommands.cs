@@ -24,9 +24,14 @@ public record AddFamilyMemberCommand(
     string? FirstName,
     string? LastName) : IRequest<MemberDto>;
 
+public record ChangeMemberRoleCommand(Guid MemberId, FamilyRole Role) : IRequest<MemberDto>;
+public record DeactivateMemberCommand(Guid MemberId) : IRequest<MemberDto>;
+
 public class FamilyCommandHandlers :
     IRequestHandler<CreateFamilyCommand, FamilyDto>,
-    IRequestHandler<AddFamilyMemberCommand, MemberDto>
+    IRequestHandler<AddFamilyMemberCommand, MemberDto>,
+    IRequestHandler<ChangeMemberRoleCommand, MemberDto>,
+    IRequestHandler<DeactivateMemberCommand, MemberDto>
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
@@ -130,5 +135,54 @@ public class FamilyCommandHandlers :
         await _db.SaveChangesAsync(ct);
 
         return new MemberDto(member.Id, user.Id, member.DisplayName, member.Role, member.IsActive);
+    }
+
+    public async Task<MemberDto> Handle(ChangeMemberRoleCommand cmd, CancellationToken ct)
+    {
+        var (familyId, actorMemberId, role) = await _current.RequireFamilyAsync(ct);
+        if (role != FamilyRole.Owner)
+            throw new ForbiddenException("Only the Owner can change roles.");
+
+        var member = await _db.FamilyMembers
+            .FirstOrDefaultAsync(m => m.Id == cmd.MemberId && m.FamilyId == familyId, ct)
+            ?? throw new NotFoundException("Member", cmd.MemberId);
+
+        if (member.Id == actorMemberId && cmd.Role != FamilyRole.Owner)
+            throw new DomainException("Owner cannot demote themselves. Transfer ownership first.");
+
+        if (cmd.Role == FamilyRole.Owner && member.Role != FamilyRole.Owner)
+        {
+            // demote current owner to Adult when promoting another
+            var owners = await _db.FamilyMembers
+                .Where(m => m.FamilyId == familyId && m.Role == FamilyRole.Owner && m.IsActive)
+                .ToListAsync(ct);
+            foreach (var o in owners)
+                o.ChangeRole(FamilyRole.Adult);
+        }
+
+        member.ChangeRole(cmd.Role);
+        await _db.SaveChangesAsync(ct);
+        return new MemberDto(member.Id, member.UserId, member.DisplayName, member.Role, member.IsActive);
+    }
+
+    public async Task<MemberDto> Handle(DeactivateMemberCommand cmd, CancellationToken ct)
+    {
+        var (familyId, actorMemberId, role) = await _current.RequireFamilyAsync(ct);
+        if (role != FamilyRole.Owner)
+            throw new ForbiddenException("Only the Owner can deactivate members.");
+
+        var member = await _db.FamilyMembers
+            .FirstOrDefaultAsync(m => m.Id == cmd.MemberId && m.FamilyId == familyId, ct)
+            ?? throw new NotFoundException("Member", cmd.MemberId);
+
+        if (member.Id == actorMemberId)
+            throw new DomainException("Cannot deactivate yourself.");
+
+        if (member.Role == FamilyRole.Owner)
+            throw new DomainException("Cannot deactivate the Owner.");
+
+        member.Deactivate();
+        await _db.SaveChangesAsync(ct);
+        return new MemberDto(member.Id, member.UserId, member.DisplayName, member.Role, member.IsActive);
     }
 }

@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View,
+} from 'react-native';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
-  familyApi,
-  meApi,
-  procurementApi,
-  type MeDto,
-  type ProcurementItemDto,
+  familyApi, meApi, procurementApi,
+  type MeDto, type ProcurementItemDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 
 type Member = { id: string; displayName: string; role: string; isActive: boolean };
+
+const ROLES = ['Owner', 'Adult', 'Teen', 'Child'] as const;
 
 export default function FamilyScreen() {
   const [familyName, setFamilyName] = useState('Family');
@@ -19,6 +20,18 @@ export default function FamilyScreen() {
   const [queue, setQueue] = useState<ProcurementItemDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<string>('Child');
+  const [saving, setSaving] = useState(false);
+
+  const [roleMember, setRoleMember] = useState<Member | null>(null);
+  const [nextRole, setNextRole] = useState<string>('Adult');
+
+  const isOwner = me?.role === 'Owner';
+  const isAdultOrOwner = me?.role === 'Owner' || me?.role === 'Adult';
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -35,26 +48,58 @@ export default function FamilyScreen() {
       setMe(who);
       setQueue(items);
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === 'object' && 'error' in e
-          ? String((e as { error: string }).error)
-          : 'Unable to load family';
-      setError(msg);
-      setFamilyName('The Hendersons');
-      setMembers([
-        { id: '1', displayName: 'Terry', role: 'Owner', isActive: true },
-        { id: '2', displayName: 'Michelle', role: 'Adult', isActive: true },
-        { id: '3', displayName: 'Mia', role: 'Teen', isActive: true },
-        { id: '4', displayName: 'Eli', role: 'Child', isActive: true },
-      ]);
+      setError((e as { error?: string })?.error ?? 'Unable to load family');
     } finally {
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
+
+  const addMember = async () => {
+    if (!displayName.trim() || !email.trim()) return;
+    setSaving(true);
+    try {
+      await familyApi.addMember({
+        email: email.trim(),
+        displayName: displayName.trim(),
+        role,
+        externalIdentityId: email.trim().toLowerCase(),
+      });
+      setAddOpen(false);
+      setDisplayName('');
+      setEmail('');
+      setRole('Child');
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Add member failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeRole = async () => {
+    if (!roleMember) return;
+    setSaving(true);
+    try {
+      await familyApi.changeRole(roleMember.id, nextRole);
+      setRoleMember(null);
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Change role failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivate = async (m: Member) => {
+    try {
+      await familyApi.deactivate(m.id);
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Deactivate failed');
+    }
+  };
 
   return (
     <ScrollView
@@ -66,14 +111,32 @@ export default function FamilyScreen() {
       {me?.role ? (
         <Text style={typography.caption}>Signed in as {me.externalIdentityId} · {me.role}</Text>
       ) : null}
-      {error ? <Text style={styles.hint}>Offline demo · {error}</Text> : null}
+      {error ? <Text style={styles.hint}>{error}</Text> : null}
 
-      <SectionTitle>Members</SectionTitle>
+      <View style={styles.toolbar}>
+        <SectionTitle>Members</SectionTitle>
+        {isAdultOrOwner ? <Button title="Add member" onPress={() => setAddOpen(true)} /> : null}
+      </View>
       {refreshing && members.length === 0 ? <ActivityIndicator color={colors.primary} /> : null}
       {members.map((m) => (
-        <Card key={m.id} style={styles.card}>
-          <Text style={typography.heading}>{m.displayName}</Text>
-          <Badge label={m.role} tone={m.role === 'Owner' ? 'success' : 'default'} />
+        <Card key={m.id} style={styles.cardCol}>
+          <View style={styles.rowBetween}>
+            <Text style={typography.heading}>{m.displayName}</Text>
+            <Badge label={m.role} tone={m.role === 'Owner' ? 'success' : 'default'} />
+          </View>
+          {isOwner && m.role !== 'Owner' ? (
+            <View style={styles.row}>
+              <Button
+                title="Change role"
+                variant="secondary"
+                onPress={() => {
+                  setNextRole(m.role === 'Adult' ? 'Teen' : 'Adult');
+                  setRoleMember(m);
+                }}
+              />
+              <Button title="Deactivate" variant="secondary" onPress={() => void deactivate(m)} />
+            </View>
+          ) : null}
         </Card>
       ))}
 
@@ -105,6 +168,46 @@ export default function FamilyScreen() {
       <Text style={[typography.caption, { marginTop: spacing.lg }]}>
         Roles and permissions are enforced on the API — UI is never the security boundary.
       </Text>
+
+      <Modal visible={addOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Add member</Text>
+            <TextInput style={styles.input} placeholder="Display name" placeholderTextColor={colors.textMuted} value={displayName} onChangeText={setDisplayName} />
+            <TextInput style={styles.input} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" value={email} onChangeText={setEmail} />
+            <View style={styles.row}>
+              {ROLES.filter((r) => r !== 'Owner').map((r) => (
+                <Pressable key={r} style={[styles.chip, role === r && styles.chipOn]} onPress={() => setRole(r)}>
+                  <Text style={styles.chipText}>{r}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="secondary" onPress={() => setAddOpen(false)} />
+              <Button title={saving ? 'Saving…' : 'Add'} onPress={() => void addMember()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!roleMember} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Role · {roleMember?.displayName}</Text>
+            <View style={styles.row}>
+              {ROLES.map((r) => (
+                <Pressable key={r} style={[styles.chip, nextRole === r && styles.chipOn]} onPress={() => setNextRole(r)}>
+                  <Text style={styles.chipText}>{r}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="secondary" onPress={() => setRoleMember(null)} />
+              <Button title={saving ? 'Saving…' : 'Save role'} onPress={() => void changeRole()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -112,13 +215,22 @@ export default function FamilyScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
-  card: {
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardCol: { marginBottom: spacing.sm, gap: spacing.sm },
   row: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', flexWrap: 'wrap' },
-  hint: { ...typography.caption, marginBottom: spacing.md },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hint: { ...typography.caption, marginBottom: spacing.md, color: colors.danger },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    padding: spacing.lg, gap: spacing.md,
+  },
+  input: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm,
+    color: colors.text, backgroundColor: colors.bg,
+  },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
+  chip: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.bg },
+  chipOn: { backgroundColor: colors.primary },
+  chipText: { ...typography.caption, color: colors.text },
 });

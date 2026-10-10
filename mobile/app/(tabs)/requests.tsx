@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
+  conditionsApi,
   requestsApi,
+  type ConditionDto,
   type ExecutionPlanDto,
   type RequestDto,
   type RequestTypeDto,
@@ -232,6 +234,26 @@ export default function RequestsScreen() {
           />,
         );
       }
+    }
+
+    if (isQueue && (APPROVABLE.has(s) || s === 'WaitingForInformation' || PLANABLE.has(s))) {
+      nodes.push(
+        <Button
+          key="cond"
+          title="Add condition"
+          variant="secondary"
+          onPress={() =>
+            void run(item.id, () =>
+              conditionsApi.create({
+                name: 'Info needed',
+                type: 'Information',
+                requestId: item.id,
+                description: 'Structured condition blocker',
+              }),
+            )
+          }
+        />,
+      );
     }
 
     if (PLANABLE.has(s)) {

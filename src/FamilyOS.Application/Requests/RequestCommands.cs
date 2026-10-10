@@ -1,6 +1,7 @@
 using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Approvals;
+using FamilyOS.Domain.Calendar;
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Execution;
 using FamilyOS.Domain.Notifications;
@@ -200,7 +201,8 @@ public class RequestCommandHandlers :
 
         var plan = ExecutionPlan.Create(_current.FamilyId!.Value, request.Id, _current.MemberId!.Value);
         plan.AddItem(ExecutionItemType.Task, $"Execute: {request.Title}", _current.MemberId);
-        if (request.NeededByUtc.HasValue)
+        // Always propose a calendar block for rides; otherwise when NeededBy is set
+        if (request.Type == RequestTypeCode.Ride || request.NeededByUtc.HasValue)
             plan.AddItem(ExecutionItemType.CalendarEvent, request.Title, _current.MemberId);
 
         _db.ExecutionPlans.Add(plan);
@@ -223,6 +225,25 @@ public class RequestCommandHandlers :
                 plan.RemoveItem(id);
 
         plan.Commit(_current.MemberId!.Value);
+
+        // Materialize selected calendar items into real CalendarEvents
+        var request = await _db.Requests.FirstOrDefaultAsync(r => r.Id == plan.RequestId, ct);
+        foreach (var item in plan.Items.Where(i => i.IsSelected && i.Type == ExecutionItemType.CalendarEvent))
+        {
+            var start = request?.NeededByUtc ?? DateTime.UtcNow.AddHours(2);
+            var ev = CalendarEvent.Create(
+                plan.FamilyId,
+                item.Title,
+                start,
+                _current.MemberId!.Value,
+                endUtc: start.AddHours(1),
+                allDay: false,
+                location: null,
+                linkedTaskId: null,
+                linkedRequestId: plan.RequestId);
+            _db.CalendarEvents.Add(ev);
+        }
+
         await _db.SaveChangesAsync(ct);
         return ToPlanDto(plan);
     }
