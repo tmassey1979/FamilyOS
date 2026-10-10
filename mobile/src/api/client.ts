@@ -4,7 +4,11 @@
  * - Development: setDevUser('terry.owner') → X-Dev-User header (API DevBypass)
  */
 
-const DEFAULT_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5080';
+const DEFAULT_BASE =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (typeof __DEV__ !== 'undefined' && __DEV__
+    ? 'http://localhost:5080'
+    : 'https://api.18.226.226.118.sslip.io');
 
 export type ApiError = { error: string; status: number };
 

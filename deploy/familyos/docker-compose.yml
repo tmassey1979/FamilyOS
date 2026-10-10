@@ -97,6 +97,7 @@ services:
       RabbitMQ__Username: ${RABBITMQ_USER:-familyos}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}
       Seed__Enabled: ${SEED_ENABLED:-true}
+      Auth__UseDevBypass: "true"
     depends_on:
       postgres:
         condition: service_healthy
