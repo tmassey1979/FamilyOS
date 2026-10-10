@@ -1,0 +1,134 @@
+# Family OS production stack behind Traefik (proxy network).
+# Prerequisites:
+#   docker network create proxy   # already created by traefik bootstrap
+#   cp deploy/familyos/.env.example deploy/familyos/.env  # edit secrets
+#
+# From repo root:
+#   docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d --build
+#
+# AWS free tier note: t2.micro/t3.micro (1GB) is tight for this stack.
+# Prefer t3.small (2GB) or enable 2GB swap on micro. See deploy/AWS.md.
+
+name: familyos
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-familyos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-familyos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # No host ports — only internal network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-familyos}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: start --import-realm --hostname-strict=false
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_HTTP_PORT: 8080
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: auth.${DOMAIN}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ../../docker/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    networks:
+      - internal
+      - proxy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.keycloak.rule=Host(`auth.${DOMAIN}`)
+      - traefik.http.routers.keycloak.entrypoints=websecure
+      - traefik.http.routers.keycloak.tls.certresolver=le
+      - traefik.http.services.keycloak.loadbalancer.server.port=8080
+      - traefik.http.routers.keycloak.middlewares=sec-headers@file
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    image: familyos-api:${VERSION:-0.1.0}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5080
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-familyos};Username=${POSTGRES_USER:-familyos};Password=${POSTGRES_PASSWORD}"
+      Keycloak__Authority: "https://auth.${DOMAIN}/realms/familyos"
+      Keycloak__Audience: "familyos-mobile"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-familyos}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      Seed__Enabled: ${SEED_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - internal
+      - proxy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.familyos-api.rule=Host(`api.${DOMAIN}`)
+      - traefik.http.routers.familyos-api.entrypoints=websecure
+      - traefik.http.routers.familyos-api.tls.certresolver=le
+      - traefik.http.services.familyos-api.loadbalancer.server.port=5080
+      - traefik.http.routers.familyos-api.middlewares=sec-headers@file
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  proxy:
+    external: true
+  internal:
+    driver: bridge
+    internal: true
