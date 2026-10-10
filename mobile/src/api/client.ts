@@ -208,12 +208,20 @@ export const tasksApi = {
     }),
 };
 
+export type DeclineReasonDto = {
+  id: string;
+  text: string;
+  sortOrder: number;
+  isEnabled: boolean;
+};
+
 export const familyApi = {
   get: () => api<{ id: string; name: string; timeZone?: string; currency?: string }>('/api/family'),
   members: () =>
     api<Array<{ id: string; userId: string; displayName: string; role: string; isActive: boolean }>>(
       '/api/family/members',
     ),
+  declineReasons: () => api<DeclineReasonDto[]>('/api/family/decline-reasons'),
 };
 
 export type RequestDto = {

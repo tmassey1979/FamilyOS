@@ -69,6 +69,21 @@ public class TaskItemTests
     }
 
     [Fact]
+    public void Decline_with_reason_records_history()
+    {
+        var task = NewTask();
+        task.Assign(AssigneeId, CreatorId);
+        var reasonId = Guid.NewGuid();
+        task.Decline(AssigneeId, reasonId, "Busy tonight");
+        task.Status.Should().Be(FamilyTaskStatus.Declined);
+        task.History.Should().Contain(h =>
+            h.Status == FamilyTaskStatus.Declined &&
+            h.Detail != null &&
+            h.Detail.Contains(reasonId.ToString()) &&
+            h.Detail.Contains("Busy tonight"));
+    }
+
+    [Fact]
     public void Full_lifecycle_Create_Assign_Accept_Start_Complete()
     {
         var task = NewTask();
