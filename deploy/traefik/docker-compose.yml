@@ -10,7 +10,7 @@ name: edge
 
 services:
   traefik:
-    image: traefik:v3.5
+    image: traefik:v3.6
     container_name: traefik
     restart: unless-stopped
     security_opt:
@@ -20,6 +20,7 @@ services:
       - "443:443"
     environment:
       - TZ=${TZ:-UTC}
+      - DOCKER_API_VERSION=1.44
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt

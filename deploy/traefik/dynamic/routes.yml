@@ -1,0 +1,58 @@
+# Static routes — works even when Docker provider fails (Engine 29 API floor)
+http:
+  routers:
+    familyos-api:
+      rule: "Host(`api.18.226.226.118.sslip.io`)"
+      entryPoints:
+        - websecure
+      service: familyos-api
+      tls:
+        certResolver: le
+      middlewares:
+        - sec-headers@file
+    familyos-api-http:
+      rule: "Host(`api.18.226.226.118.sslip.io`)"
+      entryPoints:
+        - web
+      service: familyos-api
+    keycloak:
+      rule: "Host(`auth.18.226.226.118.sslip.io`)"
+      entryPoints:
+        - websecure
+      service: keycloak
+      tls:
+        certResolver: le
+      middlewares:
+        - sec-headers@file
+    keycloak-http:
+      rule: "Host(`auth.18.226.226.118.sslip.io`)"
+      entryPoints:
+        - web
+      service: keycloak
+    portainer:
+      rule: "Host(`portainer.18.226.226.118.sslip.io`)"
+      entryPoints:
+        - websecure
+      service: portainer
+      tls:
+        certResolver: le
+      middlewares:
+        - sec-headers@file
+    portainer-http:
+      rule: "Host(`portainer.18.226.226.118.sslip.io`)"
+      entryPoints:
+        - web
+      service: portainer
+  services:
+    familyos-api:
+      loadBalancer:
+        servers:
+          - url: "http://familyos-api-1:5080"
+    keycloak:
+      loadBalancer:
+        servers:
+          - url: "http://familyos-keycloak-1:8080"
+    portainer:
+      loadBalancer:
+        servers:
+          - url: "http://portainer:9000"
