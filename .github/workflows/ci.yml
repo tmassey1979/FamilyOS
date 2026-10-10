@@ -140,3 +140,11 @@ jobs:
         run: |
           echo "## CI — Mobile" >> "$GITHUB_STEP_SUMMARY"
           echo "- Expo / TypeScript \`tsc --noEmit\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # Production CD: after green build on main → Portainer redeploy
+  deploy:
+    name: Redeploy (Portainer)
+    needs: [build-and-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/deploy-stack.yml
+    secrets: inherit

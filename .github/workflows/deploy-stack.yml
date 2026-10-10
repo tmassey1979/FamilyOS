@@ -1,0 +1,139 @@
+# Redeploy Family OS on the server via Portainer (main only).
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   PORTAINER_WEBHOOK_URL   preferred — Stack webhook POST URL from Portainer UI
+#   PORTAINER_URL           e.g. https://portainer.18.226.226.118.sslip.io
+#   PORTAINER_API_KEY       Portainer access token (if no webhook)
+#   PORTAINER_STACK_ID      numeric stack id (if no webhook)
+#   PORTAINER_ENDPOINT_ID   default 1
+#
+# Optional SSH fallback:
+#   DEPLOY_SSH_HOST         e.g. ubuntu@18.226.226.118
+#   DEPLOY_SSH_KEY          private key PEM contents
+
+name: Deploy stack (Portainer)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why redeploy"
+        required: false
+        default: manual
+
+permissions:
+  contents: read
+
+jobs:
+  redeploy:
+    name: Portainer / server redeploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — skip pull requests and non-main pushes
+        id: guard
+        run: |
+          REF="${{ github.ref }}"
+          EVENT="${{ github.event_name }}"
+          echo "ref=$REF event=$EVENT"
+          if [ "$EVENT" = "pull_request" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT" = "push" ] && [ "$REF" != "refs/heads/main" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # workflow_call from CI on main: ref is still the PR/push ref of the caller
+          if [ "$REF" != "refs/heads/main" ] && [ "$EVENT" != "workflow_dispatch" ] && [ "$EVENT" != "workflow_call" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # For workflow_call, caller must only invoke on main (enforced in ci/release)
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Redeploy (webhook → API → SSH)
+        id: deploy
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+          PORTAINER_STACK_ID: ${{ secrets.PORTAINER_STACK_ID }}
+          PORTAINER_ENDPOINT_ID: ${{ secrets.PORTAINER_ENDPOINT_ID }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          MODE=""
+
+          if [ -n "${PORTAINER_WEBHOOK_URL:-}" ]; then
+            echo "→ Portainer webhook"
+            code=$(curl -sS -o /tmp/pw.out -w "%{http_code}" -X POST "$PORTAINER_WEBHOOK_URL" \
+              -H "Content-Type: application/json" --max-time 120 || echo "000")
+            echo "HTTP $code"
+            head -c 400 /tmp/pw.out 2>/dev/null || true
+            echo
+            if [ "$code" = "200" ] || [ "$code" = "202" ] || [ "$code" = "204" ]; then
+              MODE=webhook
+            else
+              echo "::warning::Webhook HTTP $code — trying next method"
+            fi
+          fi
+
+          if [ -z "$MODE" ] && [ -n "${PORTAINER_URL:-}" ] && [ -n "${PORTAINER_API_KEY:-}" ] && [ -n "${PORTAINER_STACK_ID:-}" ]; then
+            echo "→ Portainer API git/redeploy"
+            BASE="${PORTAINER_URL%/}"
+            EP="${PORTAINER_ENDPOINT_ID:-1}"
+            code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT \
+              "${BASE}/api/stacks/${PORTAINER_STACK_ID}/git/redeploy?endpointId=${EP}" \
+              -H "X-API-Key: ${PORTAINER_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"PullImage":true,"RepositoryAuthentication":false}' \
+              --max-time 300 || echo "000")
+            echo "HTTP $code"
+            head -c 600 /tmp/pa.out 2>/dev/null || true
+            echo
+            if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+              MODE=api-git
+            else
+              echo "::warning::API HTTP $code — trying SSH"
+            fi
+          fi
+
+          if [ -z "$MODE" ] && [ -n "${DEPLOY_SSH_HOST:-}" ] && [ -n "${DEPLOY_SSH_KEY:-}" ]; then
+            echo "→ SSH git pull + compose"
+            install -m 600 /dev/null /tmp/deploy_key
+            printf '%s\n' "$DEPLOY_SSH_KEY" > /tmp/deploy_key
+            chmod 600 /tmp/deploy_key
+            ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 \
+              "$DEPLOY_SSH_HOST" bash -s << 'REMOTE'
+          set -euo pipefail
+          cd /opt/familyos
+          sudo git config --global --add safe.directory /opt/familyos || true
+          sudo git fetch origin
+          sudo git checkout main
+          sudo git pull --ff-only origin main
+          sudo docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d --build
+          sudo docker compose -f deploy/traefik/docker-compose.yml up -d || true
+          sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
+          REMOTE
+            rm -f /tmp/deploy_key
+            MODE=ssh
+          fi
+
+          if [ -z "$MODE" ]; then
+            echo "::error::No deploy method succeeded. Configure PORTAINER_WEBHOOK_URL (best) or API secrets or DEPLOY_SSH_HOST+DEPLOY_SSH_KEY."
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Redeploy OK via $MODE"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Deploy stack" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Skip: \`${{ steps.guard.outputs.skip }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`${{ steps.deploy.outputs.mode }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ref: \`${{ github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
