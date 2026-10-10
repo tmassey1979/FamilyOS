@@ -10,11 +10,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FamilyOS.Application.Requests;
 
+public record PendingQuestionDto(Guid Id, string QuestionText, bool IsAnswered, string? Answer);
+
 public record RequestDto(
     Guid Id, RequestTypeCode Type, RequestStatus Status, string Title, string? Summary,
     decimal? Amount, DateTime? NeededByUtc, Guid RequesterMemberId, string RequesterName,
     Guid? CurrentApproverMemberId, string? DenialReason, DateTime CreatedAtUtc,
-    Dictionary<string, object?> Answers);
+    Dictionary<string, object?> Answers, Guid? ExecutionPlanId,
+    List<PendingQuestionDto> PendingQuestions);
 
 public record RequestTypeDto(Guid Id, RequestTypeCode Code, string Name, string? Description, List<QuestionDefinition> Questions);
 
@@ -134,6 +137,7 @@ public class RequestCommandHandlers :
         await _current.EnsureLoadedAsync(ct);
         EnsureAuth();
         var list = await _db.Requests.AsNoTracking()
+            .Include(r => r.PendingQuestions)
             .Where(r => r.FamilyId == _current.FamilyId && r.RequesterMemberId == _current.MemberId)
             .OrderByDescending(r => r.CreatedAtUtc)
             .ToListAsync(ct);
@@ -147,8 +151,11 @@ public class RequestCommandHandlers :
         await _current.EnsureLoadedAsync(ct);
         EnsureAdult();
         var list = await _db.Requests.AsNoTracking()
+            .Include(r => r.PendingQuestions)
             .Where(r => r.FamilyId == _current.FamilyId &&
-                        (r.Status == RequestStatus.Submitted || r.Status == RequestStatus.UnderReview))
+                        (r.Status == RequestStatus.Submitted
+                         || r.Status == RequestStatus.UnderReview
+                         || r.Status == RequestStatus.WaitingForInformation))
             .OrderBy(r => r.CreatedAtUtc)
             .ToListAsync(ct);
         var result = new List<RequestDto>();
@@ -250,8 +257,12 @@ public class RequestCommandHandlers :
             .Select(m => m.DisplayName)
             .FirstOrDefaultAsync(ct) ?? "Member";
 
+        var questions = r.PendingQuestions
+            .Select(q => new PendingQuestionDto(q.Id, q.QuestionText, q.IsAnswered, q.AnswerText))
+            .ToList();
         return new RequestDto(r.Id, r.Type, r.Status, r.Title, r.Summary, r.Amount, r.NeededByUtc,
-            r.RequesterMemberId, name, r.CurrentApproverMemberId, r.DenialReason, r.CreatedAtUtc, r.GetAnswers());
+            r.RequesterMemberId, name, r.CurrentApproverMemberId, r.DenialReason, r.CreatedAtUtc, r.GetAnswers(),
+            r.ExecutionPlanId, questions);
     }
 
     private static ExecutionPlanDto ToPlanDto(ExecutionPlan plan) =>

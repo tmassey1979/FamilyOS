@@ -224,6 +224,13 @@ export const familyApi = {
   declineReasons: () => api<DeclineReasonDto[]>('/api/family/decline-reasons'),
 };
 
+export type PendingQuestionDto = {
+  id: string;
+  questionText: string;
+  isAnswered: boolean;
+  answer?: string | null;
+};
+
 export type RequestDto = {
   id: string;
   type: string;
@@ -238,6 +245,8 @@ export type RequestDto = {
   denialReason?: string;
   createdAtUtc: string;
   answers?: Record<string, unknown>;
+  executionPlanId?: string | null;
+  pendingQuestions?: PendingQuestionDto[];
 };
 
 export type RequestTypeDto = {
@@ -246,6 +255,29 @@ export type RequestTypeDto = {
   name: string;
   description?: string;
   questions: Array<{ key: string; prompt: string; required?: boolean }>;
+};
+
+export type PolicyEvaluationDto = {
+  isAllowed: boolean;
+  requiresOwner?: boolean;
+  autoApproved?: boolean;
+  explanation?: string;
+};
+
+export type ExecutionItemDto = {
+  id: string;
+  type: string;
+  title: string;
+  assigneeMemberId?: string | null;
+  isSelected: boolean;
+  resultingEntityId?: string | null;
+};
+
+export type ExecutionPlanDto = {
+  id: string;
+  requestId: string;
+  status: string;
+  items: ExecutionItemDto[];
 };
 
 export const requestsApi = {
@@ -270,6 +302,25 @@ export const requestsApi = {
     api<RequestDto>(`/api/requests/${id}/deny`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+  askQuestion: (id: string, questionText: string) =>
+    api<RequestDto>(`/api/requests/${id}/ask-question`, {
+      method: 'POST',
+      body: JSON.stringify({ questionText }),
+    }),
+  answer: (id: string, questionId: string, answer: string) =>
+    api<RequestDto>(`/api/requests/${id}/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ questionId, answer }),
+    }),
+  evaluatePolicy: (id: string) =>
+    api<PolicyEvaluationDto>(`/api/requests/${id}/policy`),
+  generatePlan: (id: string) =>
+    api<ExecutionPlanDto>(`/api/requests/${id}/execution-plan`, { method: 'POST' }),
+  commitPlan: (planId: string, deselectedItemIds?: string[]) =>
+    api<ExecutionPlanDto>(`/api/requests/execution-plans/${planId}/commit`, {
+      method: 'POST',
+      body: JSON.stringify({ deselectedItemIds: deselectedItemIds ?? null }),
     }),
 };
 

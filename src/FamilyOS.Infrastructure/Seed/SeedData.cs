@@ -63,6 +63,9 @@ public static class SeedData
             family.Id, "Grocery Auto-Approve", ApprovalMode.NeverRequire,
             RequestTypeCode.Grocery, priority: 5));
         db.ApprovalPolicies.Add(ApprovalPolicy.Create(
+            family.Id, "Ride Always Require Adult", ApprovalMode.AlwaysRequire,
+            RequestTypeCode.Ride, priority: 20));
+        db.ApprovalPolicies.Add(ApprovalPolicy.Create(
             family.Id, "Default Policy", ApprovalMode.PolicyDetermined,
             null, maxAdult: 50m, priority: 0));
 
