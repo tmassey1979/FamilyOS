@@ -19,22 +19,36 @@
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
       "protocol": "openid-connect",
-      "rootUrl": "exp://localhost:8081",
+      "rootUrl": "https://18.226.226.118.sslip.io",
       "baseUrl": "/",
       "redirectUris": [
         "exp://*",
         "familyos://*",
         "http://localhost:*",
-        "http://127.0.0.1:*"
+        "https://*.sslip.io/*",
+        "https://18.226.226.118.sslip.io/*"
       ],
-      "webOrigins": ["*"],
+      "webOrigins": [
+        "*"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "+"
       },
       "fullScopeAllowed": true,
-      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
-      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
     },
     {
       "clientId": "familyos-api",
@@ -57,7 +71,13 @@
       "lastName": "Owner",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "michelle.adult",
@@ -66,7 +86,13 @@
       "lastName": "Adult",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "mia.teen",
@@ -75,7 +101,13 @@
       "lastName": "Teen",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "eli.child",
@@ -84,10 +116,21 @@
       "lastName": "Child",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ]
     }
   ],
   "roles": {
-    "realm": [{ "name": "user", "description": "Standard Family OS user" }]
+    "realm": [
+      {
+        "name": "user",
+        "description": "Standard Family OS user"
+      }
+    ]
   }
 }
