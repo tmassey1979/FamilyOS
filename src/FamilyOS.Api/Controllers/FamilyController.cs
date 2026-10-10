@@ -87,4 +87,6 @@ public class FamilyController : ControllerBase
         string? ExternalIdentityId,
         string? FirstName,
         string? LastName);
+
+    public record ChangeRoleBody(FamilyRole Role);
 }
