@@ -123,9 +123,10 @@ jobs:
           fi
 
           if [ -z "$MODE" ]; then
-            echo "::error::No deploy method succeeded. Configure PORTAINER_WEBHOOK_URL (best) or API secrets or DEPLOY_SSH_HOST+DEPLOY_SSH_KEY."
-            echo "mode=none" >> "$GITHUB_OUTPUT"
-            exit 1
+            echo "::warning::No Portainer/SSH secrets configured yet — stack was NOT redeployed."
+            echo "Add PORTAINER_WEBHOOK_URL (recommended) or API secrets or DEPLOY_SSH_HOST+DEPLOY_SSH_KEY. See deploy/PORTAINER_CD.md"
+            echo "mode=skipped-no-secrets" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Redeploy OK via $MODE"
