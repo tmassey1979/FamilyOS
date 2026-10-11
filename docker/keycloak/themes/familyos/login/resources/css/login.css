@@ -1,0 +1,89 @@
+/* Family OS Keycloak login theme — navy brand aligned with mobile app */
+:root {
+  --fos-navy: #0f172a;
+  --fos-navy-soft: #1e293b;
+  --fos-accent: #38bdf8;
+  --fos-surface: #f8fafc;
+  --fos-text: #0f172a;
+  --fos-muted: #64748b;
+  --fos-danger: #ef4444;
+  --fos-radius: 12px;
+}
+
+body {
+  background: linear-gradient(160deg, var(--fos-navy) 0%, var(--fos-navy-soft) 55%, #0c4a6e 100%) !important;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
+  min-height: 100vh;
+}
+
+.login-pf body,
+.login-pf {
+  background: transparent !important;
+}
+
+#kc-header,
+#kc-header-wrapper {
+  color: #e2e8f0 !important;
+  text-align: center;
+  padding-top: 1.5rem;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 0.75rem;
+  background: url("../img/logo.png") center / contain no-repeat;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+#kc-page-title {
+  color: #f1f5f9 !important;
+  font-weight: 600 !important;
+}
+
+.card-pf,
+#kc-content-wrapper,
+.pf-v5-c-login__main,
+.pf-c-login__main {
+  background: var(--fos-surface) !important;
+  border-radius: var(--fos-radius) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+}
+
+.pf-v5-c-button.pf-m-primary,
+#kc-login,
+input[type="submit"] {
+  background: var(--fos-navy) !important;
+  border-color: var(--fos-navy) !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background: var(--fos-navy-soft) !important;
+}
+
+a {
+  color: #0284c7 !important;
+}
+
+#kc-info,
+#kc-info-wrapper {
+  color: var(--fos-muted) !important;
+}
+
+#kc-webauthn-settings-form,
+#webauthn-authenticator {
+  border-left: 3px solid var(--fos-accent);
+  padding-left: 0.75rem;
+}
+
+.alert-error,
+.pf-m-danger {
+  border-radius: 8px !important;
+}
