@@ -467,7 +467,19 @@ export const procurementApi = {
       method: 'POST',
       body: JSON.stringify({ storeName }),
     }),
+  addToCart: (id: string, cartId: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/add-to-cart`, {
+      method: 'POST',
+      body: JSON.stringify({ cartId }),
+    }),
   hold: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/hold`, { method: 'POST' }),
+  defer: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/defer`, { method: 'POST' }),
+  noLongerNeeded: (id: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/no-longer-needed`, { method: 'POST' }),
+  removeFromCart: (id: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/remove-from-cart`, { method: 'POST' }),
+  abandonCart: (cartId: string) =>
+    api<CartDto>(`/api/procurement/carts/${cartId}/abandon`, { method: 'POST' }),
   purchase: (id: string, actualPrice: number, store?: string) =>
     api<ProcurementItemDto>(`/api/procurement/items/${id}/purchase`, {
       method: 'POST',
