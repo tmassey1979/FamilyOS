@@ -19,6 +19,10 @@ public record GetCartsQuery() : IRequest<List<CartDto>>;
 public record AddToCartCommand(Guid ProcurementItemId, Guid CartId) : IRequest<ProcurementItemDto>;
 public record CreateCartCommand(string StoreName) : IRequest<CartDto>;
 public record HoldItemCommand(Guid ProcurementItemId) : IRequest<ProcurementItemDto>;
+public record DeferItemCommand(Guid ProcurementItemId) : IRequest<ProcurementItemDto>;
+public record MarkNoLongerNeededCommand(Guid ProcurementItemId) : IRequest<ProcurementItemDto>;
+public record RemoveFromCartCommand(Guid ProcurementItemId) : IRequest<ProcurementItemDto>;
+public record AbandonCartCommand(Guid CartId) : IRequest<CartDto>;
 public record MarkPurchasedCommand(Guid ProcurementItemId, decimal ActualPrice, string? Store) : IRequest<ProcurementItemDto>;
 public record GetProductHistoryQuery() : IRequest<List<ProductDto>>;
 public record ProductDto(Guid Id, string Name, string? Brand, string? Size, string? Category, decimal? TypicalPrice, int PurchaseCount, DateTime? LastPurchasedAtUtc);
@@ -29,6 +33,10 @@ public class ProcurementHandlers :
     IRequestHandler<AddToCartCommand, ProcurementItemDto>,
     IRequestHandler<CreateCartCommand, CartDto>,
     IRequestHandler<HoldItemCommand, ProcurementItemDto>,
+    IRequestHandler<DeferItemCommand, ProcurementItemDto>,
+    IRequestHandler<MarkNoLongerNeededCommand, ProcurementItemDto>,
+    IRequestHandler<RemoveFromCartCommand, ProcurementItemDto>,
+    IRequestHandler<AbandonCartCommand, CartDto>,
     IRequestHandler<MarkPurchasedCommand, ProcurementItemDto>,
     IRequestHandler<GetProductHistoryQuery, List<ProductDto>>
 {
@@ -120,6 +128,75 @@ public class ProcurementHandlers :
         item.Hold();
         await _db.SaveChangesAsync(ct);
         return ToDto(item);
+    }
+
+    public async Task<ProcurementItemDto> Handle(DeferItemCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAdult();
+
+        var item = await _db.ProcurementItems
+            .FirstOrDefaultAsync(p => p.Id == cmd.ProcurementItemId && p.FamilyId == _current.FamilyId, ct)
+            ?? throw new NotFoundException("ProcurementItem", cmd.ProcurementItemId);
+
+        item.Defer();
+        await _db.SaveChangesAsync(ct);
+        return ToDto(item);
+    }
+
+    public async Task<ProcurementItemDto> Handle(MarkNoLongerNeededCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAdult();
+
+        var item = await _db.ProcurementItems
+            .FirstOrDefaultAsync(p => p.Id == cmd.ProcurementItemId && p.FamilyId == _current.FamilyId, ct)
+            ?? throw new NotFoundException("ProcurementItem", cmd.ProcurementItemId);
+
+        item.MarkNoLongerNeeded();
+        await _db.SaveChangesAsync(ct);
+        return ToDto(item);
+    }
+
+    public async Task<ProcurementItemDto> Handle(RemoveFromCartCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAdult();
+
+        var item = await _db.ProcurementItems
+            .FirstOrDefaultAsync(p => p.Id == cmd.ProcurementItemId && p.FamilyId == _current.FamilyId, ct)
+            ?? throw new NotFoundException("ProcurementItem", cmd.ProcurementItemId);
+
+        if (item.CartId is Guid cartId)
+        {
+            var cart = await _db.Carts.FirstOrDefaultAsync(c => c.Id == cartId && c.FamilyId == _current.FamilyId, ct);
+            cart?.RemoveItem(item.Id);
+        }
+
+        item.RemoveFromCart();
+        await _db.SaveChangesAsync(ct);
+        return ToDto(item);
+    }
+
+    public async Task<CartDto> Handle(AbandonCartCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAdult();
+
+        var cart = await _db.Carts
+            .FirstOrDefaultAsync(c => c.Id == cmd.CartId && c.FamilyId == _current.FamilyId, ct)
+            ?? throw new NotFoundException("Cart", cmd.CartId);
+
+        var items = await _db.ProcurementItems
+            .Where(p => p.CartId == cart.Id && p.FamilyId == _current.FamilyId)
+            .ToListAsync(ct);
+
+        foreach (var item in items)
+            item.ReturnToQueue();
+
+        cart.Abandon();
+        await _db.SaveChangesAsync(ct);
+        return new CartDto(cart.Id, cart.StoreName, new(), cart.IsActive);
     }
 
     public async Task<ProcurementItemDto> Handle(MarkPurchasedCommand cmd, CancellationToken ct)
