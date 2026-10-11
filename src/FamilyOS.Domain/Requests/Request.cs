@@ -152,6 +152,29 @@ public class Request : Entity
         MarkUpdated();
     }
 
+    /// <summary>
+    /// Requester withdraws, or an Owner cancels, before execution starts.
+    /// Allowed from Draft, Submitted, WaitingForInformation, UnderReview.
+    /// </summary>
+    public void Cancel(Guid actorMemberId, bool isOwner, string? reason = null)
+    {
+        if (Status is RequestStatus.Cancelled or RequestStatus.Completed or RequestStatus.Denied
+            or RequestStatus.InExecution or RequestStatus.Executable
+            or RequestStatus.Approved or RequestStatus.ConditionallyApproved)
+            throw new InvalidOperationException($"Cannot cancel request in status {Status}.");
+
+        var isRequester = actorMemberId == RequesterMemberId;
+        if (!isRequester && !isOwner)
+            throw new UnauthorizedAccessException("Only the requester or an Owner can cancel this request.");
+
+        Status = RequestStatus.Cancelled;
+        var detail = isRequester
+            ? (string.IsNullOrWhiteSpace(reason) ? "Withdrawn by requester" : $"Withdrawn: {reason}")
+            : (string.IsNullOrWhiteSpace(reason) ? "Cancelled by owner" : $"Cancelled by owner: {reason}");
+        AddHistory(RequestStatus.Cancelled, actorMemberId, detail);
+        MarkUpdated();
+    }
+
     public void SetAnswers(Dictionary<string, object?> answers)
     {
         AnswersJson = JsonSerializer.Serialize(answers);

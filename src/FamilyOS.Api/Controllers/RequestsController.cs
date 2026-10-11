@@ -56,6 +56,10 @@ public class RequestsController : ControllerBase
     public async Task<ActionResult<RequestDto>> Deny(Guid id, [FromBody] DenyBody body, CancellationToken ct)
         => Ok(await _mediator.Send(new DenyRequestCommand(id, body.Reason), ct));
 
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<ActionResult<RequestDto>> Cancel(Guid id, [FromBody] CancelBody? body, CancellationToken ct)
+        => Ok(await _mediator.Send(new CancelRequestCommand(id, body?.Reason), ct));
+
     [HttpGet("{id:guid}/policy")]
     public async Task<ActionResult<PolicyEvaluationResult>> EvaluatePolicy(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new EvaluatePolicyQuery(id), ct));
@@ -72,5 +76,6 @@ public class RequestsController : ControllerBase
     public record AnswerBody(Guid QuestionId, string Answer);
     public record ApproveBody(bool Conditional);
     public record DenyBody(string Reason);
+    public record CancelBody(string? Reason);
     public record CommitBody(List<Guid>? DeselectedItemIds);
 }

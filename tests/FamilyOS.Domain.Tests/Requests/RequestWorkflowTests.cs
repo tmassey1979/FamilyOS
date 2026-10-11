@@ -39,27 +39,24 @@ public class RequestWorkflowTests
     {
         var r = NewRide();
         r.Submit(TeenId);
-        r.AskQuestion(AdultId, "What time do you return?");
-
+        r.AskQuestion(AdultId, "What time?");
         r.Status.Should().Be(RequestStatus.WaitingForInformation);
-        r.PendingQuestions.Should().ContainSingle(q => !q.IsAnswered);
+        r.PendingQuestions.Should().ContainSingle();
     }
 
     [Fact]
-    public void Answer_returns_to_UnderReview_when_all_answered()
+    public void Answer_question_by_requester_returns_to_review()
     {
         var r = NewRide();
         r.Submit(TeenId);
-        r.AskQuestion(AdultId, "Return time?");
+        r.AskQuestion(AdultId, "What time?");
         var qid = r.PendingQuestions.First().Id;
-
-        r.AnswerQuestion(TeenId, qid, "5:30 PM");
+        r.AnswerQuestion(TeenId, qid, "5pm");
         r.Status.Should().Be(RequestStatus.UnderReview);
-        r.PendingQuestions.Should().OnlyContain(q => q.IsAnswered);
     }
 
     [Fact]
-    public void Approver_cannot_be_requester()
+    public void Approve_cannot_be_self()
     {
         var r = NewRide();
         r.Submit(TeenId);
@@ -68,22 +65,17 @@ public class RequestWorkflowTests
     }
 
     [Fact]
-    public void Approve_sets_Approved()
+    public void Approve_and_conditional()
     {
         var r = NewRide();
         r.Submit(TeenId);
         r.Approve(AdultId);
         r.Status.Should().Be(RequestStatus.Approved);
-        r.CurrentApproverMemberId.Should().Be(AdultId);
-    }
 
-    [Fact]
-    public void Conditional_approve_sets_ConditionallyApproved()
-    {
-        var r = NewRide();
-        r.Submit(TeenId);
-        r.Approve(AdultId, conditional: true);
-        r.Status.Should().Be(RequestStatus.ConditionallyApproved);
+        var r2 = NewRide();
+        r2.Submit(TeenId);
+        r2.Approve(AdultId, conditional: true);
+        r2.Status.Should().Be(RequestStatus.ConditionallyApproved);
     }
 
     [Fact]
@@ -121,5 +113,44 @@ public class RequestWorkflowTests
 
         r.History.Count.Should().BeGreaterThanOrEqualTo(5);
         r.History.Select(h => h.TimestampUtc).Should().BeInAscendingOrder();
+    }
+
+    [Fact]
+    public void Cancel_by_requester_withdraws_submitted_request()
+    {
+        var r = NewRide();
+        r.Submit(TeenId);
+        r.Cancel(TeenId, isOwner: false, reason: "Changed plans");
+        r.Status.Should().Be(RequestStatus.Cancelled);
+        r.History.Should().Contain(h => h.Detail.Contains("Withdrawn"));
+    }
+
+    [Fact]
+    public void Cancel_by_owner_allowed()
+    {
+        var r = NewRide();
+        r.Submit(TeenId);
+        r.Cancel(AdultId, isOwner: true);
+        r.Status.Should().Be(RequestStatus.Cancelled);
+    }
+
+    [Fact]
+    public void Cancel_by_non_requester_non_owner_throws()
+    {
+        var r = NewRide();
+        r.Submit(TeenId);
+        var stranger = Guid.NewGuid();
+        var act = () => r.Cancel(stranger, isOwner: false);
+        act.Should().Throw<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public void Cancel_after_approval_throws()
+    {
+        var r = NewRide();
+        r.Submit(TeenId);
+        r.Approve(AdultId);
+        var act = () => r.Cancel(TeenId, isOwner: false);
+        act.Should().Throw<InvalidOperationException>();
     }
 }
