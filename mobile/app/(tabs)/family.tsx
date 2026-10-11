@@ -5,7 +5,7 @@ import {
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
   familyApi, meApi, procurementApi,
-  type MeDto, type ProcurementItemDto,
+  type CartDto, type MeDto, type ProcurementItemDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 
@@ -18,6 +18,7 @@ export default function FamilyScreen() {
   const [members, setMembers] = useState<Member[]>([]);
   const [me, setMe] = useState<MeDto | null>(null);
   const [queue, setQueue] = useState<ProcurementItemDto[]>([]);
+  const [carts, setCarts] = useState<CartDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -26,6 +27,7 @@ export default function FamilyScreen() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<string>('Child');
   const [saving, setSaving] = useState(false);
+  const [storeName, setStoreName] = useState('');
 
   const [roleMember, setRoleMember] = useState<Member | null>(null);
   const [nextRole, setNextRole] = useState<string>('Adult');
@@ -37,16 +39,18 @@ export default function FamilyScreen() {
     setRefreshing(true);
     setError(null);
     try {
-      const [fam, mems, who, items] = await Promise.all([
+      const [fam, mems, who, items, activeCarts] = await Promise.all([
         familyApi.get(),
         familyApi.members(),
         meApi.get().catch(() => null),
         procurementApi.queue().catch(() => [] as ProcurementItemDto[]),
+        procurementApi.carts().catch(() => [] as CartDto[]),
       ]);
       setFamilyName(fam.name);
       setMembers(mems);
       setMe(who);
       setQueue(items);
+      setCarts(activeCarts.filter((c) => c.isActive));
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Unable to load family');
     } finally {
@@ -141,6 +145,58 @@ export default function FamilyScreen() {
       ))}
 
       <SectionTitle>Shopping queue</SectionTitle>
+      {isAdultOrOwner ? (
+        <View style={[styles.row, { marginBottom: spacing.sm, gap: spacing.sm, flexWrap: 'wrap' }]}>
+          <TextInput
+            style={[styles.input, { flex: 1, minWidth: 140 }]}
+            placeholder="Store for new cart"
+            placeholderTextColor={colors.textMuted}
+            value={storeName}
+            onChangeText={setStoreName}
+          />
+          <Button
+            title="New cart"
+            variant="secondary"
+            onPress={() => {
+              if (!storeName.trim()) return;
+              procurementApi.createCart(storeName.trim()).then(() => {
+                setStoreName('');
+                return load();
+              }).catch(() => {});
+            }}
+          />
+        </View>
+      ) : null}
+
+      {carts.length > 0 ? (
+        <>
+          <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Active carts</Text>
+          {carts.map((cart) => (
+            <Card key={cart.id} style={styles.cardCol}>
+              <Text style={typography.heading}>{cart.storeName}</Text>
+              <Text style={typography.caption}>{cart.items?.length ?? 0} item(s)</Text>
+              {(cart.items ?? []).map((it) => (
+                <View key={it.id} style={[styles.row, { justifyContent: 'space-between' }]}>
+                  <Text style={typography.body}>{it.name}</Text>
+                  {isAdultOrOwner ? (
+                    <Pressable onPress={() => procurementApi.removeFromCart(it.id).then(load).catch(() => {})}>
+                      <Text style={typography.caption}>Remove</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ))}
+              {isAdultOrOwner ? (
+                <Button
+                  title="Abandon cart"
+                  variant="secondary"
+                  onPress={() => procurementApi.abandonCart(cart.id).then(load).catch(() => {})}
+                />
+              ) : null}
+            </Card>
+          ))}
+        </>
+      ) : null}
+
       {queue.length === 0 ? (
         <EmptyState title="Queue empty" subtitle="Approved purchases show up here." />
       ) : (
@@ -154,12 +210,31 @@ export default function FamilyScreen() {
                 <Text style={typography.caption}>~${item.estimatedPrice.toFixed(2)}</Text>
               ) : null}
             </View>
-            {item.status === 'Queued' || item.status === 'Approved' ? (
-              <Button
-                title="Hold"
-                variant="secondary"
-                onPress={() => procurementApi.hold(item.id).then(load).catch(() => {})}
-              />
+            {isAdultOrOwner && (item.status === 'Queued' || item.status === 'Approved' || item.status === 'Held' || item.status === 'Deferred') ? (
+              <View style={[styles.row, { flexWrap: 'wrap', gap: spacing.xs }]}>
+                {carts[0] ? (
+                  <Button
+                    title={`Add → ${carts[0].storeName}`}
+                    variant="secondary"
+                    onPress={() => procurementApi.addToCart(item.id, carts[0].id).then(load).catch(() => {})}
+                  />
+                ) : null}
+                <Button
+                  title="Hold"
+                  variant="secondary"
+                  onPress={() => procurementApi.hold(item.id).then(load).catch(() => {})}
+                />
+                <Button
+                  title="Defer"
+                  variant="secondary"
+                  onPress={() => procurementApi.defer(item.id).then(load).catch(() => {})}
+                />
+                <Button
+                  title="Not needed"
+                  variant="secondary"
+                  onPress={() => procurementApi.noLongerNeeded(item.id).then(load).catch(() => {})}
+                />
+              </View>
             ) : null}
           </Card>
         ))
