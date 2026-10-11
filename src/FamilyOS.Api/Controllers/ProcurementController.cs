@@ -35,6 +35,22 @@ public class ProcurementController : ControllerBase
     public async Task<ActionResult<ProcurementItemDto>> Hold(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new HoldItemCommand(id), ct));
 
+    [HttpPost("items/{id:guid}/defer")]
+    public async Task<ActionResult<ProcurementItemDto>> Defer(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new DeferItemCommand(id), ct));
+
+    [HttpPost("items/{id:guid}/no-longer-needed")]
+    public async Task<ActionResult<ProcurementItemDto>> NoLongerNeeded(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new MarkNoLongerNeededCommand(id), ct));
+
+    [HttpPost("items/{id:guid}/remove-from-cart")]
+    public async Task<ActionResult<ProcurementItemDto>> RemoveFromCart(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new RemoveFromCartCommand(id), ct));
+
+    [HttpPost("carts/{id:guid}/abandon")]
+    public async Task<ActionResult<CartDto>> AbandonCart(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new AbandonCartCommand(id), ct));
+
     [HttpPost("items/{id:guid}/purchase")]
     public async Task<ActionResult<ProcurementItemDto>> Purchase(Guid id, [FromBody] PurchaseBody body, CancellationToken ct)
         => Ok(await _mediator.Send(new MarkPurchasedCommand(id, body.ActualPrice, body.Store), ct));
