@@ -417,6 +417,11 @@ export const requestsApi = {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),
+  cancel: (id: string, reason?: string) =>
+    api<RequestDto>(`/api/requests/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
   askQuestion: (id: string, questionText: string) =>
     api<RequestDto>(`/api/requests/${id}/ask-question`, {
       method: 'POST',
