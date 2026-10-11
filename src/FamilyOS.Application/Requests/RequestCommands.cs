@@ -32,6 +32,7 @@ public record AskQuestionCommand(Guid RequestId, string QuestionText) : IRequest
 public record AnswerQuestionCommand(Guid RequestId, Guid QuestionId, string Answer) : IRequest<RequestDto>;
 public record ApproveRequestCommand(Guid RequestId, bool Conditional = false) : IRequest<RequestDto>;
 public record DenyRequestCommand(Guid RequestId, string Reason) : IRequest<RequestDto>;
+public record CancelRequestCommand(Guid RequestId, string? Reason = null) : IRequest<RequestDto>;
 public record GetRequestQuery(Guid RequestId) : IRequest<RequestDto>;
 public record GetMyRequestsQuery() : IRequest<List<RequestDto>>;
 public record GetApprovalQueueQuery() : IRequest<List<RequestDto>>;
@@ -50,6 +51,7 @@ public class RequestCommandHandlers :
     IRequestHandler<AnswerQuestionCommand, RequestDto>,
     IRequestHandler<ApproveRequestCommand, RequestDto>,
     IRequestHandler<DenyRequestCommand, RequestDto>,
+    IRequestHandler<CancelRequestCommand, RequestDto>,
     IRequestHandler<GetRequestQuery, RequestDto>,
     IRequestHandler<GetMyRequestsQuery, List<RequestDto>>,
     IRequestHandler<GetApprovalQueueQuery, List<RequestDto>>,
@@ -122,6 +124,17 @@ public class RequestCommandHandlers :
         EnsureAdult();
         var request = await GetRequest(cmd.RequestId, ct);
         request.Deny(_current.MemberId!.Value, cmd.Reason);
+        await _db.SaveChangesAsync(ct);
+        return await ToDto(request, ct);
+    }
+
+    public async Task<RequestDto> Handle(CancelRequestCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAuth();
+        var request = await GetRequest(cmd.RequestId, ct);
+        var isOwner = _current.Role == FamilyRole.Owner;
+        request.Cancel(_current.MemberId!.Value, isOwner, cmd.Reason);
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);
     }
@@ -201,7 +214,6 @@ public class RequestCommandHandlers :
 
         var plan = ExecutionPlan.Create(_current.FamilyId!.Value, request.Id, _current.MemberId!.Value);
         plan.AddItem(ExecutionItemType.Task, $"Execute: {request.Title}", _current.MemberId);
-        // Always propose a calendar block for rides; otherwise when NeededBy is set
         if (request.Type == RequestTypeCode.Ride || request.NeededByUtc.HasValue)
             plan.AddItem(ExecutionItemType.CalendarEvent, request.Title, _current.MemberId);
 
@@ -226,7 +238,6 @@ public class RequestCommandHandlers :
 
         plan.Commit(_current.MemberId!.Value);
 
-        // Materialize selected calendar items into real CalendarEvents
         var request = await _db.Requests.FirstOrDefaultAsync(r => r.Id == plan.RequestId, ct);
         foreach (var item in plan.Items.Where(i => i.IsSelected && i.Type == ExecutionItemType.CalendarEvent))
         {
