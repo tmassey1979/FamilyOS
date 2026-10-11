@@ -85,7 +85,26 @@ public class ProcurementItem : Entity
     public void MarkNoLongerNeeded()
     {
         Status = ProcurementItemStatus.NoLongerNeeded;
+        CartId = null;
         MarkUpdated();
+    }
+
+    /// <summary>Return an in-cart or held item to the active shopping queue.</summary>
+    public void ReturnToQueue()
+    {
+        Status = ProcurementItemStatus.Queued;
+        CartId = null;
+        MarkUpdated();
+    }
+
+    public void RemoveFromCart()
+    {
+        if (Status == ProcurementItemStatus.InCart)
+        {
+            Status = ProcurementItemStatus.Queued;
+            CartId = null;
+            MarkUpdated();
+        }
     }
 }
 
@@ -174,6 +193,14 @@ public class Cart : Entity
     public void Close()
     {
         IsActive = false;
+        MarkUpdated();
+    }
+
+    /// <summary>Abandon the cart (shopping trip cancelled). Items must be returned to queue by the application handler.</summary>
+    public void Abandon()
+    {
+        IsActive = false;
+        _itemIds.Clear();
         MarkUpdated();
     }
 }
