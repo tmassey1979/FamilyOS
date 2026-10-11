@@ -46,13 +46,10 @@ export default function RequestsScreen() {
   const [creating, setCreating] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  // Ask question modal
   const [askFor, setAskFor] = useState<RequestDto | null>(null);
   const [questionText, setQuestionText] = useState('');
-  // Answer modal
   const [answerFor, setAnswerFor] = useState<{ req: RequestDto; questionId: string; prompt: string } | null>(null);
   const [answerText, setAnswerText] = useState('');
-  // Plan modal
   const [plan, setPlan] = useState<ExecutionPlanDto | null>(null);
   const [planTitle, setPlanTitle] = useState('');
 
@@ -234,6 +231,20 @@ export default function RequestsScreen() {
           />,
         );
       }
+    }
+
+    if (
+      !isQueue &&
+      (s === 'Draft' || s === 'Submitted' || s === 'WaitingForInformation' || s === 'UnderReview')
+    ) {
+      nodes.push(
+        <Button
+          key="cancel"
+          title="Withdraw"
+          variant="secondary"
+          onPress={() => void run(item.id, () => requestsApi.cancel(item.id))}
+        />,
+      );
     }
 
     if (isQueue && (APPROVABLE.has(s) || s === 'WaitingForInformation' || PLANABLE.has(s))) {
