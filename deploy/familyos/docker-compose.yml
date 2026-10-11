@@ -28,7 +28,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-    # No host ports — only internal network
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -49,6 +48,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
+    # start-dev is friendlier on small VMs; theme still loads from volume
     command: start-dev --import-realm --hostname-strict=false
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
@@ -59,8 +59,11 @@ services:
       KC_HOSTNAME: auth.${DOMAIN}
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
+      KC_SPI_THEME_CACHE_THEMES: "false"
+      KC_SPI_THEME_CACHE_TEMPLATES: "false"
     volumes:
       - ../../docker/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - ../../docker/keycloak/themes:/opt/keycloak/themes:ro
     networks:
       - internal
       - proxy
@@ -92,12 +95,13 @@ services:
       ASPNETCORE_URLS: http://+:5080
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-familyos};Username=${POSTGRES_USER:-familyos};Password=${POSTGRES_PASSWORD}"
       Keycloak__Authority: "https://auth.${DOMAIN}/realms/familyos"
-      Keycloak__Audience: "familyos-mobile"
+      Keycloak__Audience: familyos-mobile
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: ${RABBITMQ_USER:-familyos}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}
       Seed__Enabled: ${SEED_ENABLED:-true}
-      Auth__UseDevBypass: "true"
+      # Real JWT from Keycloak in production. Set AUTH_USE_DEV_BYPASS=true only for emergency/dev.
+      Auth__UseDevBypass: ${AUTH_USE_DEV_BYPASS:-false}
     depends_on:
       postgres:
         condition: service_healthy
