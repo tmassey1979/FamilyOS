@@ -12,6 +12,11 @@ import {
 } from '../src/auth/keycloak';
 import { setAccessToken, getDevUser } from '../src/api/client';
 
+/** Only skip login automatically when explicitly requested via env. */
+const AUTO_SKIP_LOGIN =
+  process.env.EXPO_PUBLIC_SKIP_LOGIN === '1' ||
+  process.env.EXPO_PUBLIC_SKIP_LOGIN === 'true';
+
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -22,13 +27,15 @@ export default function RootLayout() {
     let cancelled = false;
     (async () => {
       try {
-        if (getDevUser()) {
+        // Explicit opt-in only: EXPO_PUBLIC_SKIP_LOGIN=1 + EXPO_PUBLIC_DEV_USER
+        if (AUTO_SKIP_LOGIN && getDevUser()) {
           if (!cancelled) {
             setSignedIn(true);
             setReady(true);
           }
           return;
         }
+
         let token = await loadStoredAccessToken();
         if (token) {
           if (await isBiometricUnlockEnabled()) {
@@ -46,7 +53,7 @@ export default function RootLayout() {
           setAccessToken(token);
           if (!cancelled) setSignedIn(true);
         } else if (!cancelled) {
-          setSignedIn(false);
+          setSignedIn(!!getDevUser());
         }
       } catch {
         if (!cancelled) setSignedIn(false);
@@ -62,9 +69,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (!ready) return;
     const onLogin = segments[0] === 'login';
-    if (!signedIn && !onLogin) {
+    const hasSession = signedIn || !!getDevUser();
+    if (!hasSession && !onLogin) {
       router.replace('/login');
-    } else if (signedIn && onLogin) {
+    } else if (hasSession && onLogin) {
       router.replace('/(tabs)');
     }
   }, [ready, signedIn, segments, router]);
