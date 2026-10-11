@@ -1,13 +1,105 @@
 {
   "realm": "familyos",
   "enabled": true,
-  "sslRequired": "none",
+  "displayName": "Family OS",
+  "displayNameHtml": "<strong>Family OS</strong>",
+  "sslRequired": "external",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
+  "loginTheme": "familyos",
+  "accountTheme": "keycloak.v2",
+  "emailTheme": "keycloak",
+  "internationalizationEnabled": false,
+  "defaultSignatureAlgorithm": "RS256",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "otpSupportedApplications": ["totpAppFreeOTPName", "totpAppGoogleName", "totpAppMicrosoftAuthenticatorName"],
+  "webAuthnPolicyRpEntityName": "Family OS",
+  "webAuthnPolicySignatureAlgorithms": ["ES256", "RS256"],
+  "webAuthnPolicyRpId": "",
+  "webAuthnPolicyAttestationConveyancePreference": "not specified",
+  "webAuthnPolicyAuthenticatorAttachment": "platform",
+  "webAuthnPolicyRequireResidentKey": "No",
+  "webAuthnPolicyUserVerificationRequirement": "preferred",
+  "webAuthnPolicyCreateTimeout": 0,
+  "webAuthnPolicyAvoidSameAuthenticatorRegister": true,
+  "webAuthnPolicyAcceptableAaguids": [],
+  "webAuthnPolicyExtraOrigins": [],
+  "webAuthnPolicyPasswordlessRpEntityName": "Family OS",
+  "webAuthnPolicyPasswordlessSignatureAlgorithms": ["ES256", "RS256"],
+  "webAuthnPolicyPasswordlessRpId": "",
+  "webAuthnPolicyPasswordlessAttestationConveyancePreference": "not specified",
+  "webAuthnPolicyPasswordlessAuthenticatorAttachment": "platform",
+  "webAuthnPolicyPasswordlessRequireResidentKey": "No",
+  "webAuthnPolicyPasswordlessUserVerificationRequirement": "preferred",
+  "webAuthnPolicyPasswordlessCreateTimeout": 0,
+  "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegister": true,
+  "webAuthnPolicyPasswordlessAcceptableAaguids": [],
+  "webAuthnPolicyPasswordlessExtraOrigins": [],
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "name": "Update Profile",
+      "providerId": "UPDATE_PROFILE",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 40,
+      "config": {}
+    },
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    },
+    {
+      "alias": "webauthn-register",
+      "name": "Webauthn Register",
+      "providerId": "webauthn-register",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 80,
+      "config": {}
+    },
+    {
+      "alias": "webauthn-register-passwordless",
+      "name": "Webauthn Register Passwordless",
+      "providerId": "webauthn-register-passwordless",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    }
+  ],
   "clients": [
     {
       "clientId": "familyos-mobile",
@@ -24,31 +116,20 @@
       "redirectUris": [
         "exp://*",
         "familyos://*",
+        "familyos://auth",
+        "familyos://auth/*",
         "http://localhost:*",
         "https://*.sslip.io/*",
         "https://18.226.226.118.sslip.io/*"
       ],
-      "webOrigins": [
-        "*"
-      ],
+      "webOrigins": ["*"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "+"
       },
       "fullScopeAllowed": true,
-      "defaultClientScopes": [
-        "web-origins",
-        "acr",
-        "profile",
-        "roles",
-        "email"
-      ],
-      "optionalClientScopes": [
-        "address",
-        "phone",
-        "offline_access",
-        "microprofile-jwt"
-      ]
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
     },
     {
       "clientId": "familyos-api",
@@ -71,13 +152,7 @@
       "lastName": "Owner",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "password",
-          "temporary": false
-        }
-      ]
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
     },
     {
       "username": "michelle.adult",
@@ -86,13 +161,7 @@
       "lastName": "Adult",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "password",
-          "temporary": false
-        }
-      ]
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
     },
     {
       "username": "mia.teen",
@@ -101,13 +170,7 @@
       "lastName": "Teen",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "password",
-          "temporary": false
-        }
-      ]
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
     },
     {
       "username": "eli.child",
@@ -116,21 +179,15 @@
       "lastName": "Child",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "password",
-          "temporary": false
-        }
-      ]
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
     }
   ],
   "roles": {
-    "realm": [
-      {
-        "name": "user",
-        "description": "Standard Family OS user"
-      }
-    ]
-  }
+    "realm": [{ "name": "user", "description": "Standard Family OS user" }]
+  },
+  "browserFlow": "browser",
+  "registrationFlow": "registration",
+  "directGrantFlow": "direct grant",
+  "resetCredentialsFlow": "reset credentials",
+  "clientAuthenticationFlow": "clients"
 }
