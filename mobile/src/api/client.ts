@@ -1,7 +1,8 @@
 /**
  * Typed API client for Family OS.
  * - Production: JWT via setAccessToken (Keycloak PKCE)
- * - Development: setDevUser('terry.owner') → X-Dev-User header (API DevBypass)
+ * - Optional dev: setDevUser('terry.owner') or EXPO_PUBLIC_DEV_USER → X-Dev-User
+ *   (does NOT auto-login; login screen is shown until the user signs in)
  */
 
 const DEFAULT_BASE =
@@ -13,9 +14,12 @@ const DEFAULT_BASE =
 export type ApiError = { error: string; status: number };
 
 let accessToken: string | null = null;
-/** Dev-only: seed external id, e.g. terry.owner | michelle.adult | mia.teen | eli.child */
-let devUser: string | null =
-  process.env.EXPO_PUBLIC_DEV_USER ?? (typeof __DEV__ !== 'undefined' && __DEV__ ? 'terry.owner' : null);
+/**
+ * Dev bypass identity. Only set when user taps a Dev user on login,
+ * or EXPO_PUBLIC_DEV_USER is explicitly set (pair with EXPO_PUBLIC_SKIP_LOGIN=1 to auto-skip).
+ * Never default to terry.owner — that skipped the login screen.
+ */
+let devUser: string | null = process.env.EXPO_PUBLIC_DEV_USER ?? null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
