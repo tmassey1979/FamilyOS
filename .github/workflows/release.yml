@@ -15,6 +15,11 @@ on:
         default: all
         type: choice
         options: [all, android, ios]
+      build_aab:
+        description: "Also build the Android App Bundle (uses an additional Expo build)"
+        required: true
+        default: false
+        type: boolean
   push:
     tags:
       - "v*"
@@ -111,10 +116,9 @@ jobs:
             API: http://localhost:5080/swagger
 
             ### Mobile
-            Every release builds **both**:
-            - `FamilyOS-android-vX.Y.Z.aab` — Play Store (AAB)
-            - `FamilyOS-android-vX.Y.Z.apk` — sideload / direct install
-            Artifacts attach to this release when the EAS build job succeeds.
+            Android APK is built by default for sideload / direct install.
+            To also build `FamilyOS-android-vX.Y.Z.aab` for the Play Store, manually run the Release workflow and enable **build_aab**.
+            Mobile artifacts attach to this release when the EAS build job succeeds.
             Builds: https://expo.dev/accounts/tmassey1979/projects/familyos/builds
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -269,20 +273,9 @@ jobs:
           mkdir -p /tmp/eas-artifacts
           : > /tmp/eas-all-builds.json
 
-          # Android: always build both AAB (Play Store) and APK (sideload)
+          # Android APK is the default. AAB is opt-in via workflow_dispatch.
           # iOS: single production profile when requested
           if [[ "$PLATFORMS" == "all" || "$PLATFORMS" == "android" ]]; then
-            echo "==> EAS Android AAB (production)"
-            eas build \
-              --profile production \
-              --platform android \
-              --non-interactive \
-              --wait \
-              --json \
-              --message "$TAG_MSG (AAB)" \
-              >> /tmp/eas-all-builds.json
-            echo "" >> /tmp/eas-all-builds.json
-
             echo "==> EAS Android APK (production-apk)"
             eas build \
               --profile production-apk \
@@ -293,6 +286,21 @@ jobs:
               --message "$TAG_MSG (APK)" \
               >> /tmp/eas-all-builds.json
             echo "" >> /tmp/eas-all-builds.json
+
+            if [[ "${{ github.event.inputs.build_aab }}" == "true" ]]; then
+              echo "==> EAS Android AAB (production; explicitly enabled)"
+              eas build \
+                --profile production \
+                --platform android \
+                --non-interactive \
+                --wait \
+                --json \
+                --message "$TAG_MSG (AAB)" \
+                >> /tmp/eas-all-builds.json
+              echo "" >> /tmp/eas-all-builds.json
+            else
+              echo "Skipping Android AAB (build_aab is false or this is a tag-triggered release)."
+            fi
           fi
 
           if [[ "$PLATFORMS" == "all" || "$PLATFORMS" == "ios" ]]; then
