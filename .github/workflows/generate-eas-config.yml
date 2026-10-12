@@ -1,0 +1,140 @@
+# Generate mobile/eas.json (and optionally link app.json projectId).
+# Secrets stay in GitHub Actions — never written into JSON files.
+#
+# Prerequisites: repository secret EXPO_TOKEN
+# Run: Actions → "Generate EAS config" → Run workflow
+
+name: Generate EAS config
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "EXPO_PUBLIC_API_URL for build profiles"
+        required: true
+        default: "https://api.18.226.226.118.sslip.io"
+      auth_authority:
+        description: "Keycloak realm authority URL"
+        required: true
+        default: "https://auth.18.226.226.118.sslip.io/realms/familyos"
+      commit_changes:
+        description: "Commit eas.json / app.json back to main"
+        type: boolean
+        default: true
+      run_eas_configure:
+        description: "Also run eas build:configure (needs EXPO_TOKEN)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  generate-eas:
+    name: Generate eas.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate eas.json (no secrets in file)
+        run: |
+          set -euo pipefail
+          python3 scripts/generate-eas-json.py \
+            --api-url "${{ inputs.api_url }}" \
+            --auth-authority "${{ inputs.auth_authority }}"
+          echo "--- eas.json ---"
+          cat mobile/eas.json
+
+      - name: Install mobile deps
+        if: ${{ inputs.run_eas_configure }}
+        working-directory: mobile
+        run: |
+          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+
+      - name: EAS whoami + build:configure
+        if: ${{ inputs.run_eas_configure }}
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::Add GitHub secret EXPO_TOKEN (expo.dev → Access tokens). Not stored in eas.json."
+            exit 1
+          fi
+          npx --yes eas-cli@latest whoami
+          npx --yes eas-cli@latest build:configure -p android --non-interactive || \
+            echo "::warning::build:configure non-zero (often OK if already linked)"
+
+      - name: Write resolved config artifacts
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_API_URL: ${{ inputs.api_url }}
+          EXPO_PUBLIC_KEYCLOAK_AUTHORITY: ${{ inputs.auth_authority }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/eas-config
+          cp eas.json /tmp/eas-config/eas.json
+          cp app.json /tmp/eas-config/app.json
+          if command -v npx >/dev/null; then
+            npx expo config --type public --json > /tmp/eas-config/expo-config.public.json 2>/dev/null || true
+          fi
+          python3 - << 'PY'
+          import json
+          from pathlib import Path
+          eas = json.loads(Path("/tmp/eas-config/eas.json").read_text())
+          app = json.loads(Path("/tmp/eas-config/app.json").read_text())
+          expo = app.get("expo") or app
+          summary = {
+            "name": expo.get("name"),
+            "slug": expo.get("slug"),
+            "version": expo.get("version"),
+            "projectId": (expo.get("extra") or {}).get("eas", {}).get("projectId"),
+            "buildProfiles": list((eas.get("build") or {}).keys()),
+            "note": "EXPO_TOKEN is only in GitHub secrets, never in these files",
+          }
+          Path("/tmp/eas-config/summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eas-config
+          path: |
+            /tmp/eas-config/eas.json
+            /tmp/eas-config/app.json
+            /tmp/eas-config/summary.json
+            /tmp/eas-config/expo-config.public.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Commit to main
+        if: ${{ inputs.commit_changes }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/eas.json mobile/app.json
+          if git diff --staged --quiet; then
+            echo "No eas.json / app.json changes to commit"
+            exit 0
+          fi
+          if [ -n "${EXPO_TOKEN:-}" ] && git diff --staged | grep -Fq "$EXPO_TOKEN"; then
+            echo "::error::Refusing to commit — EXPO_TOKEN appeared in staged diff"
+            exit 1
+          fi
+          git commit -m "chore(mobile): regenerate eas.json via Generate EAS config workflow"
+          git push origin HEAD:${{ github.ref_name }}
+          echo "Pushed eas.json / app.json updates"
