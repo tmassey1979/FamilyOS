@@ -36,6 +36,11 @@ public class RequestsController : ControllerBase
     public async Task<ActionResult<RequestDto>> Create([FromBody] CreateRequestCommand cmd, CancellationToken ct)
         => Ok(await _mediator.Send(cmd, ct));
 
+    /// <summary>Edit a Draft (or WaitingForInformation) request before submit.</summary>
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<RequestDto>> UpdateDraft(Guid id, [FromBody] UpdateDraftBody body, CancellationToken ct)
+        => Ok(await _mediator.Send(new UpdateDraftRequestCommand(id, body.Title, body.Answers, body.Amount, body.NeededBy), ct));
+
     [HttpPost("{id:guid}/submit")]
     public async Task<ActionResult<RequestDto>> Submit(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new SubmitRequestCommand(id), ct));
@@ -78,4 +83,9 @@ public class RequestsController : ControllerBase
     public record DenyBody(string Reason);
     public record CancelBody(string? Reason);
     public record CommitBody(List<Guid>? DeselectedItemIds);
+    public record UpdateDraftBody(
+        string? Title,
+        Dictionary<string, object?>? Answers,
+        decimal? Amount,
+        DateTime? NeededBy);
 }
