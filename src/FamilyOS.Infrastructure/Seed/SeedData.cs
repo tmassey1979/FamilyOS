@@ -22,6 +22,9 @@ public static class SeedData
 
         await db.Database.MigrateAsync();
 
+        // Idempotent: fill any missing request-type catalog entries on every boot.
+        await EnsureRequestTypesAsync(db, logger);
+
         if (await db.Families.AnyAsync())
         {
             logger.LogInformation("Database already seeded.");
@@ -53,8 +56,6 @@ public static class SeedData
         miaUser.AssignToFamily(family.Id, mia.Id);
         eliUser.AssignToFamily(family.Id, eli.Id);
         await db.SaveChangesAsync();
-
-        // Decline reasons are created in Family.Create and cascade via HasMany — do not re-Add.
 
         db.ApprovalPolicies.Add(ApprovalPolicy.Create(
             family.Id, "Default Purchase Policy", ApprovalMode.PolicyDetermined,
@@ -121,38 +122,94 @@ public static class SeedData
         logger.LogInformation("Seed data created successfully for family {FamilyId}", family.Id);
     }
 
-    private static void SeedRequestTypes(FamilyOsDbContext db)
+    private static void SeedRequestTypes(FamilyOsDbContext db) =>
+        AddMissingRequestTypes(db, existingCodes: new HashSet<RequestTypeCode>());
+
+    private static async Task EnsureRequestTypesAsync(FamilyOsDbContext db, ILogger logger)
     {
-        db.RequestTypeDefinitions.Add(RequestTypeDefinition.Create(RequestTypeCode.Ride, "Ride", new List<QuestionDefinition>
+        var existing = await db.RequestTypeDefinitions.Select(x => x.Code).ToListAsync();
+        var before = existing.Count;
+        AddMissingRequestTypes(db, existing.ToHashSet());
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync();
+            var after = await db.RequestTypeDefinitions.CountAsync();
+            logger.LogInformation("Request type catalog updated: {Before} → {After}", before, after);
+        }
+    }
+
+    private static void AddMissingRequestTypes(FamilyOsDbContext db, HashSet<RequestTypeCode> existingCodes)
+    {
+        void Add(RequestTypeCode code, string name, List<QuestionDefinition> qs, int sortOrder)
+        {
+            if (existingCodes.Contains(code)) return;
+            db.RequestTypeDefinitions.Add(RequestTypeDefinition.Create(code, name, qs, sortOrder: sortOrder));
+            existingCodes.Add(code);
+        }
+
+        Add(RequestTypeCode.Ride, "Ride", new List<QuestionDefinition>
         {
             new() { Key = "who", Label = "Who needs the ride?", Type = QuestionType.PersonSelection, Required = true, SortOrder = 1 },
             new() { Key = "where", Label = "Where are you going?", Type = QuestionType.Location, Required = true, SortOrder = 2 },
             new() { Key = "leave", Label = "When do you need to leave?", Type = QuestionType.DateTime, Required = true, SortOrder = 3 },
             new() { Key = "return", Label = "When will you return?", Type = QuestionType.DateTime, Required = false, SortOrder = 4 },
             new() { Key = "needRideHome", Label = "Do you need a ride home?", Type = QuestionType.YesNo, Required = true, SortOrder = 5 },
-        }, sortOrder: 1));
+        }, 1);
 
-        db.RequestTypeDefinitions.Add(RequestTypeDefinition.Create(RequestTypeCode.Money, "Money", new List<QuestionDefinition>
+        Add(RequestTypeCode.Money, "Money", new List<QuestionDefinition>
         {
             new() { Key = "amount", Label = "Amount", Type = QuestionType.MoneyAmount, Required = true, SortOrder = 1 },
             new() { Key = "purpose", Label = "Purpose", Type = QuestionType.Text, Required = true, SortOrder = 2 },
-        }, sortOrder: 2));
+        }, 2);
 
-        db.RequestTypeDefinitions.Add(RequestTypeDefinition.Create(RequestTypeCode.Purchase, "Purchase", new List<QuestionDefinition>
+        Add(RequestTypeCode.Purchase, "Purchase", new List<QuestionDefinition>
         {
             new() { Key = "item", Label = "What do you want to buy?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
             new() { Key = "amount", Label = "Estimated cost", Type = QuestionType.MoneyAmount, Required = true, SortOrder = 2 },
             new() { Key = "store", Label = "Preferred store", Type = QuestionType.Text, Required = false, SortOrder = 3 },
-        }, sortOrder: 3));
+        }, 3);
 
-        db.RequestTypeDefinitions.Add(RequestTypeDefinition.Create(RequestTypeCode.Grocery, "Groceries", new List<QuestionDefinition>
+        Add(RequestTypeCode.Grocery, "Groceries", new List<QuestionDefinition>
         {
             new() { Key = "items", Label = "Items needed", Type = QuestionType.Text, Required = true, SortOrder = 1 },
-        }, sortOrder: 4));
+        }, 4);
 
-        db.RequestTypeDefinitions.Add(RequestTypeDefinition.Create(RequestTypeCode.General, "Something else", new List<QuestionDefinition>
+        Add(RequestTypeCode.SnackFood, "Snack / food", new List<QuestionDefinition>
+        {
+            new() { Key = "what", Label = "What snack or food?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
+            new() { Key = "amount", Label = "Estimated cost", Type = QuestionType.MoneyAmount, Required = false, SortOrder = 2 },
+        }, 5);
+
+        Add(RequestTypeCode.School, "School", new List<QuestionDefinition>
+        {
+            new() { Key = "what", Label = "What do you need for school?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
+            new() { Key = "due", Label = "When is it needed?", Type = QuestionType.Date, Required = false, SortOrder = 2 },
+            new() { Key = "amount", Label = "Cost (if any)", Type = QuestionType.MoneyAmount, Required = false, SortOrder = 3 },
+        }, 6);
+
+        Add(RequestTypeCode.Medical, "Medical", new List<QuestionDefinition>
+        {
+            new() { Key = "what", Label = "What is needed?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
+            new() { Key = "when", Label = "Appointment / needed by", Type = QuestionType.DateTime, Required = false, SortOrder = 2 },
+            new() { Key = "urgent", Label = "Is this urgent?", Type = QuestionType.YesNo, Required = true, SortOrder = 3 },
+        }, 7);
+
+        Add(RequestTypeCode.Household, "Household", new List<QuestionDefinition>
+        {
+            new() { Key = "what", Label = "What household need?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
+            new() { Key = "amount", Label = "Estimated cost", Type = QuestionType.MoneyAmount, Required = false, SortOrder = 2 },
+        }, 8);
+
+        Add(RequestTypeCode.Personal, "Personal", new List<QuestionDefinition>
+        {
+            new() { Key = "what", Label = "What do you need?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
+            new() { Key = "why", Label = "Why is it important?", Type = QuestionType.Text, Required = false, SortOrder = 2 },
+            new() { Key = "amount", Label = "Cost (if any)", Type = QuestionType.MoneyAmount, Required = false, SortOrder = 3 },
+        }, 9);
+
+        Add(RequestTypeCode.General, "Something else", new List<QuestionDefinition>
         {
             new() { Key = "what", Label = "What kind of help do you need?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
-        }, sortOrder: 10));
+        }, 10);
     }
 }
