@@ -27,6 +27,14 @@ public record CreateRequestCommand(
     decimal? Amount, DateTime? NeededBy
 ) : IRequest<RequestDto>;
 
+public record UpdateDraftRequestCommand(
+    Guid RequestId,
+    string? Title,
+    Dictionary<string, object?>? Answers,
+    decimal? Amount,
+    DateTime? NeededBy
+) : IRequest<RequestDto>;
+
 public record SubmitRequestCommand(Guid RequestId) : IRequest<RequestDto>;
 public record AskQuestionCommand(Guid RequestId, string QuestionText) : IRequest<RequestDto>;
 public record AnswerQuestionCommand(Guid RequestId, Guid QuestionId, string Answer) : IRequest<RequestDto>;
@@ -46,6 +54,7 @@ public record ExecutionItemDto(Guid Id, ExecutionItemType Type, string Title, Gu
 
 public class RequestCommandHandlers :
     IRequestHandler<CreateRequestCommand, RequestDto>,
+    IRequestHandler<UpdateDraftRequestCommand, RequestDto>,
     IRequestHandler<SubmitRequestCommand, RequestDto>,
     IRequestHandler<AskQuestionCommand, RequestDto>,
     IRequestHandler<AnswerQuestionCommand, RequestDto>,
@@ -76,6 +85,21 @@ public class RequestCommandHandlers :
         var request = Request.Create(_current.FamilyId!.Value, _current.MemberId!.Value,
             cmd.Type, cmd.Title, cmd.Answers, cmd.Amount, cmd.NeededBy);
         _db.Requests.Add(request);
+        await _db.SaveChangesAsync(ct);
+        return await ToDto(request, ct);
+    }
+
+    public async Task<RequestDto> Handle(UpdateDraftRequestCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAuth();
+        var request = await GetRequest(cmd.RequestId, ct);
+        request.UpdateDraft(
+            _current.MemberId!.Value,
+            title: cmd.Title,
+            answers: cmd.Answers,
+            amount: cmd.Amount,
+            neededBy: cmd.NeededBy);
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);
     }
