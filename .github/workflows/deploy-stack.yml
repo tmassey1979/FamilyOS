@@ -79,23 +79,82 @@ jobs:
             fi
           fi
 
-          if [ -z "$MODE" ] && [ -n "${PORTAINER_URL:-}" ] && [ -n "${PORTAINER_API_KEY:-}" ] && [ -n "${PORTAINER_STACK_ID:-}" ]; then
-            echo "→ Portainer API git/redeploy"
+          if [ -z "$MODE" ] && [ -n "${PORTAINER_URL:-}" ] && [ -n "${PORTAINER_API_KEY:-}" ]; then
             BASE="${PORTAINER_URL%/}"
             EP="${PORTAINER_ENDPOINT_ID:-1}"
-            code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT \
-              "${BASE}/api/stacks/${PORTAINER_STACK_ID}/git/redeploy?endpointId=${EP}" \
+            STACK_ID="${PORTAINER_STACK_ID:-}"
+
+            echo "→ Portainer list stacks"
+            list_code=$(curl -sS -o /tmp/ps.out -w "%{http_code}" \
               -H "X-API-Key: ${PORTAINER_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d '{"PullImage":true,"RepositoryAuthentication":false}' \
-              --max-time 300 || echo "000")
-            echo "HTTP $code"
-            head -c 600 /tmp/pa.out 2>/dev/null || true
-            echo
-            if [ "$code" = "200" ] || [ "$code" = "204" ]; then
-              MODE=api-git
+              "${BASE}/api/stacks" --max-time 60 || echo "000")
+            echo "List HTTP $list_code"
+            if [ "$list_code" = "200" ]; then
+              python3 - << 'PY' || true
+import json
+from pathlib import Path
+try:
+    stacks = json.loads(Path("/tmp/ps.out").read_text())
+except Exception as e:
+    print("parse error", e)
+    raise SystemExit(0)
+for s in stacks if isinstance(stacks, list) else []:
+    print(f"  id={s.get('Id')} name={s.get('Name')!r} endpoint={s.get('EndpointId')} type={s.get('Type')}")
+names = ("familyos", "family-os", "FamilyOS", "family_os")
+match = next((s for s in stacks if str(s.get("Name") or "").lower() in {n.lower() for n in names}), None)
+if match:
+    Path("/tmp/auto_stack_id").write_text(str(match["Id"]))
+    Path("/tmp/auto_endpoint_id").write_text(str(match.get("EndpointId") or "1"))
+    print(f"Auto-matched name={match.get('Name')!r} id={match.get('Id')} endpoint={match.get('EndpointId')}")
+PY
+              if [ -z "$STACK_ID" ] && [ -f /tmp/auto_stack_id ]; then
+                STACK_ID=$(cat /tmp/auto_stack_id)
+                echo "Using auto stack id=$STACK_ID"
+              fi
+              if [ -f /tmp/auto_endpoint_id ] && [ -z "${PORTAINER_ENDPOINT_ID:-}" ]; then
+                EP=$(cat /tmp/auto_endpoint_id)
+              fi
             else
-              echo "::warning::API HTTP $code — trying SSH"
+              head -c 400 /tmp/ps.out 2>/dev/null || true
+              echo
+            fi
+
+            if [ -n "$STACK_ID" ]; then
+              echo "→ Portainer API git/redeploy stack=$STACK_ID endpoint=$EP"
+              code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT \
+                "${BASE}/api/stacks/${STACK_ID}/git/redeploy?endpointId=${EP}" \
+                -H "X-API-Key: ${PORTAINER_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"PullImage":true,"RepositoryAuthentication":false}' \
+                --max-time 300 || echo "000")
+              echo "HTTP $code"
+              head -c 600 /tmp/pa.out 2>/dev/null || true
+              echo
+              if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+                MODE=api-git
+              elif [ "$code" = "404" ] && [ -f /tmp/auto_stack_id ]; then
+                AUTO=$(cat /tmp/auto_stack_id)
+                if [ "$AUTO" != "$STACK_ID" ]; then
+                  echo "→ Retry with auto-matched stack id=$AUTO"
+                  code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT \
+                    "${BASE}/api/stacks/${AUTO}/git/redeploy?endpointId=${EP}" \
+                    -H "X-API-Key: ${PORTAINER_API_KEY}" \
+                    -H "Content-Type: application/json" \
+                    -d '{"PullImage":true,"RepositoryAuthentication":false}' \
+                    --max-time 300 || echo "000")
+                  echo "HTTP $code"
+                  head -c 600 /tmp/pa.out 2>/dev/null || true
+                  echo
+                  if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+                    MODE=api-git
+                  fi
+                fi
+              fi
+              if [ -z "$MODE" ]; then
+                echo "::warning::API redeploy failed HTTP ${code:-?} — stack may not be a Git stack; trying SSH"
+              fi
+            else
+              echo "::warning::No PORTAINER_STACK_ID and could not auto-match a familyos stack"
             fi
           fi
 
@@ -121,13 +180,10 @@ jobs:
           fi
 
           if [ -z "$MODE" ]; then
-            echo "::error::No Portainer/SSH secrets — API stack was NOT redeployed."
-            echo "Add one of:"
-            echo "  PORTAINER_WEBHOOK_URL  (recommended — Portainer stack webhook)"
-            echo "  PORTAINER_URL + PORTAINER_API_KEY + PORTAINER_STACK_ID"
-            echo "  DEPLOY_SSH_HOST + DEPLOY_SSH_KEY"
-            echo "See deploy/PORTAINER_CD.md"
-            echo "mode=skipped-no-secrets" >> "$GITHUB_OUTPUT"
+            echo "::error::Portainer/SSH deploy failed — API stack was NOT redeployed."
+            echo "Check the stack list above for the correct PORTAINER_STACK_ID."
+            echo "If the stack is not a Git stack, use a webhook or SSH secrets."
+            echo "mode=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
