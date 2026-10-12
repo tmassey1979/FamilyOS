@@ -12,6 +12,13 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
+        "EXPO_PUBLIC_API_URL": "https://api.18.226.226.118.sslip.io",
+        "EXPO_PUBLIC_KEYCLOAK_AUTHORITY": "https://auth.18.226.226.118.sslip.io/realms/familyos",
+        "EXPO_PUBLIC_KEYCLOAK_CLIENT_ID": "familyos-mobile",
+        "EXPO_PUBLIC_ALLOW_DEV_LOGIN": "1"
       }
     },
     "preview": {
@@ -20,9 +27,11 @@
         "buildType": "apk"
       },
       "env": {
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
         "EXPO_PUBLIC_API_URL": "https://api.18.226.226.118.sslip.io",
-        "EXPO_PUBLIC_DEV_USER": "terry.owner",
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+        "EXPO_PUBLIC_KEYCLOAK_AUTHORITY": "https://auth.18.226.226.118.sslip.io/realms/familyos",
+        "EXPO_PUBLIC_KEYCLOAK_CLIENT_ID": "familyos-mobile",
+        "EXPO_PUBLIC_ALLOW_DEV_LOGIN": "1"
       }
     },
     "production": {
@@ -32,7 +41,8 @@
       "env": {
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
         "EXPO_PUBLIC_API_URL": "https://api.18.226.226.118.sslip.io",
-        "EXPO_PUBLIC_DEV_USER": "terry.owner"
+        "EXPO_PUBLIC_KEYCLOAK_AUTHORITY": "https://auth.18.226.226.118.sslip.io/realms/familyos",
+        "EXPO_PUBLIC_KEYCLOAK_CLIENT_ID": "familyos-mobile"
       }
     },
     "production-apk": {
@@ -42,7 +52,8 @@
       "env": {
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
         "EXPO_PUBLIC_API_URL": "https://api.18.226.226.118.sslip.io",
-        "EXPO_PUBLIC_DEV_USER": "terry.owner"
+        "EXPO_PUBLIC_KEYCLOAK_AUTHORITY": "https://auth.18.226.226.118.sslip.io/realms/familyos",
+        "EXPO_PUBLIC_KEYCLOAK_CLIENT_ID": "familyos-mobile"
       }
     }
   },
