@@ -152,10 +152,6 @@ public class Request : Entity
         MarkUpdated();
     }
 
-    /// <summary>
-    /// Requester withdraws, or an Owner cancels, before execution starts.
-    /// Allowed from Draft, Submitted, WaitingForInformation, UnderReview.
-    /// </summary>
     public void Cancel(Guid actorMemberId, bool isOwner, string? reason = null)
     {
         if (Status is RequestStatus.Cancelled or RequestStatus.Completed or RequestStatus.Denied
@@ -178,6 +174,34 @@ public class Request : Entity
     public void SetAnswers(Dictionary<string, object?> answers)
     {
         AnswersJson = JsonSerializer.Serialize(answers);
+        MarkUpdated();
+    }
+
+    public void UpdateDraft(
+        Guid memberId,
+        string? title = null,
+        Dictionary<string, object?>? answers = null,
+        decimal? amount = null,
+        DateTime? neededBy = null,
+        bool clearNeededBy = false)
+    {
+        if (RequesterMemberId != memberId)
+            throw new UnauthorizedAccessException("Only the requester can edit this draft.");
+        if (Status is not (RequestStatus.Draft or RequestStatus.WaitingForInformation))
+            throw new InvalidOperationException($"Cannot edit request in status {Status}.");
+
+        if (!string.IsNullOrWhiteSpace(title))
+            Title = title.Trim();
+        if (answers != null)
+            AnswersJson = JsonSerializer.Serialize(answers);
+        if (amount.HasValue)
+            Amount = amount;
+        if (clearNeededBy)
+            NeededByUtc = null;
+        else if (neededBy.HasValue)
+            NeededByUtc = neededBy;
+
+        AddHistory(Status, memberId, "Draft updated");
         MarkUpdated();
     }
 
