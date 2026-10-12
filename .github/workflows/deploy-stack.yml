@@ -1,4 +1,3 @@
-# Redeploy Family OS on the server via Portainer (main only).
 name: Deploy stack (Portainer)
 
 on:
@@ -47,46 +46,31 @@ jobs:
             echo "Portainer webhook"
             code=$(curl -sS -o /tmp/pw.out -w "%{http_code}" -X POST "$PORTAINER_WEBHOOK_URL" -H "Content-Type: application/json" --max-time 120 || echo "000")
             echo "HTTP $code"; head -c 400 /tmp/pw.out 2>/dev/null || true; echo
-            if [ "$code" = "200" ] || [ "$code" = "202" ] || [ "$code" = "204" ]; then MODE=webhook; else echo "::warning::Webhook HTTP $code"; fi
+            if [ "$code" = "200" ] || [ "$code" = "202" ] || [ "$code" = "204" ]; then MODE=webhook; fi
           fi
           if [ -z "$MODE" ] && [ -n "${PORTAINER_URL:-}" ] && [ -n "${PORTAINER_API_KEY:-}" ]; then
-            BASE="${PORTAINER_URL%/}"; EP="${PORTAINER_ENDPOINT_ID:-1}"; STACK_ID="${PORTAINER_STACK_ID:-}"
+            BASE="${PORTAINER_URL%/}"
+            EP="${PORTAINER_ENDPOINT_ID:-2}"
+            STACK_ID="${PORTAINER_STACK_ID:-}"
             echo "Portainer list stacks"
             list_code=$(curl -sS -o /tmp/ps.out -w "%{http_code}" -H "X-API-Key: ${PORTAINER_API_KEY}" "${BASE}/api/stacks" --max-time 60 || echo "000")
             echo "List HTTP $list_code"
             if [ "$list_code" = "200" ]; then
-              python3 -c 'import json;from pathlib import Path;stacks=json.loads(Path("/tmp/ps.out").read_text()); [print("  id=%s name=%r endpoint=%s type=%s"%(s.get("Id"),s.get("Name"),s.get("EndpointId"),s.get("Type"))) for s in (stacks if isinstance(stacks,list) else [])]; names={"familyos","family-os","family_os"}; match=next((s for s in stacks if str(s.get("Name") or "").lower() in names),None); match and (Path("/tmp/auto_stack_id").write_text(str(match["Id"])), Path("/tmp/auto_endpoint_id").write_text(str(match.get("EndpointId") or "1")), print("Auto-matched", match.get("Name"), match.get("Id")))'
-              if [ -z "$STACK_ID" ] && [ -f /tmp/auto_stack_id ]; then STACK_ID=$(cat /tmp/auto_stack_id); echo "Using auto stack id=$STACK_ID"; fi
-              if [ -f /tmp/auto_endpoint_id ] && [ -z "${PORTAINER_ENDPOINT_ID:-}" ]; then EP=$(cat /tmp/auto_endpoint_id); fi
-            else head -c 400 /tmp/ps.out 2>/dev/null || true; echo; fi
+              python3 -c "import json;from pathlib import Path;stacks=json.loads(Path('/tmp/ps.out').read_text()); [print('  id=%s name=%r endpoint=%s'%(s.get('Id'),s.get('Name'),s.get('EndpointId'))) for s in stacks]; match=next((s for s in stacks if str(s.get('Name') or '').lower()=='familyos'),None); match and (Path('/tmp/auto_stack_id').write_text(str(match['Id'])), Path('/tmp/auto_endpoint_id').write_text(str(match.get('EndpointId') or '2')), Path('/tmp/stack_env.json').write_text(json.dumps(match.get('Env') or [])), print('Auto-matched', match.get('Name'), match.get('Id')))"
+              if [ -z "$STACK_ID" ] && [ -f /tmp/auto_stack_id ]; then STACK_ID=$(cat /tmp/auto_stack_id); fi
+              if [ -f /tmp/auto_endpoint_id ]; then EP=$(cat /tmp/auto_endpoint_id); fi
+            fi
             if [ -n "$STACK_ID" ]; then
-              echo "Portainer API git/redeploy stack=$STACK_ID endpoint=$EP"
-              code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT "${BASE}/api/stacks/${STACK_ID}/git/redeploy?endpointId=${EP}" -H "X-API-Key: ${PORTAINER_API_KEY}" -H "Content-Type: application/json" -d '{"PullImage":true,"RepositoryAuthentication":false}' --max-time 300 || echo "000")
-              echo "HTTP $code"; head -c 600 /tmp/pa.out 2>/dev/null || true; echo
-              if [ "$code" = "200" ] || [ "$code" = "204" ]; then MODE=api-git
-              elif [ "$code" = "404" ] && [ -f /tmp/auto_stack_id ]; then
-                AUTO=$(cat /tmp/auto_stack_id)
-                if [ "$AUTO" != "$STACK_ID" ]; then
-                  echo "Retry auto id=$AUTO"
-                  code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT "${BASE}/api/stacks/${AUTO}/git/redeploy?endpointId=${EP}" -H "X-API-Key: ${PORTAINER_API_KEY}" -H "Content-Type: application/json" -d '{"PullImage":true,"RepositoryAuthentication":false}' --max-time 300 || echo "000")
-                  echo "HTTP $code"; head -c 600 /tmp/pa.out 2>/dev/null || true; echo
-                  if [ "$code" = "200" ] || [ "$code" = "204" ]; then MODE=api-git; fi
-                fi
-              fi
-              if [ -z "$MODE" ]; then echo "::warning::API failed HTTP ${code:-?}"; fi
-            else echo "::warning::No stack id"; fi
-          fi
-          if [ -z "$MODE" ] && [ -n "${DEPLOY_SSH_HOST:-}" ] && [ -n "${DEPLOY_SSH_KEY:-}" ]; then
-            echo "SSH deploy"
-            install -m 600 /dev/null /tmp/deploy_key
-            printf "%s\n" "$DEPLOY_SSH_KEY" > /tmp/deploy_key
-            chmod 600 /tmp/deploy_key
-            ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 "$DEPLOY_SSH_HOST" "set -euo pipefail; cd /opt/familyos; sudo git fetch origin; sudo git checkout main; sudo git pull --ff-only origin main; sudo docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d --build"
-            rm -f /tmp/deploy_key
-            MODE=ssh
+              if [ ! -f /tmp/stack_env.json ]; then echo '[]' > /tmp/stack_env.json; fi
+              python3 -c "import json;from pathlib import Path;env=json.loads(Path('/tmp/stack_env.json').read_text());Path('/tmp/redeploy_body.json').write_text(json.dumps({'PullImage':False,'RepositoryAuthentication':False,'Env':env}))"
+              echo "Portainer git/redeploy stack=$STACK_ID endpoint=$EP"
+              code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT "${BASE}/api/stacks/${STACK_ID}/git/redeploy?endpointId=${EP}" -H "X-API-Key: ${PORTAINER_API_KEY}" -H "Content-Type: application/json" --data-binary @/tmp/redeploy_body.json --max-time 300 || echo "000")
+              echo "HTTP $code"; head -c 500 /tmp/pa.out 2>/dev/null || true; echo
+              if [ "$code" = "200" ] || [ "$code" = "204" ]; then MODE=api-git; else echo "::warning::API HTTP $code"; fi
+            fi
           fi
           if [ -z "$MODE" ]; then
-            echo "::error::Deploy failed. Fix PORTAINER_STACK_ID from list above."
+            echo "::error::Deploy failed"
             echo "mode=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -96,5 +80,5 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## Deploy stack" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Deploy" >> "$GITHUB_STEP_SUMMARY"
           echo "- Mode: ${{ steps.deploy.outputs.mode }}" >> "$GITHUB_STEP_SUMMARY"
