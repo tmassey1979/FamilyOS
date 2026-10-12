@@ -1,26 +1,18 @@
 # Redeploy Family OS on the server via Portainer (main only).
 #
-# Secrets (Settings → Secrets and variables → Actions):
-#   PORTAINER_WEBHOOK_URL   preferred — Stack webhook POST URL from Portainer UI
-#   PORTAINER_URL           e.g. https://portainer.18.226.226.118.sslip.io
-#   PORTAINER_API_KEY       Portainer access token (if no webhook)
-#   PORTAINER_STACK_ID      numeric stack id (if no webhook)
-#   PORTAINER_ENDPOINT_ID   default 1
-#
-# Optional SSH fallback:
-#   DEPLOY_SSH_HOST         e.g. ubuntu@18.226.226.118
-#   DEPLOY_SSH_KEY          private key PEM contents
+# Secrets: PORTAINER_URL + PORTAINER_API_KEY (+ optional PORTAINER_STACK_ID)
+#   or PORTAINER_WEBHOOK_URL, or DEPLOY_SSH_HOST + DEPLOY_SSH_KEY
 
 name: Deploy stack (Portainer)
 
 on:
-  workflow_call:
   workflow_dispatch:
     inputs:
       reason:
         description: "Why redeploy"
         required: false
         default: manual
+  workflow_call:
 
 permissions:
   contents: read
@@ -151,7 +143,7 @@ PY
                 fi
               fi
               if [ -z "$MODE" ]; then
-                echo "::warning::API redeploy failed HTTP ${code:-?} — stack may not be a Git stack; trying SSH"
+                echo "::warning::API redeploy failed HTTP ${code:-?} — trying SSH"
               fi
             else
               echo "::warning::No PORTAINER_STACK_ID and could not auto-match a familyos stack"
@@ -182,7 +174,6 @@ PY
           if [ -z "$MODE" ]; then
             echo "::error::Portainer/SSH deploy failed — API stack was NOT redeployed."
             echo "Check the stack list above for the correct PORTAINER_STACK_ID."
-            echo "If the stack is not a Git stack, use a webhook or SSH secrets."
             echo "mode=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
