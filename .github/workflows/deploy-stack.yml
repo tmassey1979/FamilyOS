@@ -44,12 +44,10 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # workflow_call from CI on main: ref is still the PR/push ref of the caller
           if [ "$REF" != "refs/heads/main" ] && [ "$EVENT" != "workflow_dispatch" ] && [ "$EVENT" != "workflow_call" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # For workflow_call, caller must only invoke on main (enforced in ci/release)
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Redeploy (webhook → API → SSH)
@@ -123,10 +121,14 @@ jobs:
           fi
 
           if [ -z "$MODE" ]; then
-            echo "::warning::No Portainer/SSH secrets configured yet — stack was NOT redeployed."
-            echo "Add PORTAINER_WEBHOOK_URL (recommended) or API secrets or DEPLOY_SSH_HOST+DEPLOY_SSH_KEY. See deploy/PORTAINER_CD.md"
+            echo "::error::No Portainer/SSH secrets — API stack was NOT redeployed."
+            echo "Add one of:"
+            echo "  PORTAINER_WEBHOOK_URL  (recommended — Portainer stack webhook)"
+            echo "  PORTAINER_URL + PORTAINER_API_KEY + PORTAINER_STACK_ID"
+            echo "  DEPLOY_SSH_HOST + DEPLOY_SSH_KEY"
+            echo "See deploy/PORTAINER_CD.md"
             echo "mode=skipped-no-secrets" >> "$GITHUB_OUTPUT"
-            exit 0
+            exit 1
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Redeploy OK via $MODE"
