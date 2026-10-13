@@ -72,6 +72,10 @@ public class TasksController : ControllerBase
     public async Task<ActionResult<TaskDto>> Cancel(Guid id, [FromBody] NoteBody? body, CancellationToken ct)
         => Ok(await _mediator.Send(new CancelTaskCommand(id, body?.Reason), ct));
 
+    [HttpPost("{id:guid}/skip")]
+    public async Task<ActionResult<TaskDto>> Skip(Guid id, [FromBody] NoteBody? body, CancellationToken ct)
+        => Ok(await _mediator.Send(new SkipTaskCommand(id, body?.Note), ct));
+
     [HttpPost("{id:guid}/reassign")]
     public async Task<ActionResult<TaskDto>> Reassign(Guid id, [FromBody] AssignBody body, CancellationToken ct)
         => Ok(await _mediator.Send(new ReassignTaskCommand(id, body.AssignToMemberId), ct));
