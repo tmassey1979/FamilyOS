@@ -73,6 +73,7 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
             e.HasIndex(x => new { x.FamilyId, x.UserId }).IsUnique();
             e.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
             e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.QuietHoursEnabled).HasDefaultValue(false);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
