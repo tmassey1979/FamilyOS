@@ -131,6 +131,9 @@ export type TaskDto = {
   calendarBacked?: boolean;
   createdAtUtc?: string;
   isOverdue?: boolean;
+  plannedStartTime?: string;
+  plannedEndTime?: string;
+  varianceMinutes?: number;
 };
 
 export type MeDto = {
@@ -242,6 +245,22 @@ export const tasksApi = {
         category: body.category ?? null,
         dueDate: body.dueDate ?? null,
         clearDueDate: body.clearDueDate ?? false,
+      }),
+    }),
+  setPlannedTimes: (
+    id: string,
+    body: {
+      plannedStartTime?: string;
+      plannedEndTime?: string;
+      estimatedDurationMinutes?: number;
+    },
+  ) =>
+    api<TaskDto>(`/api/tasks/${id}/planned-times`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        plannedStartTime: body.plannedStartTime ?? null,
+        plannedEndTime: body.plannedEndTime ?? null,
+        estimatedDurationMinutes: body.estimatedDurationMinutes ?? null,
       }),
     }),
 };
