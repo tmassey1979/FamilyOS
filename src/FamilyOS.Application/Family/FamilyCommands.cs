@@ -27,11 +27,17 @@ public record AddFamilyMemberCommand(
 public record ChangeMemberRoleCommand(Guid MemberId, FamilyRole Role) : IRequest<MemberDto>;
 public record DeactivateMemberCommand(Guid MemberId) : IRequest<MemberDto>;
 
+public record QuietHoursDto(bool Enabled, int? StartMinutes, int? EndMinutes, string? StartLabel, string? EndLabel);
+public record GetQuietHoursQuery() : IRequest<QuietHoursDto>;
+public record UpdateQuietHoursCommand(bool Enabled, int? StartMinutes, int? EndMinutes) : IRequest<QuietHoursDto>;
+
 public class FamilyCommandHandlers :
     IRequestHandler<CreateFamilyCommand, FamilyDto>,
     IRequestHandler<AddFamilyMemberCommand, MemberDto>,
     IRequestHandler<ChangeMemberRoleCommand, MemberDto>,
-    IRequestHandler<DeactivateMemberCommand, MemberDto>
+    IRequestHandler<DeactivateMemberCommand, MemberDto>,
+    IRequestHandler<GetQuietHoursQuery, QuietHoursDto>,
+    IRequestHandler<UpdateQuietHoursCommand, QuietHoursDto>
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
@@ -46,14 +52,12 @@ public class FamilyCommandHandlers :
     {
         await _current.EnsureLoadedAsync(ct);
 
-        // If already bound to a family, reject
         if (_current.FamilyId.HasValue)
             throw new DomainException("You already belong to a family. Leave it before creating another.");
 
         var externalId = _current.ExternalIdentityId
             ?? throw new ForbiddenException("Sign in before creating a family.");
 
-        // Upsert User for this identity
         var user = await _db.Users.FirstOrDefaultAsync(u => u.ExternalIdentityId == externalId, ct);
         if (user == null)
         {
@@ -72,14 +76,13 @@ public class FamilyCommandHandlers :
 
         var family = FamilyOS.Domain.Family.Family.Create(cmd.Name, cmd.TimeZone ?? "America/Chicago", cmd.Currency ?? "USD");
         _db.Families.Add(family);
-        await _db.SaveChangesAsync(ct); // get Family.Id
+        await _db.SaveChangesAsync(ct);
 
         var displayName = string.IsNullOrWhiteSpace(cmd.OwnerDisplayName)
             ? user.DisplayName
             : cmd.OwnerDisplayName.Trim();
 
         var owner = family.AddMember(user, FamilyRole.Owner, displayName);
-        // Members + DeclineReasons are on family navigations — EF persists with Family
         user.AssignToFamily(family.Id, owner.Id);
         await _db.SaveChangesAsync(ct);
 
@@ -152,7 +155,6 @@ public class FamilyCommandHandlers :
 
         if (cmd.Role == FamilyRole.Owner && member.Role != FamilyRole.Owner)
         {
-            // demote current owner to Adult when promoting another
             var owners = await _db.FamilyMembers
                 .Where(m => m.FamilyId == familyId && m.Role == FamilyRole.Owner && m.IsActive)
                 .ToListAsync(ct);
@@ -184,5 +186,42 @@ public class FamilyCommandHandlers :
         member.Deactivate();
         await _db.SaveChangesAsync(ct);
         return new MemberDto(member.Id, member.UserId, member.DisplayName, member.Role, member.IsActive);
+    }
+
+    public async Task<QuietHoursDto> Handle(GetQuietHoursQuery query, CancellationToken ct)
+    {
+        var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
+        var member = await _db.FamilyMembers
+            .FirstOrDefaultAsync(m => m.Id == memberId && m.FamilyId == familyId, ct)
+            ?? throw new NotFoundException("Member", memberId);
+        return ToQuietHoursDto(member);
+    }
+
+    public async Task<QuietHoursDto> Handle(UpdateQuietHoursCommand cmd, CancellationToken ct)
+    {
+        var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
+        var member = await _db.FamilyMembers
+            .FirstOrDefaultAsync(m => m.Id == memberId && m.FamilyId == familyId, ct)
+            ?? throw new NotFoundException("Member", memberId);
+        member.SetQuietHours(cmd.Enabled, cmd.StartMinutes, cmd.EndMinutes);
+        await _db.SaveChangesAsync(ct);
+        return ToQuietHoursDto(member);
+    }
+
+    private static QuietHoursDto ToQuietHoursDto(FamilyMember member)
+    {
+        static string? Label(int? mins)
+        {
+            if (mins is null) return null;
+            var h = mins.Value / 60;
+            var m = mins.Value % 60;
+            return $"{h:D2}:{m:D2}";
+        }
+        return new QuietHoursDto(
+            member.QuietHoursEnabled,
+            member.QuietHoursStartMinutes,
+            member.QuietHoursEndMinutes,
+            Label(member.QuietHoursStartMinutes),
+            Label(member.QuietHoursEndMinutes));
     }
 }
