@@ -128,6 +128,9 @@ export type TaskDto = {
   estimatedDurationMinutes?: number;
   actualDurationMinutes?: number;
   category?: string;
+  calendarBacked?: boolean;
+  createdAtUtc?: string;
+  isOverdue?: boolean;
 };
 
 export type MeDto = {
@@ -213,6 +216,28 @@ export const tasksApi = {
     api<TaskDto>(`/api/tasks/${id}/reassign`, {
       method: 'POST',
       body: JSON.stringify({ assignToMemberId }),
+    }),
+  updateDetails: (
+    id: string,
+    body: {
+      title?: string;
+      description?: string;
+      priority?: string;
+      category?: string;
+      dueDate?: string | null;
+      clearDueDate?: boolean;
+    },
+  ) =>
+    api<TaskDto>(`/api/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: body.title ?? null,
+        description: body.description ?? null,
+        priority: body.priority ?? null,
+        category: body.category ?? null,
+        dueDate: body.dueDate ?? null,
+        clearDueDate: body.clearDueDate ?? false,
+      }),
     }),
 };
 
