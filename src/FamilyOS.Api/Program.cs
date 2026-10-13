@@ -1,11 +1,13 @@
 using System.Text.Json.Serialization;
 using FamilyOS.Api.Middleware;
+using FamilyOS.Application.Family;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Application.Tasks;
 using FamilyOS.Infrastructure;
 using FamilyOS.Infrastructure.Identity;
 using FamilyOS.Infrastructure.Persistence;
 using FamilyOS.Infrastructure.Seed;
+using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -135,7 +137,6 @@ try
 
     var app = builder.Build();
 
-    // Trust Traefik / reverse proxy headers
     var fwd = new ForwardedHeadersOptions
     {
         ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
@@ -143,7 +144,6 @@ try
     fwd.KnownNetworks.Clear();
     fwd.KnownProxies.Clear();
     app.UseForwardedHeaders(fwd);
-
 
     app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -156,7 +156,6 @@ try
         };
     });
 
-    // Swagger available in all environments (API is behind Traefik; useful for ops + mobile)
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
@@ -183,7 +182,6 @@ try
 
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
-    // Dev helper: who am I (family context)
     app.MapGet("/api/me", async (ICurrentUserService current) =>
     {
         await current.EnsureLoadedAsync();
@@ -198,6 +196,14 @@ try
             Role = current.Role?.ToString()
         });
     }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapGet("/api/me/quiet-hours", async (IMediator mediator, CancellationToken ct) =>
+        Results.Ok(await mediator.Send(new GetQuietHoursQuery(), ct)))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapPut("/api/me/quiet-hours", async (UpdateQuietHoursBody body, IMediator mediator, CancellationToken ct) =>
+        Results.Ok(await mediator.Send(new UpdateQuietHoursCommand(body.Enabled, body.StartMinutes, body.EndMinutes), ct)))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
 
     var seedEnabled = app.Environment.IsDevelopment()
         || string.Equals(app.Configuration["Seed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
@@ -242,6 +248,8 @@ static async Task WriteDetailedHealth(HttpContext ctx, HealthReport report)
     };
     await ctx.Response.WriteAsJsonAsync(payload);
 }
+
+file record UpdateQuietHoursBody(bool Enabled, int? StartMinutes, int? EndMinutes);
 
 /// <summary>Checks Postgres connectivity via EF Core.</summary>
 file sealed class PostgresHealthCheck : IHealthCheck
