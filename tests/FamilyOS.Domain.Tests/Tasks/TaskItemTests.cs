@@ -253,4 +253,19 @@ public class TaskItemTests
         var act = () => task.Skip(AssigneeId);
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void Planned_vs_actual_variance_on_complete()
+    {
+        var task = NewTask();
+        task.SetPlannedTimes(new TimeOnly(9, 0), new TimeOnly(9, 30), 30);
+        task.EstimatedDurationMinutes.Should().Be(30);
+        task.Assign(AssigneeId, CreatorId);
+        task.Accept(AssigneeId);
+        task.Start(AssigneeId);
+        task.Complete(AssigneeId);
+        task.ActualDurationMinutes.Should().NotBeNull();
+        task.PlannedStartTime.Should().Be(new TimeOnly(9, 0));
+        task.PlannedEndTime.Should().Be(new TimeOnly(9, 30));
+    }
 }
