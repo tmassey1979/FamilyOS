@@ -133,3 +133,9 @@ export async function refreshAccessToken(): Promise<string | null> {
   await persistTokens(data.access_token, data.refresh_token ?? refresh);
   return data.access_token as string;
 }
+
+/** Clear session (JWT + dev bypass) and return to login. */
+export async function signOut() {
+  await clearTokens();
+  setDevUser(null);
+}
