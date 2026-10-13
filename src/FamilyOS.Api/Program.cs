@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using FamilyOS.Api.Middleware;
 using FamilyOS.Application.Family;
+using FamilyOS.Application.Notifications;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Application.Tasks;
 using FamilyOS.Infrastructure;
@@ -205,6 +206,20 @@ try
         Results.Ok(await mediator.Send(new UpdateQuietHoursCommand(body.Enabled, body.StartMinutes, body.EndMinutes), ct)))
         .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
 
+    app.MapPost("/api/me/devices", async (RegisterDeviceBody body, IMediator mediator, CancellationToken ct) =>
+        Results.Ok(await mediator.Send(new RegisterDeviceCommand(body.Token, body.Platform, body.DeviceName), ct)))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapGet("/api/me/devices", async (IMediator mediator, CancellationToken ct) =>
+        Results.Ok(await mediator.Send(new GetMyDevicesQuery(), ct)))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapDelete("/api/me/devices", async (string token, IMediator mediator, CancellationToken ct) =>
+    {
+        await mediator.Send(new UnregisterDeviceCommand(token), ct);
+        return Results.NoContent();
+    }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
     var seedEnabled = app.Environment.IsDevelopment()
         || string.Equals(app.Configuration["Seed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
     if (seedEnabled)
@@ -250,6 +265,7 @@ static async Task WriteDetailedHealth(HttpContext ctx, HealthReport report)
 }
 
 file record UpdateQuietHoursBody(bool Enabled, int? StartMinutes, int? EndMinutes);
+file record RegisterDeviceBody(string Token, string Platform, string? DeviceName);
 
 /// <summary>Checks Postgres connectivity via EF Core.</summary>
 file sealed class PostgresHealthCheck : IHealthCheck
