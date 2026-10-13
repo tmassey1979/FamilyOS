@@ -35,6 +35,14 @@ export default function FamilyScreen() {
   const [purchaseStore, setPurchaseStore] = useState('');
   const [purchasing, setPurchasing] = useState(false);
 
+  // Add to shopping list (#34)
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [itemName, setItemName] = useState('');
+  const [itemStore, setItemStore] = useState('');
+  const [itemPrice, setItemPrice] = useState('');
+  const [itemCategory, setItemCategory] = useState('Grocery');
+  const [addingItem, setAddingItem] = useState(false);
+
   const [roleMember, setRoleMember] = useState<Member | null>(null);
   const [nextRole, setNextRole] = useState<string>('Adult');
 
@@ -127,6 +135,34 @@ export default function FamilyScreen() {
     }
   };
 
+  const submitAddItem = async () => {
+    if (!itemName.trim()) {
+      setError('Item name is required');
+      return;
+    }
+    setAddingItem(true);
+    setError(null);
+    try {
+      const price = parseFloat(itemPrice);
+      await procurementApi.createQueueItem({
+        name: itemName.trim(),
+        preferredStore: itemStore.trim() || undefined,
+        estimatedPrice: Number.isFinite(price) && price >= 0 ? price : undefined,
+        category: itemCategory || 'Grocery',
+      });
+      setAddItemOpen(false);
+      setItemName('');
+      setItemStore('');
+      setItemPrice('');
+      setItemCategory('Grocery');
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not add item');
+    } finally {
+      setAddingItem(false);
+    }
+  };
+
   useEffect(() => { void load(); }, [load]);
 
   const addMember = async () => {
@@ -213,7 +249,12 @@ export default function FamilyScreen() {
         </Card>
       ))}
 
-      <SectionTitle>Shopping by store</SectionTitle>
+      <View style={styles.toolbar}>
+        <SectionTitle>Shopping by store</SectionTitle>
+        {isAdultOrOwner ? (
+          <Button title="Add to list" onPress={() => setAddItemOpen(true)} />
+        ) : null}
+      </View>
       <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
         Queue grouped by preferred store — start a trip to build a cart.
       </Text>
@@ -281,7 +322,7 @@ export default function FamilyScreen() {
       ) : null}
 
       {storeGroups.length === 0 ? (
-        <EmptyState title="Queue empty" subtitle="Approved purchases show up here by store." />
+        <EmptyState title="Queue empty" subtitle="Add items or approve grocery requests." />
       ) : (
         storeGroups.map(([store, items]) => {
           const est = items.reduce((s, i) => s + (i.estimatedPrice ?? 0), 0);
@@ -304,6 +345,7 @@ export default function FamilyScreen() {
                   </View>
                   <View style={styles.row}>
                     <Badge label={item.status} tone="warning" />
+                    {item.requestId ? <Badge label="from request" /> : null}
                   </View>
                   {isAdultOrOwner ? (
                     <View style={[styles.row, { flexWrap: 'wrap', gap: spacing.xs }]}>
@@ -384,6 +426,47 @@ export default function FamilyScreen() {
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="secondary" onPress={() => setAddOpen(false)} />
               <Button title={saving ? 'Saving…' : 'Add'} onPress={() => void addMember()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={addItemOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Add to shopping list</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Item name"
+              placeholderTextColor={colors.textMuted}
+              value={itemName}
+              onChangeText={setItemName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Preferred store (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={itemStore}
+              onChangeText={setItemStore}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Est. price (optional)"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              value={itemPrice}
+              onChangeText={setItemPrice}
+            />
+            <View style={styles.row}>
+              {['Grocery', 'Snack', 'Purchase', 'Household'].map((c) => (
+                <Pressable key={c} style={[styles.chip, itemCategory === c && styles.chipOn]} onPress={() => setItemCategory(c)}>
+                  <Text style={styles.chipText}>{c}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="secondary" onPress={() => setAddItemOpen(false)} />
+              <Button title={addingItem ? 'Adding…' : 'Add'} onPress={() => void submitAddItem()} />
             </View>
           </View>
         </View>
