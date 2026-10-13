@@ -5,7 +5,7 @@ import {
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
   familyApi, meApi, procurementApi,
-  type CartDto, type MeDto, type ProcurementItemDto,
+  type CartDto, type MeDto, type ProcurementItemDto, type ProductDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 
@@ -19,6 +19,7 @@ export default function FamilyScreen() {
   const [me, setMe] = useState<MeDto | null>(null);
   const [queue, setQueue] = useState<ProcurementItemDto[]>([]);
   const [carts, setCarts] = useState<CartDto[]>([]);
+  const [products, setProducts] = useState<ProductDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -29,6 +30,10 @@ export default function FamilyScreen() {
   const [saving, setSaving] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [startingTrip, setStartingTrip] = useState<string | null>(null);
+  const [purchaseItem, setPurchaseItem] = useState<ProcurementItemDto | null>(null);
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [purchaseStore, setPurchaseStore] = useState('');
+  const [purchasing, setPurchasing] = useState(false);
 
   const [roleMember, setRoleMember] = useState<Member | null>(null);
   const [nextRole, setNextRole] = useState<string>('Adult');
@@ -76,24 +81,51 @@ export default function FamilyScreen() {
     setRefreshing(true);
     setError(null);
     try {
-      const [fam, mems, who, items, activeCarts] = await Promise.all([
+      const [fam, mems, who, items, activeCarts, catalog] = await Promise.all([
         familyApi.get(),
         familyApi.members(),
         meApi.get().catch(() => null),
         procurementApi.queue().catch(() => [] as ProcurementItemDto[]),
         procurementApi.carts().catch(() => [] as CartDto[]),
+        procurementApi.products().catch(() => [] as ProductDto[]),
       ]);
       setFamilyName(fam.name);
       setMembers(mems);
       setMe(who);
       setQueue(items);
       setCarts(activeCarts.filter((c) => c.isActive));
+      setProducts(catalog);
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Unable to load family');
     } finally {
       setRefreshing(false);
     }
   }, []);
+
+  const submitPurchase = async () => {
+    if (!purchaseItem) return;
+    const price = parseFloat(purchasePrice);
+    if (!Number.isFinite(price) || price < 0) {
+      setError('Enter a valid price');
+      return;
+    }
+    setPurchasing(true);
+    try {
+      await procurementApi.purchase(
+        purchaseItem.id,
+        price,
+        purchaseStore.trim() || undefined,
+      );
+      setPurchaseItem(null);
+      setPurchasePrice('');
+      setPurchaseStore('');
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Purchase failed');
+    } finally {
+      setPurchasing(false);
+    }
+  };
 
   useEffect(() => { void load(); }, [load]);
 
@@ -219,9 +251,20 @@ export default function FamilyScreen() {
                 <View key={it.id} style={[styles.row, { justifyContent: 'space-between' }]}>
                   <Text style={typography.body}>{it.name}</Text>
                   {isAdultOrOwner ? (
-                    <Pressable onPress={() => procurementApi.removeFromCart(it.id).then(load).catch(() => {})}>
-                      <Text style={typography.caption}>Remove</Text>
-                    </Pressable>
+                    <View style={styles.row}>
+                      <Pressable
+                        onPress={() => {
+                          setPurchasePrice(it.estimatedPrice != null ? String(it.estimatedPrice) : '');
+                          setPurchaseStore(cart.storeName);
+                          setPurchaseItem(it);
+                        }}
+                      >
+                        <Text style={[typography.caption, { color: colors.primary }]}>Bought</Text>
+                      </Pressable>
+                      <Pressable onPress={() => procurementApi.removeFromCart(it.id).then(load).catch(() => {})}>
+                        <Text style={typography.caption}>Remove</Text>
+                      </Pressable>
+                    </View>
                   ) : null}
                 </View>
               ))}
@@ -292,6 +335,35 @@ export default function FamilyScreen() {
         })
       )}
 
+      <SectionTitle>Product catalog</SectionTitle>
+      <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+        Prices learned from purchases — typical price and count.
+      </Text>
+      {products.length === 0 ? (
+        <EmptyState title="No products yet" subtitle="Mark cart items Bought to build the catalog." />
+      ) : (
+        products.map((pr) => (
+          <Card key={pr.id} style={styles.cardCol}>
+            <Text style={typography.heading}>{pr.name}</Text>
+            <View style={styles.row}>
+              {pr.brand ? <Badge label={pr.brand} /> : null}
+              {pr.category ? <Badge label={pr.category} /> : null}
+              {pr.size ? <Badge label={pr.size} /> : null}
+            </View>
+            <Text style={typography.body}>
+              {pr.typicalPrice != null ? `Typical $${pr.typicalPrice.toFixed(2)}` : 'No price yet'}
+              {' · '}
+              {pr.purchaseCount} purchase{pr.purchaseCount === 1 ? '' : 's'}
+            </Text>
+            {pr.lastPurchasedAtUtc ? (
+              <Text style={typography.caption}>
+                Last {new Date(pr.lastPurchasedAtUtc).toLocaleDateString()}
+              </Text>
+            ) : null}
+          </Card>
+        ))
+      )}
+
       <Text style={[typography.caption, { marginTop: spacing.lg }]}>
         Roles and permissions are enforced on the API — UI is never the security boundary.
       </Text>
@@ -312,6 +384,34 @@ export default function FamilyScreen() {
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="secondary" onPress={() => setAddOpen(false)} />
               <Button title={saving ? 'Saving…' : 'Add'} onPress={() => void addMember()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!purchaseItem} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Mark purchased</Text>
+            <Text style={typography.caption}>{purchaseItem?.name}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Actual price"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              value={purchasePrice}
+              onChangeText={setPurchasePrice}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Store (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={purchaseStore}
+              onChangeText={setPurchaseStore}
+            />
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="secondary" onPress={() => setPurchaseItem(null)} />
+              <Button title={purchasing ? 'Saving…' : 'Save'} onPress={() => void submitPurchase()} />
             </View>
           </View>
         </View>
