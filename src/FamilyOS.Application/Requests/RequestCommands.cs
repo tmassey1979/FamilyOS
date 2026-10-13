@@ -51,6 +51,16 @@ public record GetRequestHistoryQuery(Guid RequestId) : IRequest<List<RequestHist
 public record GetRequestTypesQuery() : IRequest<List<RequestTypeDto>>;
 public record EvaluatePolicyQuery(Guid RequestId) : IRequest<PolicyEvaluationResult>;
 
+/// <summary>
+/// Owner-only: force approve or deny regardless of policy limits; records a PolicyOverride audit row.
+/// </summary>
+public record OverridePolicyCommand(
+    Guid RequestId,
+    bool Approve,
+    string? Reason = null,
+    bool Conditional = false
+) : IRequest<RequestDto>;
+
 public record GenerateExecutionPlanCommand(Guid RequestId) : IRequest<ExecutionPlanDto>;
 public record CommitExecutionPlanCommand(Guid PlanId, List<Guid>? DeselectedItemIds) : IRequest<ExecutionPlanDto>;
 public record ExecutionPlanDto(Guid Id, Guid RequestId, ExecutionPlanStatus Status, List<ExecutionItemDto> Items);
@@ -71,6 +81,7 @@ public class RequestCommandHandlers :
     IRequestHandler<GetRequestHistoryQuery, List<RequestHistoryDto>>,
     IRequestHandler<GetRequestTypesQuery, List<RequestTypeDto>>,
     IRequestHandler<EvaluatePolicyQuery, PolicyEvaluationResult>,
+    IRequestHandler<OverridePolicyCommand, RequestDto>,
     IRequestHandler<GenerateExecutionPlanCommand, ExecutionPlanDto>,
     IRequestHandler<CommitExecutionPlanCommand, ExecutionPlanDto>
 {
@@ -240,6 +251,57 @@ public class RequestCommandHandlers :
 
         return policy.Evaluate(_current.Role ?? FamilyRole.Child, _current.MemberId!.Value,
             request.RequesterMemberId, request.Amount, request.Type);
+    }
+
+    public async Task<RequestDto> Handle(OverridePolicyCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAuth();
+        if (_current.Role != FamilyRole.Owner)
+            throw new ForbiddenException("Only the family Owner can override policy.");
+
+        var request = await GetRequest(cmd.RequestId, ct);
+        if (request.Status is RequestStatus.Completed or RequestStatus.Cancelled or RequestStatus.Denied)
+            throw new InvalidOperationException($"Cannot override a request in status {request.Status}.");
+
+        var policy = await _db.ApprovalPolicies.AsNoTracking()
+            .Where(p => p.FamilyId == _current.FamilyId && p.IsActive &&
+                        (p.AppliesToType == null || p.AppliesToType == request.Type))
+            .OrderByDescending(p => p.Priority)
+            .FirstOrDefaultAsync(ct);
+
+        var evaluation = policy == null
+            ? PolicyEvaluationResult.RequireApproval("No policy configured.")
+            : policy.Evaluate(_current.Role ?? FamilyRole.Owner, _current.MemberId!.Value,
+                request.RequesterMemberId, request.Amount, request.Type);
+
+        var original = evaluation.RequiresOwner
+            ? $"RequiresOwner: {evaluation.Explanation}"
+            : evaluation.IsAllowed
+                ? $"Allowed: {evaluation.Explanation}"
+                : evaluation.AutoApproved
+                    ? $"AutoApproved: {evaluation.Explanation}"
+                    : $"Denied/Blocked: {evaluation.Explanation}";
+
+        var decision = cmd.Approve
+            ? (cmd.Conditional ? "ConditionallyApproved" : "Approved")
+            : "Denied";
+
+        _db.PolicyOverrides.Add(PolicyOverride.Create(
+            _current.FamilyId!.Value,
+            request.Id,
+            _current.MemberId!.Value,
+            original,
+            decision,
+            cmd.Reason));
+
+        if (cmd.Approve)
+            request.Approve(_current.MemberId!.Value, cmd.Conditional);
+        else
+            request.Deny(_current.MemberId!.Value, cmd.Reason ?? "Owner policy override — denied");
+
+        await _db.SaveChangesAsync(ct);
+        return await ToDto(request, ct);
     }
 
     public async Task<ExecutionPlanDto> Handle(GenerateExecutionPlanCommand cmd, CancellationToken ct)
