@@ -487,6 +487,16 @@ export const requestsApi = {
     }),
   evaluatePolicy: (id: string) =>
     api<PolicyEvaluationDto>(`/api/requests/${id}/policy`),
+  /** Owner-only: force approve/deny and record PolicyOverride audit. */
+  overridePolicy: (id: string, body: { approve: boolean; reason?: string; conditional?: boolean }) =>
+    api<RequestDto>(`/api/requests/${id}/override-policy`, {
+      method: 'POST',
+      body: JSON.stringify({
+        approve: body.approve,
+        reason: body.reason ?? null,
+        conditional: body.conditional ?? false,
+      }),
+    }),
   generatePlan: (id: string) =>
     api<ExecutionPlanDto>(`/api/requests/${id}/execution-plan`, { method: 'POST' }),
   commitPlan: (planId: string, deselectedItemIds?: string[]) =>
