@@ -57,6 +57,10 @@ export default function RequestsScreen() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyTitle, setHistoryTitle] = useState('');
   const [history, setHistory] = useState<RequestHistoryDto[]>([]);
+  const [editFor, setEditFor] = useState<RequestDto | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -128,14 +132,14 @@ export default function RequestsScreen() {
         answers.where = 'School';
         answers.when = 'Today after practice';
       }
-      const created = await requestsApi.create({
+      await requestsApi.create({
         type: type.code,
         title: type.code === 'Ride' || type.code.toLowerCase() === 'ride'
           ? 'Ride needed'
           : type.name,
         answers,
       });
-      await requestsApi.submit(created.id);
+      // Leave as Draft so user can edit title/amount then Submit (#48)
       await load();
       setTab('mine');
     } catch (e: unknown) {
@@ -186,6 +190,30 @@ export default function RequestsScreen() {
       setError((e as { error?: string })?.error ?? 'Commit failed');
     } finally {
       setActionId(null);
+    }
+  };
+
+  const openEdit = (item: RequestDto) => {
+    setEditFor(item);
+    setEditTitle(item.title);
+    setEditAmount(item.amount != null ? String(item.amount) : '');
+  };
+
+  const saveEdit = async () => {
+    if (!editFor || !editTitle.trim()) return;
+    setEditSaving(true);
+    try {
+      const amt = parseFloat(editAmount);
+      await requestsApi.updateDraft(editFor.id, {
+        title: editTitle.trim(),
+        amount: Number.isFinite(amt) ? amt : undefined,
+      });
+      setEditFor(null);
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Save failed');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -305,6 +333,19 @@ export default function RequestsScreen() {
       }
     }
 
+    if (!isQueue && s === 'Draft') {
+      nodes.push(
+        <Button key="edit" title="Edit" variant="secondary" onPress={() => openEdit(item)} />,
+      );
+      nodes.push(
+        <Button
+          key="submit"
+          title="Submit"
+          onPress={() => void run(item.id, () => requestsApi.submit(item.id))}
+        />,
+      );
+    }
+
     if (
       !isQueue &&
       (s === 'Draft' || s === 'Submitted' || s === 'WaitingForInformation' || s === 'UnderReview')
@@ -374,7 +415,7 @@ export default function RequestsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <SectionTitle>What do you need?</SectionTitle>
       <Text style={[typography.caption, { marginBottom: spacing.md }]}>
-        Ride and other types create + submit in one tap (REQUEST → queue).
+        Tap a type to create a Draft — Edit details, then Submit to the queue.
       </Text>
       <View style={styles.grid}>
         {(types.length
@@ -510,6 +551,33 @@ export default function RequestsScreen() {
             <View style={styles.modalActions}>
               <Button title="Close" variant="secondary" onPress={() => setPlan(null)} />
               <Button title="Commit" onPress={() => void commitPlan()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!editFor} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Edit draft · {editFor?.type}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Title"
+              placeholderTextColor={colors.textMuted}
+              value={editTitle}
+              onChangeText={setEditTitle}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Amount (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={editAmount}
+              onChangeText={setEditAmount}
+              keyboardType="decimal-pad"
+            />
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="secondary" onPress={() => setEditFor(null)} />
+              <Button title={editSaving ? 'Saving…' : 'Save'} onPress={() => void saveEdit()} />
             </View>
           </View>
         </View>
