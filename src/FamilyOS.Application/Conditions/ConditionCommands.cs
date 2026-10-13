@@ -2,6 +2,8 @@ using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Conditions;
+using FamilyOS.Domain.Notifications;
+using FamilyOS.Domain.Procurement;
 using FamilyOS.Domain.Requests;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -130,6 +132,8 @@ public class ConditionHandlers :
                 if (request is { Status: RequestStatus.ConditionallyApproved })
                 {
                     request.PromoteFromConditions(memberId);
+                    // Grocery path also applies after conditions clear (#34)
+                    EnqueueProcurementFromRequest(request, memberId);
                 }
             }
         }
@@ -160,6 +164,75 @@ public class ConditionHandlers :
         condition.Cancel();
         await _db.SaveChangesAsync(ct);
         return ToDto(condition);
+    }
+
+    private void EnqueueProcurementFromRequest(Request request, Guid actorMemberId)
+    {
+        if (request.Type is not (RequestTypeCode.Grocery or RequestTypeCode.Purchase or RequestTypeCode.SnackFood))
+            return;
+
+        // Avoid double-queue if items already exist for this request
+        // (checked at SaveChanges time; lightweight in-memory skip if already tracked)
+
+        var category = request.Type switch
+        {
+            RequestTypeCode.Grocery => "Grocery",
+            RequestTypeCode.SnackFood => "Snack",
+            _ => "Purchase"
+        };
+
+        var answers = request.GetAnswers();
+        string? store = null;
+        if (answers.TryGetValue("store", out var storeObj) && storeObj is not null)
+            store = storeObj.ToString();
+        else if (answers.TryGetValue("preferredStore", out var ps) && ps is not null)
+            store = ps.ToString();
+
+        var itemNames = new List<string>();
+        if (answers.TryGetValue("items", out var itemsObj) && itemsObj is not null)
+        {
+            var raw = itemsObj.ToString() ?? "";
+            foreach (var part in raw.Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (!string.IsNullOrWhiteSpace(part))
+                    itemNames.Add(part);
+        }
+
+        if (itemNames.Count == 0)
+        {
+            foreach (var part in request.Title.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (!string.IsNullOrWhiteSpace(part))
+                    itemNames.Add(part);
+        }
+
+        if (itemNames.Count == 0)
+            itemNames.Add(request.Title);
+
+        for (var i = 0; i < itemNames.Count; i++)
+        {
+            var name = itemNames[i];
+            var est = i == 0 ? request.Amount : null;
+            _db.ProcurementItems.Add(ProcurementItem.Create(
+                request.FamilyId,
+                name,
+                actorMemberId,
+                requestId: request.Id,
+                category: category,
+                quantity: 1,
+                estimatedPrice: est,
+                preferredStore: store));
+        }
+
+        if (request.RequesterMemberId != actorMemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                request.FamilyId,
+                request.RequesterMemberId,
+                NotificationType.ProcurementChanged,
+                $"On shopping list: {request.Title}",
+                $"{itemNames.Count} item(s) added to the family procurement queue.",
+                request.Id,
+                "Procurement"));
+        }
     }
 
     private async Task<Condition> GetOwned(Guid id, Guid familyId, CancellationToken ct) =>

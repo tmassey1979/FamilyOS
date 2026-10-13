@@ -27,6 +27,10 @@ public class ProcurementController : ControllerBase
     public async Task<ActionResult<CartDto>> CreateCart([FromBody] CreateCartCommand cmd, CancellationToken ct)
         => Ok(await _mediator.Send(cmd, ct));
 
+    [HttpPost("items")]
+    public async Task<ActionResult<ProcurementItemDto>> CreateItem([FromBody] CreateQueueItemCommand cmd, CancellationToken ct)
+        => Ok(await _mediator.Send(cmd, ct));
+
     [HttpPost("items/{id:guid}/add-to-cart")]
     public async Task<ActionResult<ProcurementItemDto>> AddToCart(Guid id, [FromBody] CartBody body, CancellationToken ct)
         => Ok(await _mediator.Send(new AddToCartCommand(id, body.CartId), ct));
