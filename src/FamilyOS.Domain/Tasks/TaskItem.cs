@@ -252,7 +252,7 @@ public class TaskItem : Entity
         if (category is not null)
         {
             Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
-            changes.Add($"category={Category ?? \"(none)\"}");
+            changes.Add("category=" + (Category ?? "(none)"));
         }
         if (clearDueDate)
         {
