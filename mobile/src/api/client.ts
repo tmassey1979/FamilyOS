@@ -431,6 +431,14 @@ export type PolicyEvaluationDto = {
   explanation?: string;
 };
 
+export type RequestHistoryDto = {
+  id: string;
+  status: string;
+  actorMemberId: string;
+  detail: string;
+  timestampUtc: string;
+};
+
 export type ExecutionItemDto = {
   id: string;
   type: string;
@@ -487,6 +495,8 @@ export const requestsApi = {
     }),
   evaluatePolicy: (id: string) =>
     api<PolicyEvaluationDto>(`/api/requests/${id}/policy`),
+  history: (id: string) =>
+    api<RequestHistoryDto[]>(`/api/requests/${id}/history`),
   /** Owner-only: force approve/deny and record PolicyOverride audit. */
   overridePolicy: (id: string, body: { approve: boolean; reason?: string; conditional?: boolean }) =>
     api<RequestDto>(`/api/requests/${id}/override-policy`, {
