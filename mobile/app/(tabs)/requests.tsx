@@ -52,6 +52,7 @@ export default function RequestsScreen() {
   const [answerText, setAnswerText] = useState('');
   const [plan, setPlan] = useState<ExecutionPlanDto | null>(null);
   const [planTitle, setPlanTitle] = useState('');
+  const [condsByReq, setCondsByReq] = useState<Record<string, ConditionDto[]>>({});
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -65,6 +66,27 @@ export default function RequestsScreen() {
       setTypes(t);
       setMine(m);
       setQueue(q);
+      // Load conditions for conditionally approved requests (promotion gate)
+      const conditionalIds = [...m, ...q]
+        .filter((r) => r.status === 'ConditionallyApproved')
+        .map((r) => r.id);
+      if (conditionalIds.length > 0) {
+        const pairs = await Promise.all(
+          conditionalIds.map(async (id) => {
+            try {
+              const list = await conditionsApi.byRequest(id);
+              return [id, list] as const;
+            } catch {
+              return [id, [] as ConditionDto[]] as const;
+            }
+          }),
+        );
+        const map: Record<string, ConditionDto[]> = {};
+        for (const [id, list] of pairs) map[id] = list;
+        setCondsByReq(map);
+      } else {
+        setCondsByReq({});
+      }
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'error' in e
@@ -390,6 +412,18 @@ export default function RequestsScreen() {
             {item.denialReason ? (
               <Text style={typography.caption}>Denied: {item.denialReason}</Text>
             ) : null}
+            {(condsByReq[item.id] ?? [])
+              .filter((c) => c.status === 'Pending')
+              .map((c) => (
+                <View key={c.id} style={styles.row}>
+                  <Badge label={`Condition: ${c.name}`} tone="warning" />
+                  <Button
+                    title="Satisfy"
+                    variant="secondary"
+                    onPress={() => void run(item.id, () => conditionsApi.satisfy(c.id))}
+                  />
+                </View>
+              ))}
             <View style={styles.actions}>
               {actionId === item.id ? (
                 <ActivityIndicator color={colors.primary} />
