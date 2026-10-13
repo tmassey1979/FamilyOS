@@ -2,6 +2,7 @@ using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Conditions;
+using FamilyOS.Domain.Requests;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -109,6 +110,30 @@ public class ConditionHandlers :
         var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
         var condition = await GetOwned(cmd.ConditionId, familyId, ct);
         condition.Satisfy(memberId);
+
+        // Conditional approval gate: when no Pending conditions remain on the request, promote it.
+        if (condition.RequestId.HasValue)
+        {
+            var requestId = condition.RequestId.Value;
+            var stillPending = await _db.Conditions.AnyAsync(
+                c => c.RequestId == requestId
+                     && c.FamilyId == familyId
+                     && c.Status == ConditionStatus.Pending
+                     && c.Id != condition.Id,
+                ct);
+
+            if (!stillPending)
+            {
+                var request = await _db.Requests
+                    .Include(r => r.History)
+                    .FirstOrDefaultAsync(r => r.Id == requestId && r.FamilyId == familyId, ct);
+                if (request is { Status: RequestStatus.ConditionallyApproved })
+                {
+                    request.PromoteFromConditions(memberId);
+                }
+            }
+        }
+
         await _db.SaveChangesAsync(ct);
         return ToDto(condition);
     }
