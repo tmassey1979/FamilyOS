@@ -12,7 +12,9 @@ public record TaskDto(
     Guid Id, string Title, string? Description, FamilyTaskStatus Status, TaskPriority Priority,
     Guid? AssignedToMemberId, string? AssignedToName, DateTime? DueDate,
     int? EstimatedDurationMinutes, int? ActualDurationMinutes, string? Category,
-    bool CalendarBacked, DateTime CreatedAtUtc, bool IsOverdue);
+    bool CalendarBacked, DateTime CreatedAtUtc, bool IsOverdue,
+    string? PlannedStartTime, string? PlannedEndTime,
+    int? VarianceMinutes);
 
 public record TaskHistoryDto(Guid Id, FamilyTaskStatus Status, Guid ActorMemberId, string Detail, DateTime TimestampUtc);
 
@@ -46,6 +48,13 @@ public record UpdateTaskDetailsCommand(
     bool ClearDueDate = false
 ) : IRequest<TaskDto>;
 
+public record SetPlannedTimesCommand(
+    Guid TaskId,
+    string? PlannedStartTime = null,
+    string? PlannedEndTime = null,
+    int? EstimatedDurationMinutes = null
+) : IRequest<TaskDto>;
+
 public class TaskCommandHandlers :
     IRequestHandler<CreateTaskCommand, TaskDto>,
     IRequestHandler<AssignTaskCommand, TaskDto>,
@@ -63,7 +72,8 @@ public class TaskCommandHandlers :
     IRequestHandler<GetMyTasksQuery, List<TaskDto>>,
     IRequestHandler<GetFamilyTasksQuery, List<TaskDto>>,
     IRequestHandler<GetTaskHistoryQuery, List<TaskHistoryDto>>,
-    IRequestHandler<UpdateTaskDetailsCommand, TaskDto>
+    IRequestHandler<UpdateTaskDetailsCommand, TaskDto>,
+    IRequestHandler<SetPlannedTimesCommand, TaskDto>
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
@@ -283,6 +293,37 @@ public class TaskCommandHandlers :
         return await ToDto(task, ct);
     }
 
+    public async Task<TaskDto> Handle(SetPlannedTimesCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        EnsureAuthenticated();
+        var task = await GetTaskForFamily(cmd.TaskId, ct);
+
+        TimeOnly? start = null;
+        TimeOnly? end = null;
+        if (!string.IsNullOrWhiteSpace(cmd.PlannedStartTime) && TimeOnly.TryParse(cmd.PlannedStartTime, out var s))
+            start = s;
+        if (!string.IsNullOrWhiteSpace(cmd.PlannedEndTime) && TimeOnly.TryParse(cmd.PlannedEndTime, out var e))
+            end = e;
+
+        if (start is null && end is null && cmd.EstimatedDurationMinutes is null)
+            throw new ArgumentException("Provide planned start/end and/or estimated duration minutes.");
+
+        var existingStart = start ?? task.PlannedStartTime;
+        var existingEnd = end ?? task.PlannedEndTime;
+        var estimated = cmd.EstimatedDurationMinutes ?? task.EstimatedDurationMinutes;
+
+        if (cmd.EstimatedDurationMinutes is null && existingStart is not null && existingEnd is not null
+            && existingEnd > existingStart)
+        {
+            estimated = (int)(existingEnd.Value - existingStart.Value).TotalMinutes;
+        }
+
+        task.SetPlannedTimes(existingStart, existingEnd, estimated);
+        await _db.SaveChangesAsync(ct);
+        return await ToDto(task, ct);
+    }
+
     private async Task<TaskItem> GetTaskForFamily(Guid taskId, CancellationToken ct)
     {
         EnsureAuthenticated();
@@ -325,10 +366,17 @@ public class TaskCommandHandlers :
                 .FirstOrDefaultAsync(ct);
         }
 
+        int? variance = null;
+        if (t.EstimatedDurationMinutes.HasValue && t.ActualDurationMinutes.HasValue)
+            variance = t.ActualDurationMinutes.Value - t.EstimatedDurationMinutes.Value;
+
         return new TaskDto(
             t.Id, t.Title, t.Description, t.Status, t.Priority,
             t.AssignedToMemberId, name, t.DueDate,
             t.EstimatedDurationMinutes, t.ActualDurationMinutes, t.Category,
-            t.CalendarBacked, t.CreatedAtUtc, t.IsOverdue());
+            t.CalendarBacked, t.CreatedAtUtc, t.IsOverdue(),
+            t.PlannedStartTime?.ToString("HH:mm"),
+            t.PlannedEndTime?.ToString("HH:mm"),
+            variance);
     }
 }
