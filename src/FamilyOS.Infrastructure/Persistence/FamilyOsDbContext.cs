@@ -38,6 +38,7 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
     public DbSet<TaskTimingRecord> TaskTimingRecords => Set<TaskTimingRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -263,6 +264,17 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.FamilyId, x.TaskCategory });
             e.Property(x => x.TaskCategory).HasMaxLength(100).IsRequired();
+        });
+
+        modelBuilder.Entity<DeviceRegistration>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => new { x.MemberId, x.IsActive });
+            e.Property(x => x.Token).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Platform).HasMaxLength(40).IsRequired();
+            e.Property(x => x.DeviceName).HasMaxLength(120);
+            e.HasQueryFilter(x => !x.IsDeleted);
         });
     }
 }
