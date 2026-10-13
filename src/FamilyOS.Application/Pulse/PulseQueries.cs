@@ -12,6 +12,8 @@ namespace FamilyOS.Application.Pulse;
 /// </summary>
 public record PulseDto(
     string Greeting,
+    string Role,
+    string? RoleHint,
     NextActionDto? NextAction,
     List<AttentionItemDto> NeedsAttention,
     List<AttentionItemDto> WaitingBlockers,
@@ -61,18 +63,45 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
             _ => $"Good evening, {name}"
         };
 
+        // #59 Role-aware Pulse surface
+        var roleLabel = role.ToString();
+        var roleHint = role switch
+        {
+            FamilyRole.Owner => "You see the full household — approvals, shopping, and blockers.",
+            FamilyRole.Adult => "Approvals and household tasks are on your plate.",
+            FamilyRole.Teen => "Your assigned tasks and any answers needed from you.",
+            _ => "Your tasks and requests — keep it moving."
+        };
+
         NextActionDto? nextAction = null;
+
+        // Owners/Adults: pending approval can be the next action when no personal task is in progress
+        if (role is FamilyRole.Owner or FamilyRole.Adult)
+        {
+            var topPending = await _db.Requests.AsNoTracking()
+                .Where(r => r.FamilyId == familyId &&
+                            (r.Status == RequestStatus.Submitted || r.Status == RequestStatus.UnderReview))
+                .OrderBy(r => r.CreatedAtUtc)
+                .FirstOrDefaultAsync(ct);
+            if (topPending != null)
+            {
+                nextAction = new NextActionDto(
+                    "Request", topPending.Id, topPending.Title,
+                    "Needs your review", "Review", "In queue");
+            }
+        }
 
         var inProgress = await _db.Tasks.AsNoTracking()
             .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId && t.Status == FamilyTaskStatus.InProgress)
             .OrderBy(t => t.DueDate)
             .FirstOrDefaultAsync(ct);
 
+        // Personal in-progress always wins over approval queue
         if (inProgress != null)
         {
             nextAction = new NextActionDto("Task", inProgress.Id, inProgress.Title, "In progress", "Resume", null);
         }
-        else
+        else if (nextAction is null)
         {
             var today = DateTime.UtcNow.Date;
             var dueTask = await _db.Tasks.AsNoTracking()
@@ -217,6 +246,7 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
                 "Request", r.Id, r.Title, "Blocked on conditions", "Review"));
 
         return new PulseDto(
-            greeting, nextAction, attention, waitingBlockers, upcoming, household, procurement, conditionItems);
+            greeting, roleLabel, roleHint,
+            nextAction, attention, waitingBlockers, upcoming, household, procurement, conditionItems);
     }
 }
