@@ -1,3 +1,14 @@
+# Redeploy Family OS on AWS via Portainer (webhook preferred).
+# Secrets (repo → Settings → Secrets → Actions):
+#   PORTAINER_WEBHOOK_URL  preferred — Stack webhook URL from Portainer UI
+#   PORTAINER_URL          https://portainer.18.226.226.118.sslip.io
+#   PORTAINER_API_KEY      Portainer access token
+#   PORTAINER_STACK_ID     2
+#   PORTAINER_ENDPOINT_ID  2
+#
+# Webhook setup (once): Portainer → Stacks → familyos → Editor →
+#   GitOps / Automatic updates → Enable webhook → copy URL → secret above.
+
 name: Deploy stack (Portainer)
 
 on:
@@ -37,17 +48,17 @@ jobs:
           PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
           PORTAINER_STACK_ID: ${{ secrets.PORTAINER_STACK_ID }}
           PORTAINER_ENDPOINT_ID: ${{ secrets.PORTAINER_ENDPOINT_ID }}
-          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           set -euo pipefail
           MODE=""
+
           if [ -n "${PORTAINER_WEBHOOK_URL:-}" ]; then
             echo "Portainer webhook"
-            code=$(curl -sS -o /tmp/pw.out -w "%{http_code}" -X POST "$PORTAINER_WEBHOOK_URL" -H "Content-Type: application/json" --max-time 120 || echo "000")
+            code=$(curl -sS -o /tmp/pw.out -w "%{http_code}" -X POST "$PORTAINER_WEBHOOK_URL" -H "Content-Type: application/json" --max-time 180 || echo "000")
             echo "HTTP $code"; head -c 400 /tmp/pw.out 2>/dev/null || true; echo
-            if [ "$code" = "200" ] || [ "$code" = "202" ] || [ "$code" = "204" ]; then MODE=webhook; fi
+            if [ "$code" = "200" ] || [ "$code" = "202" ] || [ "$code" = "204" ]; then MODE=webhook; else echo "::warning::Webhook HTTP $code - falling back to API"; fi
           fi
+
           if [ -z "$MODE" ] && [ -n "${PORTAINER_URL:-}" ] && [ -n "${PORTAINER_API_KEY:-}" ]; then
             BASE="${PORTAINER_URL%/}"
             EP="${PORTAINER_ENDPOINT_ID:-2}"
@@ -63,22 +74,40 @@ jobs:
             if [ -n "$STACK_ID" ]; then
               if [ ! -f /tmp/stack_env.json ]; then echo '[]' > /tmp/stack_env.json; fi
               python3 -c "import json;from pathlib import Path;env=json.loads(Path('/tmp/stack_env.json').read_text());Path('/tmp/redeploy_body.json').write_text(json.dumps({'PullImage':False,'RepositoryAuthentication':False,'Env':env}))"
-              echo "Portainer git/redeploy stack=$STACK_ID endpoint=$EP"
+              echo "git/redeploy stack=$STACK_ID endpoint=$EP"
               code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT "${BASE}/api/stacks/${STACK_ID}/git/redeploy?endpointId=${EP}" -H "X-API-Key: ${PORTAINER_API_KEY}" -H "Content-Type: application/json" --data-binary @/tmp/redeploy_body.json --max-time 300 || echo "000")
               echo "HTTP $code"; head -c 500 /tmp/pa.out 2>/dev/null || true; echo
               if [ "$code" = "200" ] || [ "$code" = "204" ]; then MODE=api-git; else echo "::warning::API HTTP $code"; fi
             fi
           fi
+
           if [ -z "$MODE" ]; then
-            echo "::error::Deploy failed"
+            echo "::error::Deploy failed. Set PORTAINER_WEBHOOK_URL or API secrets (STACK_ID=2 ENDPOINT_ID=2)"
             echo "mode=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Redeploy OK via $MODE"
 
+      - name: Health check API
+        if: steps.guard.outputs.skip != 'true' && steps.deploy.outputs.mode != 'failed'
+        run: |
+          set -euo pipefail
+          URL="https://api.18.226.226.118.sslip.io/health"
+          echo "Waiting for $URL ..."
+          for i in $(seq 1 18); do
+            code=$(curl -sS -o /tmp/h.out -w "%{http_code}" --max-time 10 "$URL" || echo "000")
+            body=$(head -c 80 /tmp/h.out 2>/dev/null || true)
+            echo "try $i HTTP $code $body"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::warning::API health not 200 yet (deploy may still be starting)"
+          exit 0
+
       - name: Summary
         if: always()
         run: |
           echo "## Deploy" >> "$GITHUB_STEP_SUMMARY"
           echo "- Mode: ${{ steps.deploy.outputs.mode }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- API: https://api.18.226.226.118.sslip.io/health" >> "$GITHUB_STEP_SUMMARY"
