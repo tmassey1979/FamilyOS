@@ -13,6 +13,9 @@ namespace FamilyOS.Application.Requests;
 
 public record PendingQuestionDto(Guid Id, string QuestionText, bool IsAnswered, string? Answer);
 
+public record RequestHistoryDto(
+    Guid Id, RequestStatus Status, Guid ActorMemberId, string Detail, DateTime TimestampUtc);
+
 public record RequestDto(
     Guid Id, RequestTypeCode Type, RequestStatus Status, string Title, string? Summary,
     decimal? Amount, DateTime? NeededByUtc, Guid RequesterMemberId, string RequesterName,
@@ -44,6 +47,7 @@ public record CancelRequestCommand(Guid RequestId, string? Reason = null) : IReq
 public record GetRequestQuery(Guid RequestId) : IRequest<RequestDto>;
 public record GetMyRequestsQuery() : IRequest<List<RequestDto>>;
 public record GetApprovalQueueQuery() : IRequest<List<RequestDto>>;
+public record GetRequestHistoryQuery(Guid RequestId) : IRequest<List<RequestHistoryDto>>;
 public record GetRequestTypesQuery() : IRequest<List<RequestTypeDto>>;
 public record EvaluatePolicyQuery(Guid RequestId) : IRequest<PolicyEvaluationResult>;
 
@@ -64,6 +68,7 @@ public class RequestCommandHandlers :
     IRequestHandler<GetRequestQuery, RequestDto>,
     IRequestHandler<GetMyRequestsQuery, List<RequestDto>>,
     IRequestHandler<GetApprovalQueueQuery, List<RequestDto>>,
+    IRequestHandler<GetRequestHistoryQuery, List<RequestHistoryDto>>,
     IRequestHandler<GetRequestTypesQuery, List<RequestTypeDto>>,
     IRequestHandler<EvaluatePolicyQuery, PolicyEvaluationResult>,
     IRequestHandler<GenerateExecutionPlanCommand, ExecutionPlanDto>,
@@ -199,6 +204,15 @@ public class RequestCommandHandlers :
         var result = new List<RequestDto>();
         foreach (var r in list) result.Add(await ToDto(r, ct));
         return result;
+    }
+
+    public async Task<List<RequestHistoryDto>> Handle(GetRequestHistoryQuery query, CancellationToken ct)
+    {
+        var request = await GetRequest(query.RequestId, ct);
+        return request.History
+            .OrderBy(h => h.TimestampUtc)
+            .Select(h => new RequestHistoryDto(h.Id, h.Status, h.ActorMemberId, h.Detail, h.TimestampUtc))
+            .ToList();
     }
 
     public async Task<List<RequestTypeDto>> Handle(GetRequestTypesQuery query, CancellationToken ct)
