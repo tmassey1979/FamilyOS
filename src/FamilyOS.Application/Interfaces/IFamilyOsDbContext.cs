@@ -36,6 +36,7 @@ public interface IFamilyOsDbContext
     DbSet<Product> Products { get; }
     DbSet<Cart> Carts { get; }
     DbSet<Notification> Notifications { get; }
+    DbSet<DeviceRegistration> DeviceRegistrations { get; }
     DbSet<TaskTimingRecord> TaskTimingRecords { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
