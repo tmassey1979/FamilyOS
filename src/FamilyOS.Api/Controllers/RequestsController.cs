@@ -65,6 +65,10 @@ public class RequestsController : ControllerBase
     public async Task<ActionResult<RequestDto>> Cancel(Guid id, [FromBody] CancelBody? body, CancellationToken ct)
         => Ok(await _mediator.Send(new CancelRequestCommand(id, body?.Reason), ct));
 
+    [HttpGet("{id:guid}/history")]
+    public async Task<ActionResult<List<RequestHistoryDto>>> History(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new GetRequestHistoryQuery(id), ct));
+
     [HttpGet("{id:guid}/policy")]
     public async Task<ActionResult<PolicyEvaluationResult>> EvaluatePolicy(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new EvaluatePolicyQuery(id), ct));
