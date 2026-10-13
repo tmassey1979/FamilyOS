@@ -14,6 +14,7 @@ public record PulseDto(
     string Greeting,
     NextActionDto? NextAction,
     List<AttentionItemDto> NeedsAttention,
+    List<AttentionItemDto> WaitingBlockers,
     List<UpcomingItemDto> ComingUp,
     HouseholdSummaryDto Household,
     ProcurementSummaryDto? Procurement,
@@ -184,6 +185,38 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
         var conditionItems = conditions.Select(c => new ConditionItemDto(
             c.Id, c.Name, c.Status.ToString(), c.Description)).ToList();
 
-        return new PulseDto(greeting, nextAction, attention, upcoming, household, procurement, conditionItems);
+        // Dedicated waiting / blockers surface (#30)
+        var waitingBlockers = new List<AttentionItemDto>();
+        foreach (var r in waitingInfo)
+            waitingBlockers.Add(new AttentionItemDto("Request", r.Id, r.Title, "Waiting for your answer", "Answer"));
+
+        foreach (var c in conditions)
+            waitingBlockers.Add(new AttentionItemDto(
+                "Condition", c.Id, c.Name,
+                c.DeadlineUtc.HasValue ? $"Pending · due {c.DeadlineUtc:MMM d}" : "Pending condition",
+                "Satisfy"));
+
+        var overdueMine = await _db.Tasks.AsNoTracking()
+            .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId &&
+                        t.DueDate != null && t.DueDate < DateTime.UtcNow &&
+                        t.Status != FamilyTaskStatus.Completed && t.Status != FamilyTaskStatus.Cancelled &&
+                        t.Status != FamilyTaskStatus.Skipped)
+            .OrderBy(t => t.DueDate)
+            .Take(5)
+            .ToListAsync(ct);
+        foreach (var t in overdueMine)
+            waitingBlockers.Add(new AttentionItemDto("Task", t.Id, t.Title, "Overdue", "Open"));
+
+        var conditional = await _db.Requests.AsNoTracking()
+            .Where(r => r.FamilyId == familyId && r.Status == RequestStatus.ConditionallyApproved)
+            .OrderBy(r => r.CreatedAtUtc)
+            .Take(5)
+            .ToListAsync(ct);
+        foreach (var r in conditional)
+            waitingBlockers.Add(new AttentionItemDto(
+                "Request", r.Id, r.Title, "Blocked on conditions", "Review"));
+
+        return new PulseDto(
+            greeting, nextAction, attention, waitingBlockers, upcoming, household, procurement, conditionItems);
     }
 }
