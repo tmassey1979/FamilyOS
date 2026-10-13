@@ -76,7 +76,19 @@ public class TasksController : ControllerBase
     public async Task<ActionResult<TaskDto>> Reassign(Guid id, [FromBody] AssignBody body, CancellationToken ct)
         => Ok(await _mediator.Send(new ReassignTaskCommand(id, body.AssignToMemberId), ct));
 
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<TaskDto>> UpdateDetails(Guid id, [FromBody] UpdateTaskDetailsBody body, CancellationToken ct)
+        => Ok(await _mediator.Send(new UpdateTaskDetailsCommand(
+            id, body.Title, body.Description, body.Priority, body.Category, body.DueDate, body.ClearDueDate), ct));
+
     public record AssignBody(Guid AssignToMemberId);
+    public record UpdateTaskDetailsBody(
+        string? Title,
+        string? Description,
+        TaskPriority? Priority,
+        string? Category,
+        DateTime? DueDate,
+        bool ClearDueDate = false);
     public record DeclineBody(Guid? ReasonId, string? Note);
     public record NoteBody(string? Note, string? Reason);
 }
