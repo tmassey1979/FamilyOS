@@ -3,8 +3,15 @@ import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Badge, Button, Card, SectionTitle } from '../../src/components/ui';
-import { familyApi, meApi, type MeDto, type QuietHoursDto } from '../../src/api/client';
+import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
+import {
+  familyApi,
+  meApi,
+  notificationsApi,
+  type MeDto,
+  type NotificationDto,
+  type QuietHoursDto,
+} from '../../src/api/client';
 import {
   isBiometricUnlockEnabled,
   setBiometricUnlockEnabled,
@@ -13,7 +20,7 @@ import {
 import { colors, spacing, typography } from '../../src/theme';
 
 /**
- * Settings hub — account, family summary, security, quiet hours, sign out (#37 #46).
+ * Settings hub — account, family, security, notifications, quiet hours (#37 #46 #50).
  */
 export default function SettingsScreen() {
   const router = useRouter();
@@ -25,6 +32,7 @@ export default function SettingsScreen() {
   const [quietOn, setQuietOn] = useState(false);
   const [quietStart, setQuietStart] = useState('22:00');
   const [quietEnd, setQuietEnd] = useState('07:00');
+  const [notifs, setNotifs] = useState<NotificationDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,9 +65,21 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const loadNotifs = useCallback(async () => {
+    try {
+      setNotifs(await notificationsApi.mine());
+    } catch {
+      setNotifs([]);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadNotifs();
+  }, [loadNotifs]);
 
   const onToggleBio = async (on: boolean) => {
     setBio(on);
@@ -119,7 +139,15 @@ export default function SettingsScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            void load();
+            void loadNotifs();
+          }}
+        />
+      }
     >
       <SectionTitle>Account</SectionTitle>
       {error ? <Text style={styles.hint}>{error}</Text> : null}
@@ -166,6 +194,39 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
+      <SectionTitle>In-app notifications</SectionTitle>
+      <View style={styles.row}>
+        <Button
+          title="Mark all read"
+          variant="secondary"
+          onPress={() => void notificationsApi.markAllRead().then(loadNotifs).catch(() => {})}
+        />
+        <Button title="Refresh" variant="secondary" onPress={() => void loadNotifs()} />
+      </View>
+      {notifs.length === 0 ? (
+        <EmptyState title="No notifications" subtitle="Approvals and assignments will show here." />
+      ) : (
+        notifs.slice(0, 15).map((n) => (
+          <Card key={n.id} style={{ marginBottom: spacing.sm, gap: spacing.xs, opacity: n.isRead ? 0.65 : 1 }}>
+            <Text style={typography.heading}>{n.title}</Text>
+            <Text style={typography.caption}>{n.body}</Text>
+            <View style={styles.row}>
+              <Badge label={n.type} />
+              {!n.isRead ? <Badge label="Unread" tone="warning" /> : null}
+              {n.relatedEntityType ? <Badge label={n.relatedEntityType} /> : null}
+            </View>
+            <Text style={typography.caption}>{new Date(n.createdAtUtc).toLocaleString()}</Text>
+            {!n.isRead ? (
+              <Button
+                title="Mark read"
+                variant="secondary"
+                onPress={() => void notificationsApi.markRead(n.id).then(loadNotifs).catch(() => {})}
+              />
+            ) : null}
+          </Card>
+        ))
+      )}
+
       <SectionTitle>Quiet hours</SectionTitle>
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
@@ -204,11 +265,7 @@ export default function SettingsScreen() {
           {quietEnd}  (tap to cycle)
         </Text>
         {quietOn ? (
-          <Button
-            title="Save window"
-            variant="secondary"
-            onPress={() => void saveQuietHours(true)}
-          />
+          <Button title="Save window" variant="secondary" onPress={() => void saveQuietHours(true)} />
         ) : null}
         {quiet?.startLabel && quiet?.endLabel ? (
           <Text style={typography.caption}>
@@ -219,10 +276,7 @@ export default function SettingsScreen() {
 
       <SectionTitle>Session</SectionTitle>
       <Card style={styles.card}>
-        <Button
-          title={busy ? 'Signing out…' : 'Sign out'}
-          onPress={() => void onSignOut()}
-        />
+        <Button title={busy ? 'Signing out…' : 'Sign out'} onPress={() => void onSignOut()} />
         <Pressable onPress={() => router.push('/(tabs)/family')}>
           <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.primary }]}>
             Open Family settings →
@@ -241,6 +295,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.sm },
   card: { marginBottom: spacing.md, gap: spacing.sm },
+  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   hint: { ...typography.caption, color: colors.danger, marginBottom: spacing.sm },
   timeChip: {
