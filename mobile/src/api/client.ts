@@ -73,6 +73,14 @@ export async function api<T>(
   return (await res.json()) as T;
 }
 
+export type PulseAttentionItem = {
+  kind: string;
+  entityId: string;
+  title: string;
+  reason: string;
+  actionLabel: string;
+};
+
 export type PulseDto = {
   greeting: string;
   nextAction?: {
@@ -83,13 +91,9 @@ export type PulseDto = {
     primaryAction: string;
     dueLabel?: string;
   };
-  needsAttention: Array<{
-    kind: string;
-    entityId: string;
-    title: string;
-    reason: string;
-    actionLabel: string;
-  }>;
+  needsAttention: PulseAttentionItem[];
+  /** Waiting / blockers: answers needed, pending conditions, overdue (#30) */
+  waitingBlockers?: PulseAttentionItem[];
   comingUp: Array<{
     kind: string;
     entityId: string;
