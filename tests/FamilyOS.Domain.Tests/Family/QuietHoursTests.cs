@@ -1,3 +1,4 @@
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Family;
 using Xunit;
 
