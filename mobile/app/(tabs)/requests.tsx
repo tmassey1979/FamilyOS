@@ -17,6 +17,7 @@ import {
   type ConditionDto,
   type ExecutionPlanDto,
   type RequestDto,
+  type RequestHistoryDto,
   type RequestTypeDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
@@ -53,6 +54,9 @@ export default function RequestsScreen() {
   const [plan, setPlan] = useState<ExecutionPlanDto | null>(null);
   const [planTitle, setPlanTitle] = useState('');
   const [condsByReq, setCondsByReq] = useState<Record<string, ConditionDto[]>>({});
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTitle, setHistoryTitle] = useState('');
+  const [history, setHistory] = useState<RequestHistoryDto[]>([]);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -66,7 +70,6 @@ export default function RequestsScreen() {
       setTypes(t);
       setMine(m);
       setQueue(q);
-      // Load conditions for conditionally approved requests (promotion gate)
       const conditionalIds = [...m, ...q]
         .filter((r) => r.status === 'ConditionallyApproved')
         .map((r) => r.id);
@@ -183,6 +186,17 @@ export default function RequestsScreen() {
       setError((e as { error?: string })?.error ?? 'Commit failed');
     } finally {
       setActionId(null);
+    }
+  };
+
+  const openHistory = async (item: RequestDto) => {
+    setHistoryTitle(item.title);
+    setHistoryOpen(true);
+    setHistory([]);
+    try {
+      setHistory(await requestsApi.history(item.id));
+    } catch {
+      setHistory([]);
     }
   };
 
@@ -342,6 +356,15 @@ export default function RequestsScreen() {
       }
     }
 
+    nodes.push(
+      <Button
+        key="hist"
+        title="Trail"
+        variant="secondary"
+        onPress={() => void openHistory(item)}
+      />,
+    );
+
     return nodes;
   };
 
@@ -488,6 +511,28 @@ export default function RequestsScreen() {
               <Button title="Close" variant="secondary" onPress={() => setPlan(null)} />
               <Button title="Commit" onPress={() => void commitPlan()} />
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={historyOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Decision trail · {historyTitle}</Text>
+            {history.length === 0 ? (
+              <Text style={typography.caption}>No history entries yet.</Text>
+            ) : (
+              history.map((h) => (
+                <View key={h.id} style={{ gap: 4, marginBottom: spacing.sm }}>
+                  <Badge label={h.status} tone={statusTone(h.status)} />
+                  <Text style={typography.caption}>{h.detail}</Text>
+                  <Text style={[typography.caption, { opacity: 0.7 }]}>
+                    {new Date(h.timestampUtc).toLocaleString()}
+                  </Text>
+                </View>
+              ))
+            )}
+            <Button title="Close" onPress={() => setHistoryOpen(false)} />
           </View>
         </View>
       </Modal>
