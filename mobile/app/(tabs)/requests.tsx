@@ -61,6 +61,11 @@ export default function RequestsScreen() {
   const [editTitle, setEditTitle] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  /** #22 Money request create sheet */
+  const [moneyFor, setMoneyFor] = useState<RequestTypeDto | null>(null);
+  const [moneyAmount, setMoneyAmount] = useState('');
+  const [moneyPurpose, setMoneyPurpose] = useState('');
+  const [moneySaving, setMoneySaving] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -125,27 +130,59 @@ export default function RequestsScreen() {
   };
 
   const startRequest = async (type: RequestTypeDto) => {
-    setCreating(type.code);
+    const code = type.code;
+    // #22 Money — collect amount + purpose before draft
+    if (code === 'Money' || code.toLowerCase() === 'money') {
+      setMoneyAmount('');
+      setMoneyPurpose('');
+      setMoneyFor(type);
+      return;
+    }
+    setCreating(code);
     try {
       const answers: Record<string, unknown> = {};
-      if (type.code === 'Ride' || type.code.toLowerCase() === 'ride') {
+      if (code === 'Ride' || code.toLowerCase() === 'ride') {
         answers.where = 'School';
         answers.when = 'Today after practice';
       }
       await requestsApi.create({
-        type: type.code,
-        title: type.code === 'Ride' || type.code.toLowerCase() === 'ride'
-          ? 'Ride needed'
-          : type.name,
+        type: code,
+        title: code === 'Ride' || code.toLowerCase() === 'ride' ? 'Ride needed' : type.name,
         answers,
       });
-      // Leave as Draft so user can edit title/amount then Submit (#48)
       await load();
       setTab('mine');
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Create failed');
     } finally {
       setCreating(null);
+    }
+  };
+
+  const submitMoney = async () => {
+    if (!moneyFor) return;
+    const amt = parseFloat(moneyAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setError('Enter a valid amount greater than 0');
+      return;
+    }
+    const purpose = moneyPurpose.trim() || 'Money request';
+    setMoneySaving(true);
+    setError(null);
+    try {
+      await requestsApi.create({
+        type: moneyFor.code,
+        title: purpose,
+        amount: amt,
+        answers: { amount: amt, purpose },
+      });
+      setMoneyFor(null);
+      await load();
+      setTab('mine');
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Create failed');
+    } finally {
+      setMoneySaving(false);
     }
   };
 
@@ -463,6 +500,11 @@ export default function RequestsScreen() {
         renderItem={({ item }) => (
           <Card style={styles.card}>
             <Text style={typography.heading}>{item.title}</Text>
+            {item.amount != null ? (
+              <Text style={[typography.heading, { color: colors.primary }]}>
+                ${Number(item.amount).toFixed(2)}
+              </Text>
+            ) : null}
             <View style={styles.row}>
               <Badge label={item.status} tone={statusTone(item.status)} />
               <Badge label={String(item.type)} />
@@ -588,19 +630,48 @@ export default function RequestsScreen() {
           <View style={styles.modalCard}>
             <Text style={typography.heading}>Decision trail · {historyTitle}</Text>
             {history.length === 0 ? (
-              <Text style={typography.caption}>No history entries yet.</Text>
+              <Text style={typography.caption}>No history yet.</Text>
             ) : (
               history.map((h) => (
-                <View key={h.id} style={{ gap: 4, marginBottom: spacing.sm }}>
-                  <Badge label={h.status} tone={statusTone(h.status)} />
+                <View key={h.id} style={{ marginBottom: spacing.sm }}>
+                  <Text style={typography.body}>{h.status}</Text>
                   <Text style={typography.caption}>{h.detail}</Text>
-                  <Text style={[typography.caption, { opacity: 0.7 }]}>
-                    {new Date(h.timestampUtc).toLocaleString()}
-                  </Text>
+                  <Text style={typography.caption}>{new Date(h.timestampUtc).toLocaleString()}</Text>
                 </View>
               ))
             )}
             <Button title="Close" onPress={() => setHistoryOpen(false)} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!moneyFor} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Request money</Text>
+            <Text style={typography.caption}>Amount and what it is for</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Amount (e.g. 20)"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              value={moneyAmount}
+              onChangeText={setMoneyAmount}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Purpose (e.g. Lunch money)"
+              placeholderTextColor={colors.textMuted}
+              value={moneyPurpose}
+              onChangeText={setMoneyPurpose}
+            />
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="secondary" onPress={() => setMoneyFor(null)} />
+              <Button
+                title={moneySaving ? 'Saving…' : 'Create draft'}
+                onPress={() => void submitMoney()}
+              />
+            </View>
           </View>
         </View>
       </Modal>
