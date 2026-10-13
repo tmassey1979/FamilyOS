@@ -73,6 +73,10 @@ public class RequestsController : ControllerBase
     public async Task<ActionResult<PolicyEvaluationResult>> EvaluatePolicy(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new EvaluatePolicyQuery(id), ct));
 
+    [HttpPost("{id:guid}/override-policy")]
+    public async Task<ActionResult<RequestDto>> OverridePolicy(Guid id, [FromBody] OverridePolicyBody body, CancellationToken ct)
+        => Ok(await _mediator.Send(new OverridePolicyCommand(id, body.Approve, body.Reason, body.Conditional), ct));
+
     [HttpPost("{id:guid}/execution-plan")]
     public async Task<ActionResult<ExecutionPlanDto>> GeneratePlan(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new GenerateExecutionPlanCommand(id), ct));
@@ -87,6 +91,7 @@ public class RequestsController : ControllerBase
     public record DenyBody(string Reason);
     public record CancelBody(string? Reason);
     public record CommitBody(List<Guid>? DeselectedItemIds);
+    public record OverridePolicyBody(bool Approve, string? Reason = null, bool Conditional = false);
     public record UpdateDraftBody(
         string? Title,
         Dictionary<string, object?>? Answers,
