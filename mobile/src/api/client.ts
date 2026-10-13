@@ -217,6 +217,11 @@ export const tasksApi = {
       method: 'POST',
       body: JSON.stringify({ assignToMemberId }),
     }),
+  skip: (id: string, note?: string) =>
+    api<TaskDto>(`/api/tasks/${id}/skip`, {
+      method: 'POST',
+      body: JSON.stringify({ note: note ?? null }),
+    }),
   updateDetails: (
     id: string,
     body: {
