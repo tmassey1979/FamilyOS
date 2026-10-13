@@ -153,4 +153,22 @@ public class RequestWorkflowTests
         var act = () => r.Cancel(TeenId, isOwner: false);
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void UpdateDraft_changes_title_and_records_history()
+    {
+        var r = NewRide();
+        r.UpdateDraft(TeenId, title: "Ride to practice", answers: null, amount: null, neededBy: null);
+        r.Title.Should().Be("Ride to practice");
+        r.History.Should().Contain(h => h.Detail.Contains("Draft updated"));
+    }
+
+    [Fact]
+    public void Cancel_from_draft_records_history()
+    {
+        var r = NewRide();
+        r.Cancel(TeenId, isOwner: false, reason: "Changed plans");
+        r.Status.Should().Be(RequestStatus.Cancelled);
+        r.History.Should().Contain(h => h.Status == RequestStatus.Cancelled);
+    }
 }
