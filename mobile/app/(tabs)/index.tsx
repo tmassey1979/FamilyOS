@@ -27,6 +27,8 @@ export default function HomeScreen() {
       setError(msg);
       setPulse({
         greeting: 'Welcome to Family OS',
+        role: 'Owner',
+        roleHint: 'You see the full household — approvals, shopping, and blockers.',
         nextAction: {
           kind: 'Task',
           entityId: 'demo',
@@ -76,6 +78,14 @@ export default function HomeScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
     >
       <Text style={typography.title}>{pulse?.greeting ?? 'Family OS'}</Text>
+      {pulse?.role ? (
+        <View style={styles.row}>
+          <Badge label={pulse.role} />
+        </View>
+      ) : null}
+      {pulse?.roleHint ? (
+        <Text style={[typography.caption, { marginBottom: spacing.md }]}>{pulse.roleHint}</Text>
+      ) : null}
       {error ? (
         <Text style={styles.hint} accessibilityLiveRegion="polite">
           Offline demo mode · {error}
@@ -149,13 +159,23 @@ export default function HomeScreen() {
 
       <SectionTitle>Household</SectionTitle>
       <Card>
-        <Text style={typography.body}>
-          {pulse?.household.requestsAwaitingApproval ?? 0} requests awaiting approval
-        </Text>
+        {(pulse?.role === 'Owner' || pulse?.role === 'Adult' || !pulse?.role) ? (
+          <Text style={typography.body}>
+            {pulse?.household.requestsAwaitingApproval ?? 0} requests awaiting approval
+          </Text>
+        ) : null}
         <Text style={typography.body}>{pulse?.household.tasksDueToday ?? 0} tasks due today</Text>
-        <Text style={typography.body}>
-          {pulse?.household.tasksNeedingAcceptance ?? 0} tasks need acceptance
-        </Text>
+        {(pulse?.role === 'Owner' || pulse?.role === 'Adult' || !pulse?.role) ? (
+          <Text style={typography.body}>
+            {pulse?.household.tasksNeedingAcceptance ?? 0} tasks need acceptance
+          </Text>
+        ) : null}
+        {pulse?.procurement ? (
+          <Text style={typography.body}>
+            Shopping: {pulse.procurement.approvedItems} items
+            {pulse.procurement.primaryStore ? ` · ${pulse.procurement.primaryStore}` : ''}
+          </Text>
+        ) : null}
       </Card>
     </ScrollView>
   );
