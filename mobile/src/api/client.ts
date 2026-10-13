@@ -468,6 +468,24 @@ export const requestsApi = {
     neededBy?: string;
   }) => api<RequestDto>('/api/requests', { method: 'POST', body: JSON.stringify(body) }),
   submit: (id: string) => api<RequestDto>(`/api/requests/${id}/submit`, { method: 'POST' }),
+  updateDraft: (
+    id: string,
+    body: {
+      title?: string;
+      answers?: Record<string, unknown>;
+      amount?: number;
+      neededBy?: string;
+    },
+  ) =>
+    api<RequestDto>(`/api/requests/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: body.title ?? null,
+        answers: body.answers ?? null,
+        amount: body.amount ?? null,
+        neededBy: body.neededBy ?? null,
+      }),
+    }),
   approve: (id: string, conditional = false) =>
     api<RequestDto>(`/api/requests/${id}/approve`, {
       method: 'POST',
