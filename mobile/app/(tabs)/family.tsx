@@ -28,12 +28,49 @@ export default function FamilyScreen() {
   const [role, setRole] = useState<string>('Child');
   const [saving, setSaving] = useState(false);
   const [storeName, setStoreName] = useState('');
+  const [startingTrip, setStartingTrip] = useState<string | null>(null);
 
   const [roleMember, setRoleMember] = useState<Member | null>(null);
   const [nextRole, setNextRole] = useState<string>('Adult');
 
   const isOwner = me?.role === 'Owner';
   const isAdultOrOwner = me?.role === 'Owner' || me?.role === 'Adult';
+
+  /** #23 Group queue by preferred store for shopping trips */
+  const actionable = queue.filter(
+    (i) =>
+      i.status === 'Queued' ||
+      i.status === 'Approved' ||
+      i.status === 'Held' ||
+      i.status === 'Deferred',
+  );
+  const byStore: Record<string, ProcurementItemDto[]> = {};
+  for (const item of actionable) {
+    const key = (item.preferredStore || 'Any store').trim() || 'Any store';
+    (byStore[key] ??= []).push(item);
+  }
+  const storeGroups = Object.entries(byStore).sort(([a], [b]) => a.localeCompare(b));
+
+  const startTrip = async (store: string, items: ProcurementItemDto[]) => {
+    if (!items.length) return;
+    setStartingTrip(store);
+    setError(null);
+    try {
+      const cart = await procurementApi.createCart(store === 'Any store' ? 'Trip' : store);
+      for (const it of items) {
+        try {
+          await procurementApi.addToCart(it.id, cart.id);
+        } catch {
+          /* continue other items */
+        }
+      }
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not start trip');
+    } finally {
+      setStartingTrip(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -144,12 +181,15 @@ export default function FamilyScreen() {
         </Card>
       ))}
 
-      <SectionTitle>Shopping queue</SectionTitle>
+      <SectionTitle>Shopping by store</SectionTitle>
+      <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+        Queue grouped by preferred store — start a trip to build a cart.
+      </Text>
       {isAdultOrOwner ? (
         <View style={[styles.row, { marginBottom: spacing.sm, gap: spacing.sm, flexWrap: 'wrap' }]}>
           <TextInput
             style={[styles.input, { flex: 1, minWidth: 140 }]}
-            placeholder="Store for new cart"
+            placeholder="Store for empty cart"
             placeholderTextColor={colors.textMuted}
             value={storeName}
             onChangeText={setStoreName}
@@ -170,7 +210,7 @@ export default function FamilyScreen() {
 
       {carts.length > 0 ? (
         <>
-          <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Active carts</Text>
+          <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Active carts / trips</Text>
           {carts.map((cart) => (
             <Card key={cart.id} style={styles.cardCol}>
               <Text style={typography.heading}>{cart.storeName}</Text>
@@ -197,47 +237,59 @@ export default function FamilyScreen() {
         </>
       ) : null}
 
-      {queue.length === 0 ? (
-        <EmptyState title="Queue empty" subtitle="Approved purchases show up here." />
+      {storeGroups.length === 0 ? (
+        <EmptyState title="Queue empty" subtitle="Approved purchases show up here by store." />
       ) : (
-        queue.map((item) => (
-          <Card key={item.id} style={styles.cardCol}>
-            <Text style={typography.heading}>{item.name}</Text>
-            <View style={styles.row}>
-              <Badge label={item.status} tone="warning" />
-              {item.preferredStore ? <Badge label={item.preferredStore} /> : null}
-              {item.estimatedPrice != null ? (
-                <Text style={typography.caption}>~${item.estimatedPrice.toFixed(2)}</Text>
-              ) : null}
-            </View>
-            {isAdultOrOwner && (item.status === 'Queued' || item.status === 'Approved' || item.status === 'Held' || item.status === 'Deferred') ? (
-              <View style={[styles.row, { flexWrap: 'wrap', gap: spacing.xs }]}>
-                {carts[0] ? (
-                  <Button
-                    title={`Add → ${carts[0].storeName}`}
-                    variant="secondary"
-                    onPress={() => procurementApi.addToCart(item.id, carts[0].id).then(load).catch(() => {})}
-                  />
-                ) : null}
-                <Button
-                  title="Hold"
-                  variant="secondary"
-                  onPress={() => procurementApi.hold(item.id).then(load).catch(() => {})}
-                />
-                <Button
-                  title="Defer"
-                  variant="secondary"
-                  onPress={() => procurementApi.defer(item.id).then(load).catch(() => {})}
-                />
-                <Button
-                  title="Not needed"
-                  variant="secondary"
-                  onPress={() => procurementApi.noLongerNeeded(item.id).then(load).catch(() => {})}
-                />
+        storeGroups.map(([store, items]) => {
+          const est = items.reduce((s, i) => s + (i.estimatedPrice ?? 0), 0);
+          return (
+            <Card key={store} style={styles.cardCol}>
+              <View style={styles.rowBetween}>
+                <Text style={typography.heading}>{store}</Text>
+                <Badge label={`${items.length} item${items.length === 1 ? '' : 's'}`} />
               </View>
-            ) : null}
-          </Card>
-        ))
+              {est > 0 ? (
+                <Text style={typography.caption}>Est. total ~${est.toFixed(2)}</Text>
+              ) : null}
+              {items.map((item) => (
+                <View key={item.id} style={{ gap: 4, marginTop: spacing.xs }}>
+                  <View style={styles.rowBetween}>
+                    <Text style={typography.body}>{item.name}</Text>
+                    {item.estimatedPrice != null ? (
+                      <Text style={typography.caption}>${item.estimatedPrice.toFixed(2)}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.row}>
+                    <Badge label={item.status} tone="warning" />
+                  </View>
+                  {isAdultOrOwner ? (
+                    <View style={[styles.row, { flexWrap: 'wrap', gap: spacing.xs }]}>
+                      {carts.find((c) => c.storeName.toLowerCase() === store.toLowerCase()) ? (
+                        <Button
+                          title="Add to cart"
+                          variant="secondary"
+                          onPress={() => {
+                            const c = carts.find((x) => x.storeName.toLowerCase() === store.toLowerCase())!;
+                            procurementApi.addToCart(item.id, c.id).then(load).catch(() => {});
+                          }}
+                        />
+                      ) : null}
+                      <Button title="Hold" variant="secondary" onPress={() => procurementApi.hold(item.id).then(load).catch(() => {})} />
+                      <Button title="Defer" variant="secondary" onPress={() => procurementApi.defer(item.id).then(load).catch(() => {})} />
+                      <Button title="Not needed" variant="secondary" onPress={() => procurementApi.noLongerNeeded(item.id).then(load).catch(() => {})} />
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+              {isAdultOrOwner ? (
+                <Button
+                  title={startingTrip === store ? 'Starting…' : `Start trip · ${store}`}
+                  onPress={() => void startTrip(store, items)}
+                />
+              ) : null}
+            </Card>
+          );
+        })
       )}
 
       <Text style={[typography.caption, { marginTop: spacing.lg }]}>
