@@ -1,68 +1,58 @@
-# Continuous deploy via Portainer + GitHub Actions
+# Portainer continuous deploy (AWS)
 
-After **CI** (push to `main`) and **Release** succeed, GitHub Actions calls Portainer to redeploy the Family OS stack.
+Backend runs on EC2 behind Traefik; Portainer manages the **familyos** Git stack.
 
-Workflow: `.github/workflows/deploy-stack.yml`
+## Live endpoints
 
-## Option A — Stack webhook (recommended)
+| Service | URL |
+|---------|-----|
+| API health | https://api.18.226.226.118.sslip.io/health |
+| Keycloak | https://auth.18.226.226.118.sslip.io |
+| Portainer | https://portainer.18.226.226.118.sslip.io |
 
-1. Open https://portainer.YOUR_DOMAIN  
-2. **Stacks** → add/import the Family OS stack if it is not listed:
-   - Build method: **Repository**
-   - Repository URL: `https://github.com/tmassey1979/FamilyOS`
-   - Compose path: `deploy/familyos/docker-compose.yml`
-   - Auto-update / webhook: enable  
-3. Open the stack → **Create webhook** (or Webhooks) → copy the URL  
-4. GitHub repo → **Settings → Secrets and variables → Actions** → New secret:
+## Stack identity
 
-| Secret | Value |
-|--------|--------|
-| `PORTAINER_WEBHOOK_URL` | full webhook URL from Portainer |
+| Field | Value |
+|-------|-------|
+| Stack name | `familyos` |
+| Stack id | `2` |
+| Endpoint id | `2` (`local`) |
+| Compose path | `deploy/familyos/docker-compose.yml` |
+| Git branch | `main` |
 
-Redeploy is a single `POST` to that URL (pull + recreate).
+## GitHub secrets
 
-## Option B — Portainer API
+| Secret | Required | Notes |
+|--------|----------|-------|
+| `PORTAINER_WEBHOOK_URL` | **Preferred** | Full webhook URL from Portainer |
+| `PORTAINER_URL` | Fallback | `https://portainer.18.226.226.118.sslip.io` |
+| `PORTAINER_API_KEY` | Fallback | Access token (rotate if leaked) |
+| `PORTAINER_STACK_ID` | Fallback | `2` |
+| `PORTAINER_ENDPOINT_ID` | Fallback | `2` |
 
-1. Portainer → your user → **Access tokens** → create token  
-2. Stacks → note numeric **stack id** (URL or details)  
-3. Endpoints → note **endpoint id** (local Docker is often `1` or `3`)  
+## Enable webhook (recommended, one-time)
 
-| Secret | Example |
-|--------|---------|
-| `PORTAINER_URL` | `https://portainer.18.226.226.118.sslip.io` |
-| `PORTAINER_API_KEY` | token string |
-| `PORTAINER_STACK_ID` | `2` |
-| `PORTAINER_ENDPOINT_ID` | `1` |
+1. Open Portainer → **Stacks** → **familyos**
+2. **Editor** (or Git details) → **Automatic updates / GitOps**
+3. Enable **Webhook**
+4. Copy the webhook URL
+5. GitHub → Settings → Secrets → Actions → `PORTAINER_WEBHOOK_URL` = that URL
 
-Uses `PUT /api/stacks/{id}/git/redeploy`.
+CI on every push to `main` POSTs the webhook after a green API build.
 
-## Option C — SSH fallback
+## How CI deploys
 
-Used only if webhook/API secrets are missing or fail.
+1. `CI` → Build & Test (API)
+2. On `main` only → `Deploy stack (Portainer)`
+   - Tries **webhook** first
+   - Falls back to **API git/redeploy** with stored stack Env and `PullImage: false`
+3. Health-checks `https://api.18.226.226.118.sslip.io/health`
 
-| Secret | Example |
-|--------|---------|
-| `DEPLOY_SSH_HOST` | `ubuntu@18.226.226.118` |
-| `DEPLOY_SSH_KEY` | full PEM private key |
+## Manual redeploy
 
-Runs on the host:
+Actions → **Deploy stack (Portainer)** → Run workflow
 
-```bash
-cd /opt/familyos && git pull &&
-docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d --build
-```
+## Notes
 
-## When it runs
-
-| Trigger | Redeploy? |
-|---------|-----------|
-| Push / CI on **`main`** (after build-and-test) | Yes |
-| **Release** workflow (after release-api) | Yes |
-| Push to `develop` / pull requests | No |
-| Manual **Actions → Deploy stack (Portainer)** | Yes |
-
-## Verify
-
-1. Actions → latest **CI** or **Release** on `main` → job **Portainer / server redeploy**  
-2. Portainer → stack → containers restarted / updated  
-3. `curl -sk https://api.YOUR_DOMAIN/health` → `Healthy`
+- `familyos-api` is **built on the host**, not pulled from a registry — do not force `PullImage: true` unless you publish the image.
+- Env vars (Postgres, RabbitMQ, Keycloak) live on the Portainer stack; API redeploy must include them.
