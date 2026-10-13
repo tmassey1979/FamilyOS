@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -76,9 +80,9 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## CI — API" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Version: \`${{ steps.ver.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Informational: \`${{ steps.ver.outputs.info }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "## CI - API" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: ${{ steps.ver.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Info: ${{ steps.ver.outputs.info }}" >> "$GITHUB_STEP_SUMMARY"
 
   mobile:
     name: Mobile typecheck
@@ -101,7 +105,7 @@ jobs:
           if [[ -f scripts/expand-eas-brand-bundle.py ]]; then
             python3 scripts/expand-eas-brand-bundle.py
           else
-            echo "No expand-eas-brand-bundle.py — skip"
+            echo "No expand-eas-brand-bundle.py - skip"
             exit 1
           fi
 
@@ -138,10 +142,9 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## CI — Mobile" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Expo / TypeScript \`tsc --noEmit\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "## CI - Mobile" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Expo / TypeScript tsc --noEmit" >> "$GITHUB_STEP_SUMMARY"
 
-  # Production CD: after green build on main → Portainer redeploy
   deploy:
     name: Redeploy (Portainer)
     needs: [build-and-test]
