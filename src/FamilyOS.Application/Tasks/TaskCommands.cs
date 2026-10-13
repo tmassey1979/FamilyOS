@@ -1,6 +1,7 @@
 using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Common;
+using FamilyOS.Domain.Notifications;
 using FamilyOS.Domain.Tasks;
 using FamilyOS.Domain.TimeIntelligence;
 using MediatR;
@@ -100,6 +101,17 @@ public class TaskCommandHandlers :
         {
             await EnsureMemberInFamily(cmd.AssignToMemberId.Value, ct);
             task.Assign(cmd.AssignToMemberId.Value, _current.MemberId!.Value);
+            if (cmd.AssignToMemberId.Value != _current.MemberId)
+            {
+                _db.Notifications.Add(Notification.Create(
+                    _current.FamilyId!.Value,
+                    cmd.AssignToMemberId.Value,
+                    NotificationType.TaskAssigned,
+                    $"Assigned: {task.Title}",
+                    "You have a new task to accept.",
+                    task.Id,
+                    "Task"));
+            }
         }
 
         _db.Tasks.Add(task);
@@ -114,6 +126,19 @@ public class TaskCommandHandlers :
         var task = await GetTaskForFamily(cmd.TaskId, ct);
         await EnsureMemberInFamily(cmd.AssignToMemberId, ct);
         task.Assign(cmd.AssignToMemberId, _current.MemberId!.Value);
+
+        if (cmd.AssignToMemberId != _current.MemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                cmd.AssignToMemberId,
+                NotificationType.TaskAssigned,
+                $"Assigned: {task.Title}",
+                "You have a new task to accept.",
+                task.Id,
+                "Task"));
+        }
+
         await _db.SaveChangesAsync(ct);
         return await ToDto(task, ct);
     }
@@ -221,6 +246,19 @@ public class TaskCommandHandlers :
         var task = await GetTaskForFamily(cmd.TaskId, ct);
         await EnsureMemberInFamily(cmd.NewAssigneeMemberId, ct);
         task.Reassign(cmd.NewAssigneeMemberId, _current.MemberId!.Value);
+
+        if (cmd.NewAssigneeMemberId != _current.MemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                cmd.NewAssigneeMemberId,
+                NotificationType.TaskReassigned,
+                $"Reassigned: {task.Title}",
+                "A task was reassigned to you.",
+                task.Id,
+                "Task"));
+        }
+
         await _db.SaveChangesAsync(ct);
         return await ToDto(task, ct);
     }

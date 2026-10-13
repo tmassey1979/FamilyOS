@@ -125,6 +125,28 @@ public class RequestCommandHandlers :
         await _current.EnsureLoadedAsync(ct);
         var request = await GetRequest(cmd.RequestId, ct);
         request.Submit(_current.MemberId!.Value);
+
+        // Notify adults/owners that a request needs review (#9 #50)
+        var approvers = await _db.FamilyMembers.AsNoTracking()
+            .Where(m => m.FamilyId == _current.FamilyId
+                        && m.IsActive
+                        && m.Id != request.RequesterMemberId
+                        && (m.Role == FamilyRole.Owner || m.Role == FamilyRole.Adult))
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+
+        foreach (var mid in approvers)
+        {
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                mid,
+                NotificationType.RequestSubmitted,
+                $"Request needs review: {request.Title}",
+                $"{request.Type} submitted and waiting for approval.",
+                request.Id,
+                "Request"));
+        }
+
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);
     }
@@ -135,6 +157,19 @@ public class RequestCommandHandlers :
         EnsureAdult();
         var request = await GetRequest(cmd.RequestId, ct);
         request.AskQuestion(_current.MemberId!.Value, cmd.QuestionText);
+
+        if (request.RequesterMemberId != _current.MemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                request.RequesterMemberId,
+                NotificationType.RequestQuestionAsked,
+                $"Question on: {request.Title}",
+                cmd.QuestionText.Length > 120 ? cmd.QuestionText[..117] + "…" : cmd.QuestionText,
+                request.Id,
+                "Request"));
+        }
+
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);
     }
@@ -154,6 +189,22 @@ public class RequestCommandHandlers :
         EnsureAdult();
         var request = await GetRequest(cmd.RequestId, ct);
         request.Approve(_current.MemberId!.Value, cmd.Conditional);
+
+        if (request.RequesterMemberId != _current.MemberId)
+        {
+            var label = cmd.Conditional ? "Conditionally approved" : "Approved";
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                request.RequesterMemberId,
+                NotificationType.RequestApproved,
+                $"{label}: {request.Title}",
+                cmd.Conditional
+                    ? "Your request was conditionally approved — check conditions."
+                    : "Your request was approved.",
+                request.Id,
+                "Request"));
+        }
+
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);
     }
@@ -164,6 +215,19 @@ public class RequestCommandHandlers :
         EnsureAdult();
         var request = await GetRequest(cmd.RequestId, ct);
         request.Deny(_current.MemberId!.Value, cmd.Reason);
+
+        if (request.RequesterMemberId != _current.MemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                request.RequesterMemberId,
+                NotificationType.RequestDenied,
+                $"Denied: {request.Title}",
+                string.IsNullOrWhiteSpace(cmd.Reason) ? "Your request was denied." : cmd.Reason,
+                request.Id,
+                "Request"));
+        }
+
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);
     }
@@ -299,6 +363,18 @@ public class RequestCommandHandlers :
             request.Approve(_current.MemberId!.Value, cmd.Conditional);
         else
             request.Deny(_current.MemberId!.Value, cmd.Reason ?? "Owner policy override — denied");
+
+        if (request.RequesterMemberId != _current.MemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                request.RequesterMemberId,
+                cmd.Approve ? NotificationType.RequestApproved : NotificationType.RequestDenied,
+                cmd.Approve ? $"Approved (owner override): {request.Title}" : $"Denied (owner override): {request.Title}",
+                cmd.Reason ?? (cmd.Approve ? "Owner overrode policy and approved." : "Owner overrode policy and denied."),
+                request.Id,
+                "Request"));
+        }
 
         await _db.SaveChangesAsync(ct);
         return await ToDto(request, ct);

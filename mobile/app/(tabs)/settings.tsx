@@ -21,6 +21,7 @@ import { colors, spacing, typography } from '../../src/theme';
 
 /**
  * Settings hub — account, family, security, notifications, quiet hours (#37 #46 #50).
+ * Tap a notification to mark read and deep-link to the related tab (#9 #55).
  */
 export default function SettingsScreen() {
   const router = useRouter();
@@ -135,6 +136,31 @@ export default function SettingsScreen() {
     }
   };
 
+  const openNotification = async (n: NotificationDto) => {
+    if (!n.isRead) {
+      try {
+        await notificationsApi.markRead(n.id);
+        setNotifs((prev) =>
+          prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)),
+        );
+      } catch {
+        /* still navigate */
+      }
+    }
+
+    const kind = (n.relatedEntityType ?? '').toLowerCase();
+    if (kind === 'request') {
+      router.push('/(tabs)/requests');
+    } else if (kind === 'task') {
+      router.push('/(tabs)/tasks');
+    } else if (kind === 'procurement' || kind === 'product' || kind === 'cart') {
+      router.push('/(tabs)/family');
+    } else if (kind === 'calendar' || kind === 'calendarevent') {
+      router.push('/(tabs)/calendar');
+    }
+    // else stay on Settings (general notices)
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -207,23 +233,23 @@ export default function SettingsScreen() {
         <EmptyState title="No notifications" subtitle="Approvals and assignments will show here." />
       ) : (
         notifs.slice(0, 15).map((n) => (
-          <Card key={n.id} style={{ marginBottom: spacing.sm, gap: spacing.xs, opacity: n.isRead ? 0.65 : 1 }}>
-            <Text style={typography.heading}>{n.title}</Text>
-            <Text style={typography.caption}>{n.body}</Text>
-            <View style={styles.row}>
-              <Badge label={n.type} />
-              {!n.isRead ? <Badge label="Unread" tone="warning" /> : null}
-              {n.relatedEntityType ? <Badge label={n.relatedEntityType} /> : null}
-            </View>
-            <Text style={typography.caption}>{new Date(n.createdAtUtc).toLocaleString()}</Text>
-            {!n.isRead ? (
-              <Button
-                title="Mark read"
-                variant="secondary"
-                onPress={() => void notificationsApi.markRead(n.id).then(loadNotifs).catch(() => {})}
-              />
-            ) : null}
-          </Card>
+          <Pressable key={n.id} onPress={() => void openNotification(n)}>
+            <Card style={{ marginBottom: spacing.sm, gap: spacing.xs, opacity: n.isRead ? 0.65 : 1 }}>
+              <Text style={typography.heading}>{n.title}</Text>
+              <Text style={typography.caption}>{n.body}</Text>
+              <View style={styles.row}>
+                <Badge label={n.type} />
+                {!n.isRead ? <Badge label="Unread" tone="warning" /> : null}
+                {n.relatedEntityType ? <Badge label={n.relatedEntityType} /> : null}
+              </View>
+              <Text style={typography.caption}>{new Date(n.createdAtUtc).toLocaleString()}</Text>
+              {n.relatedEntityType ? (
+                <Text style={[typography.caption, { color: colors.primary }]}>
+                  Tap to open {n.relatedEntityType} →
+                </Text>
+              ) : null}
+            </Card>
+          </Pressable>
         ))
       )}
 
