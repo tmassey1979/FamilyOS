@@ -14,7 +14,7 @@ type Member = { id: string; displayName: string; role: string };
 function statusTone(status: string): 'default' | 'warning' | 'success' | 'danger' {
   if (status === 'Assigned' || status === 'Reassigned') return 'warning';
   if (status === 'Accepted' || status === 'InProgress') return 'success';
-  if (status === 'Declined' || status === 'Cancelled') return 'danger';
+  if (status === 'Declined' || status === 'Cancelled' || status === 'Skipped') return 'danger';
   return 'default';
 }
 
@@ -184,7 +184,7 @@ export default function TasksScreen() {
     if (s === 'Accepted' || s === 'InProgress' || s === 'Paused') {
       nodes.push(<Button key="df" title="Defer" variant="secondary" onPress={() => run(item.id, () => tasksApi.defer(item.id, 'Deferred from app'))} />);
     }
-    if (s !== 'Completed' && s !== 'Cancelled' && s !== 'Declined') {
+    if (s !== 'Completed' && s !== 'Cancelled' && s !== 'Declined' && s !== 'Skipped') {
       nodes.push(
         <Button
           key="ra"
@@ -197,8 +197,9 @@ export default function TasksScreen() {
         />,
       );
     }
-    if (s !== 'Completed' && s !== 'Cancelled') {
+    if (s !== 'Completed' && s !== 'Cancelled' && s !== 'Skipped') {
       nodes.push(<Button key="x" title="Cancel" variant="secondary" onPress={() => run(item.id, () => tasksApi.cancel(item.id, 'Cancelled from app'))} />);
+      nodes.push(<Button key="sk" title="Skip" variant="secondary" onPress={() => run(item.id, () => tasksApi.skip(item.id, 'Skipped from app'))} />);
     }
     nodes.push(<Button key="h" title="History" variant="secondary" onPress={() => openHistory(item)} />);
     return nodes;
