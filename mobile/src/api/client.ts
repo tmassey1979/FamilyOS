@@ -563,6 +563,17 @@ export const requestsApi = {
     }),
 };
 
+export type ProductDto = {
+  id: string;
+  name: string;
+  brand?: string;
+  size?: string;
+  category?: string;
+  typicalPrice?: number;
+  purchaseCount: number;
+  lastPurchasedAtUtc?: string;
+};
+
 export type ProcurementItemDto = {
   id: string;
   name: string;
@@ -585,6 +596,7 @@ export type CartDto = {
 };
 
 export const procurementApi = {
+  products: () => api<ProductDto[]>('/api/procurement/products'),
   queue: () => api<ProcurementItemDto[]>('/api/procurement/queue'),
   carts: () => api<CartDto[]>('/api/procurement/carts'),
   createCart: (storeName: string) =>
