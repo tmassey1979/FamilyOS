@@ -577,6 +577,7 @@ export type ProcurementItemDto = {
   preferredStore?: string;
   status: string;
   createdAtUtc: string;
+  requestId?: string | null;
 };
 
 export type CartDto = {
@@ -594,6 +595,29 @@ export const procurementApi = {
     api<CartDto>('/api/procurement/carts', {
       method: 'POST',
       body: JSON.stringify({ storeName }),
+    }),
+  createQueueItem: (body: {
+    name: string;
+    brand?: string;
+    size?: string;
+    category?: string;
+    quantity?: number;
+    estimatedPrice?: number;
+    preferredStore?: string;
+    requestId?: string;
+  }) =>
+    api<ProcurementItemDto>('/api/procurement/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: body.name,
+        brand: body.brand ?? null,
+        size: body.size ?? null,
+        category: body.category ?? null,
+        quantity: body.quantity ?? 1,
+        estimatedPrice: body.estimatedPrice ?? null,
+        preferredStore: body.preferredStore ?? null,
+        requestId: body.requestId ?? null,
+      }),
     }),
   addToCart: (id: string, cartId: string) =>
     api<ProcurementItemDto>(`/api/procurement/items/${id}/add-to-cart`, {
