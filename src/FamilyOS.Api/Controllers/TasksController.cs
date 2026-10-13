@@ -85,6 +85,11 @@ public class TasksController : ControllerBase
         => Ok(await _mediator.Send(new UpdateTaskDetailsCommand(
             id, body.Title, body.Description, body.Priority, body.Category, body.DueDate, body.ClearDueDate), ct));
 
+    [HttpPut("{id:guid}/planned-times")]
+    public async Task<ActionResult<TaskDto>> SetPlannedTimes(Guid id, [FromBody] PlannedTimesBody body, CancellationToken ct)
+        => Ok(await _mediator.Send(new SetPlannedTimesCommand(
+            id, body.PlannedStartTime, body.PlannedEndTime, body.EstimatedDurationMinutes), ct));
+
     public record AssignBody(Guid AssignToMemberId);
     public record UpdateTaskDetailsBody(
         string? Title,
@@ -95,4 +100,5 @@ public class TasksController : ControllerBase
         bool ClearDueDate = false);
     public record DeclineBody(Guid? ReasonId, string? Note);
     public record NoteBody(string? Note, string? Reason);
+    public record PlannedTimesBody(string? PlannedStartTime, string? PlannedEndTime, int? EstimatedDurationMinutes);
 }
