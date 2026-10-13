@@ -39,6 +39,7 @@ export default function TasksScreen() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Chores');
   const [priority, setPriority] = useState<'Low' | 'Normal' | 'High' | 'Urgent'>('Normal');
+  const [estMin, setEstMin] = useState('');
   const [assignTo, setAssignTo] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -101,14 +102,17 @@ export default function TasksScreen() {
     if (!title.trim()) return;
     setCreating(true);
     try {
+      const est = parseInt(estMin, 10);
       await tasksApi.create({
         title: title.trim(),
         category: category.trim() || undefined,
         assignToMemberId: assignTo,
         priority,
+        estimatedDurationMinutes: Number.isFinite(est) && est > 0 ? est : undefined,
       });
       setTitle('');
       setPriority('Normal');
+      setEstMin('');
       setCreateOpen(false);
       await load();
     } catch (e: unknown) {
@@ -242,6 +246,21 @@ export default function TasksScreen() {
                 {item.isOverdue ? ' · overdue' : ''}
               </Text>
             ) : null}
+            {(item.estimatedDurationMinutes != null || item.actualDurationMinutes != null) ? (
+              <Text style={typography.caption}>
+                {item.plannedStartTime && item.plannedEndTime
+                  ? `Planned ${item.plannedStartTime}–${item.plannedEndTime}`
+                  : item.estimatedDurationMinutes != null
+                    ? `Est ${item.estimatedDurationMinutes}m`
+                    : ''}
+                {item.actualDurationMinutes != null
+                  ? ` · Actual ${item.actualDurationMinutes}m`
+                  : ''}
+                {item.varianceMinutes != null
+                  ? ` · ${item.varianceMinutes > 0 ? '+' : ''}${item.varianceMinutes}m`
+                  : ''}
+              </Text>
+            ) : null}
             <View style={styles.actions}>
               {busyId === item.id ? <ActivityIndicator color={colors.primary} /> : actionsFor(item)}
             </View>
@@ -255,6 +274,14 @@ export default function TasksScreen() {
             <Text style={typography.heading}>New task</Text>
             <TextInput style={styles.input} placeholder="Title" placeholderTextColor={colors.textMuted} value={title} onChangeText={setTitle} />
             <TextInput style={styles.input} placeholder="Category" placeholderTextColor={colors.textMuted} value={category} onChangeText={setCategory} />
+            <TextInput
+              style={styles.input}
+              placeholder="Est. minutes (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={estMin}
+              onChangeText={setEstMin}
+              keyboardType="number-pad"
+            />
             <Text style={typography.caption}>Priority</Text>
             <View style={styles.memberRow}>
               {PRIORITIES.map((p) => (
