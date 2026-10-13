@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
+  ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
   familyApi,
   meApi,
   notificationsApi,
+  type DeviceRegistrationDto,
   type MeDto,
   type NotificationDto,
   type QuietHoursDto,
@@ -19,8 +21,18 @@ import {
 } from '../../src/auth/keycloak';
 import { colors, spacing, typography } from '../../src/theme';
 
+const DEVICE_TOKEN_KEY = 'familyos.device.localToken';
+
+async function getOrCreateLocalDeviceToken(): Promise<string> {
+  const existing = await SecureStore.getItemAsync(DEVICE_TOKEN_KEY);
+  if (existing) return existing;
+  const token = `local-${Platform.OS}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  await SecureStore.setItemAsync(DEVICE_TOKEN_KEY, token);
+  return token;
+}
+
 /**
- * Settings hub — account, family, security, notifications, quiet hours (#37 #46 #50).
+ * Settings hub — account, family, security, notifications, quiet hours, devices (#37 #46 #50 #27).
  * Tap a notification to mark read and deep-link to the related tab (#9 #55).
  */
 export default function SettingsScreen() {
@@ -34,6 +46,8 @@ export default function SettingsScreen() {
   const [quietStart, setQuietStart] = useState('22:00');
   const [quietEnd, setQuietEnd] = useState('07:00');
   const [notifs, setNotifs] = useState<NotificationDto[]>([]);
+  const [devices, setDevices] = useState<DeviceRegistrationDto[]>([]);
+  const [localToken, setLocalToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -42,17 +56,19 @@ export default function SettingsScreen() {
     setRefreshing(true);
     setError(null);
     try {
-      const [who, fam, mems, bioOn, qh] = await Promise.all([
+      const [who, fam, mems, bioOn, qh, tok] = await Promise.all([
         meApi.get().catch(() => null),
         familyApi.get().catch(() => null),
         familyApi.members().catch(() => []),
         isBiometricUnlockEnabled(),
         meApi.getQuietHours().catch(() => null),
+        getOrCreateLocalDeviceToken(),
       ]);
       setMe(who);
       setFamilyName(fam?.name ?? '');
       setMemberCount(mems.filter((m) => m.isActive !== false).length);
       setBio(bioOn);
+      setLocalToken(tok);
       if (qh) {
         setQuiet(qh);
         setQuietOn(qh.enabled);
@@ -74,6 +90,14 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const loadDevices = useCallback(async () => {
+    try {
+      setDevices(await meApi.myDevices());
+    } catch {
+      setDevices([]);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -81,6 +105,10 @@ export default function SettingsScreen() {
   useEffect(() => {
     void loadNotifs();
   }, [loadNotifs]);
+
+  useEffect(() => {
+    void loadDevices();
+  }, [loadDevices]);
 
   const onToggleBio = async (on: boolean) => {
     setBio(on);
@@ -124,9 +152,49 @@ export default function SettingsScreen() {
     }
   };
 
+  const registerThisDevice = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const token = localToken ?? (await getOrCreateLocalDeviceToken());
+      setLocalToken(token);
+      await meApi.registerDevice({
+        token,
+        platform: Platform.OS,
+        deviceName: `${Platform.OS} device`,
+      });
+      await loadDevices();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not register device');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unregisterThisDevice = async () => {
+    if (!localToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await meApi.unregisterDevice(localToken);
+      await loadDevices();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not unregister device');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onSignOut = async () => {
     setBusy(true);
     try {
+      if (localToken) {
+        try {
+          await meApi.unregisterDevice(localToken);
+        } catch {
+          /* best-effort */
+        }
+      }
       await signOut();
       router.replace('/login');
     } catch {
@@ -161,6 +229,10 @@ export default function SettingsScreen() {
     // else stay on Settings (general notices)
   };
 
+  const thisDeviceRegistered = localToken
+    ? devices.some((d) => d.isActive)
+    : false;
+
   return (
     <ScrollView
       style={styles.container}
@@ -171,6 +243,7 @@ export default function SettingsScreen() {
           onRefresh={() => {
             void load();
             void loadNotifs();
+            void loadDevices();
           }}
         />
       }
@@ -218,6 +291,40 @@ export default function SettingsScreen() {
             trackColor={{ true: colors.primary, false: colors.border }}
           />
         </View>
+      </Card>
+
+      <SectionTitle>This device</SectionTitle>
+      <Card style={styles.card}>
+        <Text style={typography.body}>Platform · {Platform.OS}</Text>
+        <Text style={typography.caption}>
+          Registers a local device id for push foundation (#27). Expo push tokens can replace this later.
+        </Text>
+        {localToken ? (
+          <Text style={typography.caption}>Token · {localToken.slice(0, 24)}…</Text>
+        ) : null}
+        <View style={styles.row}>
+          <Button
+            title={busy ? 'Working…' : thisDeviceRegistered ? 'Refresh registration' : 'Register this device'}
+            onPress={() => void registerThisDevice()}
+          />
+          {thisDeviceRegistered ? (
+            <Button title="Unregister" variant="secondary" onPress={() => void unregisterThisDevice()} />
+          ) : null}
+        </View>
+        {devices.length === 0 ? (
+          <Text style={typography.caption}>No active devices on server yet.</Text>
+        ) : (
+          devices.map((d) => (
+            <View key={d.id} style={{ marginTop: spacing.xs }}>
+              <Text style={typography.caption}>
+                {d.platform} · {d.deviceName ?? 'unnamed'} · {d.isActive ? 'active' : 'off'}
+              </Text>
+              <Text style={typography.caption}>
+                Last seen {new Date(d.lastSeenAtUtc).toLocaleString()}
+              </Text>
+            </View>
+          ))
+        )}
       </Card>
 
       <SectionTitle>In-app notifications</SectionTitle>

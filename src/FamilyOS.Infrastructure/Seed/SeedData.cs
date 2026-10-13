@@ -25,6 +25,9 @@ public static class SeedData
         // Additive schema for quiet hours without a full EF migration cycle (#46).
         await EnsureQuietHoursColumnsAsync(db, logger);
 
+        // Additive schema for push device tokens (#27).
+        await EnsureDeviceRegistrationsTableAsync(db, logger);
+
         // Idempotent: fill any missing request-type catalog entries on every boot.
         await EnsureRequestTypesAsync(db, logger);
 
@@ -156,6 +159,35 @@ public static class SeedData
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not ensure quiet hours columns (may already exist or non-Postgres)");
+        }
+    }
+
+    /// <summary>Additive schema for device push tokens (#27) without a full EF migration cycle.</summary>
+    private static async Task EnsureDeviceRegistrationsTableAsync(FamilyOsDbContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "CREATE TABLE IF NOT EXISTS familyos.\"DeviceRegistrations\" (" +
+                "\"Id\" uuid NOT NULL, " +
+                "\"FamilyId\" uuid NOT NULL, " +
+                "\"MemberId\" uuid NOT NULL, " +
+                "\"Token\" character varying(512) NOT NULL, " +
+                "\"Platform\" character varying(40) NOT NULL, " +
+                "\"DeviceName\" character varying(120) NULL, " +
+                "\"LastSeenAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"IsActive\" boolean NOT NULL, " +
+                "\"CreatedAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"UpdatedAtUtc\" timestamp with time zone NULL, " +
+                "\"IsDeleted\" boolean NOT NULL DEFAULT false, " +
+                "CONSTRAINT \"PK_DeviceRegistrations\" PRIMARY KEY (\"Id\"));" +
+                "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_DeviceRegistrations_Token\" ON familyos.\"DeviceRegistrations\" (\"Token\");" +
+                "CREATE INDEX IF NOT EXISTS \"IX_DeviceRegistrations_MemberId_IsActive\" ON familyos.\"DeviceRegistrations\" (\"MemberId\", \"IsActive\");");
+            logger.LogInformation("DeviceRegistrations table ensured");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not ensure DeviceRegistrations table (may already exist or non-Postgres)");
         }
     }
 

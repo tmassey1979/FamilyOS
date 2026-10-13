@@ -151,6 +151,14 @@ export type QuietHoursDto = {
   endLabel?: string | null;
 };
 
+export type DeviceRegistrationDto = {
+  id: string;
+  platform: string;
+  deviceName?: string | null;
+  lastSeenAtUtc: string;
+  isActive: boolean;
+};
+
 export const meApi = {
   get: () => api<MeDto>('/api/me'),
   getQuietHours: () => api<QuietHoursDto>('/api/me/quiet-hours'),
@@ -167,6 +175,18 @@ export const meApi = {
         endMinutes: body.endMinutes ?? null,
       }),
     }),
+  registerDevice: (body: { token: string; platform: string; deviceName?: string | null }) =>
+    api<DeviceRegistrationDto>('/api/me/devices', {
+      method: 'POST',
+      body: JSON.stringify({
+        token: body.token,
+        platform: body.platform,
+        deviceName: body.deviceName ?? null,
+      }),
+    }),
+  myDevices: () => api<DeviceRegistrationDto[]>('/api/me/devices'),
+  unregisterDevice: (token: string) =>
+    api<void>(`/api/me/devices?token=${encodeURIComponent(token)}`, { method: 'DELETE' }),
 };
 
 export const pulseApi = {
