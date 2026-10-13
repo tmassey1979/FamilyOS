@@ -46,13 +46,11 @@ export default function TasksScreen() {
   const [history, setHistory] = useState<TaskHistoryDto[]>([]);
   const [historyTitle, setHistoryTitle] = useState('');
 
-  // Decline modal
   const [declineTask, setDeclineTask] = useState<TaskDto | null>(null);
   const [declineReasonId, setDeclineReasonId] = useState<string | undefined>();
   const [declineNote, setDeclineNote] = useState('');
   const [declining, setDeclining] = useState(false);
 
-  // Reassign modal
   const [reassignTask, setReassignTask] = useState<TaskDto | null>(null);
   const [reassignTo, setReassignTo] = useState<string | undefined>();
   const [reassigning, setReassigning] = useState(false);
@@ -375,15 +373,22 @@ export default function TasksScreen() {
       <Modal visible={historyOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={typography.heading}>History · {historyTitle}</Text>
+            <Text style={typography.heading}>Timeline · {historyTitle}</Text>
+            <Text style={typography.caption}>Status changes in order</Text>
             {history.length === 0 ? (
               <Text style={typography.caption}>No history entries.</Text>
             ) : (
-              history.map((h) => (
-                <View key={h.id} style={styles.histRow}>
-                  <Badge label={h.status} tone={statusTone(h.status)} />
-                  <Text style={typography.caption}>{h.detail}</Text>
-                  <Text style={styles.histTime}>{new Date(h.timestampUtc).toLocaleString()}</Text>
+              history.map((h, idx) => (
+                <View key={h.id} style={styles.timelineRow}>
+                  <View style={styles.timelineRail}>
+                    <View style={styles.timelineDot} />
+                    {idx < history.length - 1 ? <View style={styles.timelineLine} /> : null}
+                  </View>
+                  <View style={styles.timelineBody}>
+                    <Badge label={h.status} tone={statusTone(h.status)} />
+                    <Text style={typography.body}>{h.detail}</Text>
+                    <Text style={styles.histTime}>{new Date(h.timestampUtc).toLocaleString()}</Text>
+                  </View>
                 </View>
               ))
             )}
@@ -396,6 +401,13 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
+  timelineRow: { flexDirection: 'row', gap: spacing.sm, minHeight: 56 },
+  timelineRail: { width: 16, alignItems: 'center' },
+  timelineDot: {
+    width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4,
+  },
+  timelineLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
+  timelineBody: { flex: 1, gap: 4, paddingBottom: spacing.md },
   container: { flex: 1, backgroundColor: colors.bg },
   toolbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
