@@ -173,4 +173,62 @@ public class TaskItemTests
         task.EstimatedDurationMinutes.Should().Be(30);
         task.PlannedEndTime.Should().Be(new TimeOnly(17, 30));
     }
+
+    [Fact]
+    public void IsOverdue_when_due_in_past_and_open()
+    {
+        var task = NewTask();
+        task.UpdateDetails(CreatorId, dueDate: DateTime.UtcNow.AddDays(-1));
+        task.IsOverdue().Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsOverdue_false_when_completed()
+    {
+        var task = NewTask();
+        task.UpdateDetails(CreatorId, dueDate: DateTime.UtcNow.AddDays(-2));
+        task.Assign(AssigneeId, CreatorId);
+        task.Accept(AssigneeId);
+        task.Complete(AssigneeId);
+        task.IsOverdue().Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsOverdue_false_when_no_due_date()
+    {
+        var task = NewTask();
+        task.IsOverdue().Should().BeFalse();
+    }
+
+    [Fact]
+    public void UpdateDetails_sets_priority_category_and_history()
+    {
+        var task = NewTask();
+        task.UpdateDetails(CreatorId, priority: TaskPriority.Urgent, category: "School");
+        task.Priority.Should().Be(TaskPriority.Urgent);
+        task.Category.Should().Be("School");
+        task.History.Should().Contain(h => h.Detail.Contains("priority=Urgent"));
+    }
+
+    [Fact]
+    public void UpdateDetails_rejects_completed()
+    {
+        var task = NewTask();
+        task.Assign(AssigneeId, CreatorId);
+        task.Accept(AssigneeId);
+        task.Complete(AssigneeId);
+        var act = () => task.UpdateDetails(CreatorId, priority: TaskPriority.High);
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void UpdateDetails_can_clear_due_date()
+    {
+        var task = NewTask();
+        task.UpdateDetails(CreatorId, dueDate: DateTime.UtcNow.AddDays(3));
+        task.DueDate.Should().NotBeNull();
+        task.UpdateDetails(CreatorId, clearDueDate: true);
+        task.DueDate.Should().BeNull();
+        task.IsOverdue().Should().BeFalse();
+    }
 }
