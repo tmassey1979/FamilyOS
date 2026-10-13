@@ -44,6 +44,15 @@ export default function HomeScreen() {
             actionLabel: 'Review',
           },
         ],
+        waitingBlockers: [
+          {
+            kind: 'Condition',
+            entityId: 'demo-cond',
+            title: 'Permission slip',
+            reason: 'Pending condition',
+            actionLabel: 'Satisfy',
+          },
+        ],
         comingUp: [],
         household: {
           requestsAwaitingApproval: 2,
@@ -93,15 +102,50 @@ export default function HomeScreen() {
       <SectionTitle>Needs your attention</SectionTitle>
       {pulse?.needsAttention?.length ? (
         pulse.needsAttention.map((item) => (
-          <Card key={item.entityId} style={styles.cardGap}>
+          <Card key={`att-${item.entityId}`} style={styles.cardGap}>
             <Text style={typography.heading}>{item.title}</Text>
             <Text style={typography.caption}>{item.reason}</Text>
+            <View style={styles.row}>
+              <Badge label={item.kind} />
+            </View>
             <Button title={item.actionLabel} variant="secondary" onPress={() => {}} />
           </Card>
         ))
       ) : (
         <EmptyState title="Nothing waiting" />
       )}
+
+      <SectionTitle>Waiting / blockers</SectionTitle>
+      {pulse?.waitingBlockers?.length ? (
+        pulse.waitingBlockers.map((item) => (
+          <Card key={`blk-${item.entityId}-${item.kind}`} style={styles.cardGap}>
+            <Text style={typography.heading}>{item.title}</Text>
+            <Text style={typography.caption}>{item.reason}</Text>
+            <View style={styles.row}>
+              <Badge label={item.kind} tone="warning" />
+            </View>
+            <Button title={item.actionLabel} variant="secondary" onPress={() => {}} />
+          </Card>
+        ))
+      ) : (
+        <EmptyState title="No blockers" subtitle="Nothing is waiting on you right now." />
+      )}
+
+      {(pulse?.comingUp?.length ?? 0) > 0 ? (
+        <>
+          <SectionTitle>Coming up</SectionTitle>
+          {pulse!.comingUp.map((item) => (
+            <Card key={`up-${item.entityId}`} style={styles.cardGap}>
+              <Text style={typography.heading}>{item.title}</Text>
+              <Text style={typography.caption}>
+                {new Date(item.whenUtc).toLocaleString()}
+                {item.location ? ` · ${item.location}` : ''}
+              </Text>
+              <Badge label={item.kind} />
+            </Card>
+          ))}
+        </>
+      ) : null}
 
       <SectionTitle>Household</SectionTitle>
       <Card>
