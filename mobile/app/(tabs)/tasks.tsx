@@ -18,6 +18,15 @@ function statusTone(status: string): 'default' | 'warning' | 'success' | 'danger
   return 'default';
 }
 
+function priorityTone(priority: string): 'default' | 'warning' | 'success' | 'danger' {
+  if (priority === 'Urgent') return 'danger';
+  if (priority === 'High') return 'warning';
+  if (priority === 'Low') return 'default';
+  return 'success';
+}
+
+const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'] as const;
+
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -29,6 +38,7 @@ export default function TasksScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Chores');
+  const [priority, setPriority] = useState<'Low' | 'Normal' | 'High' | 'Urgent'>('Normal');
   const [assignTo, setAssignTo] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -95,9 +105,10 @@ export default function TasksScreen() {
         title: title.trim(),
         category: category.trim() || undefined,
         assignToMemberId: assignTo,
-        priority: 'Normal',
+        priority,
       });
       setTitle('');
+      setPriority('Normal');
       setCreateOpen(false);
       await load();
     } catch (e: unknown) {
@@ -219,9 +230,17 @@ export default function TasksScreen() {
             {item.description ? <Text style={typography.caption}>{item.description}</Text> : null}
             <View style={styles.row}>
               <Badge label={item.status} tone={statusTone(item.status)} />
+              {item.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
+              <Badge label={item.priority || 'Normal'} tone={priorityTone(item.priority || 'Normal')} />
               {item.category ? <Badge label={item.category} /> : null}
               {item.assignedToName ? <Badge label={item.assignedToName} /> : null}
             </View>
+            {item.dueDate ? (
+              <Text style={typography.caption}>
+                Due {new Date(item.dueDate).toLocaleDateString()}
+                {item.isOverdue ? ' · overdue' : ''}
+              </Text>
+            ) : null}
             <View style={styles.actions}>
               {busyId === item.id ? <ActivityIndicator color={colors.primary} /> : actionsFor(item)}
             </View>
@@ -235,6 +254,14 @@ export default function TasksScreen() {
             <Text style={typography.heading}>New task</Text>
             <TextInput style={styles.input} placeholder="Title" placeholderTextColor={colors.textMuted} value={title} onChangeText={setTitle} />
             <TextInput style={styles.input} placeholder="Category" placeholderTextColor={colors.textMuted} value={category} onChangeText={setCategory} />
+            <Text style={typography.caption}>Priority</Text>
+            <View style={styles.memberRow}>
+              {PRIORITIES.map((p) => (
+                <Pressable key={p} style={[styles.chip, priority === p && styles.chipOn]} onPress={() => setPriority(p)}>
+                  <Text style={styles.chipText}>{p}</Text>
+                </Pressable>
+              ))}
+            </View>
             {members.length > 0 ? (
               <View style={styles.memberRow}>
                 <Pressable style={[styles.chip, !assignTo && styles.chipOn]} onPress={() => setAssignTo(undefined)}>
