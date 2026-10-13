@@ -1,5 +1,6 @@
 using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
+using FamilyOS.Domain.Calendar;
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Conditions;
 using FamilyOS.Domain.Notifications;
@@ -113,7 +114,6 @@ public class ConditionHandlers :
         var condition = await GetOwned(cmd.ConditionId, familyId, ct);
         condition.Satisfy(memberId);
 
-        // Conditional approval gate: when no Pending conditions remain on the request, promote it.
         if (condition.RequestId.HasValue)
         {
             var requestId = condition.RequestId.Value;
@@ -132,8 +132,8 @@ public class ConditionHandlers :
                 if (request is { Status: RequestStatus.ConditionallyApproved })
                 {
                     request.PromoteFromConditions(memberId);
-                    // Grocery path also applies after conditions clear (#34)
                     EnqueueProcurementFromRequest(request, memberId);
+                    ScheduleCalendarFromRequest(request, memberId);
                 }
             }
         }
@@ -166,13 +166,64 @@ public class ConditionHandlers :
         return ToDto(condition);
     }
 
+    private void ScheduleCalendarFromRequest(Request request, Guid actorMemberId)
+    {
+        if (request.Type is not (RequestTypeCode.Ride or RequestTypeCode.School or RequestTypeCode.Medical))
+            return;
+
+        var answers = request.GetAnswers();
+        string? location = null;
+        if (answers.TryGetValue("location", out var loc) && loc is not null)
+            location = loc.ToString();
+        else if (answers.TryGetValue("where", out var wh) && wh is not null)
+            location = wh.ToString();
+        else if (answers.TryGetValue("pickup", out var pu) && pu is not null)
+            location = pu.ToString();
+
+        var start = request.NeededByUtc ?? DateTime.UtcNow.AddHours(2);
+        if (answers.TryGetValue("when", out var whenObj) && whenObj is not null
+            && DateTime.TryParse(whenObj.ToString(), out var parsed))
+            start = parsed.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+                : parsed.ToUniversalTime();
+
+        var end = start.AddHours(request.Type == RequestTypeCode.Ride ? 1 : 2);
+        var titlePrefix = request.Type switch
+        {
+            RequestTypeCode.Ride => "Ride: ",
+            RequestTypeCode.School => "School: ",
+            RequestTypeCode.Medical => "Medical: ",
+            _ => ""
+        };
+
+        _db.CalendarEvents.Add(CalendarEvent.Create(
+            request.FamilyId,
+            titlePrefix + request.Title,
+            start,
+            actorMemberId,
+            endUtc: end,
+            allDay: false,
+            location: location,
+            linkedTaskId: null,
+            linkedRequestId: request.Id));
+
+        if (request.RequesterMemberId != actorMemberId)
+        {
+            _db.Notifications.Add(Notification.Create(
+                request.FamilyId,
+                request.RequesterMemberId,
+                NotificationType.CalendarReminder,
+                $"On calendar: {request.Title}",
+                $"Scheduled for {start:u}" + (location is null ? "" : $" · {location}"),
+                request.Id,
+                "Calendar"));
+        }
+    }
+
     private void EnqueueProcurementFromRequest(Request request, Guid actorMemberId)
     {
         if (request.Type is not (RequestTypeCode.Grocery or RequestTypeCode.Purchase or RequestTypeCode.SnackFood))
             return;
-
-        // Avoid double-queue if items already exist for this request
-        // (checked at SaveChanges time; lightweight in-memory skip if already tracked)
 
         var category = request.Type switch
         {
@@ -242,5 +293,4 @@ public class ConditionHandlers :
     private static ConditionDto ToDto(Condition c) =>
         new(c.Id, c.RequestId, c.TaskId, c.Name, c.Description, c.Type, c.Status,
             c.LogicGroup, c.GroupOrder, c.DeadlineUtc, c.SatisfiedByMemberId, c.SatisfiedAtUtc);
-
 }
