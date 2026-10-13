@@ -231,4 +231,26 @@ public class TaskItemTests
         task.DueDate.Should().BeNull();
         task.IsOverdue().Should().BeFalse();
     }
+
+    [Fact]
+    public void Skip_marks_Skipped_and_history()
+    {
+        var task = NewTask();
+        task.Assign(AssigneeId, CreatorId);
+        task.Accept(AssigneeId);
+        task.Skip(AssigneeId, "Out of town");
+        task.Status.Should().Be(FamilyTaskStatus.Skipped);
+        task.History.Should().Contain(h => h.Status == FamilyTaskStatus.Skipped && h.Detail.Contains("Out of town"));
+    }
+
+    [Fact]
+    public void Skip_rejects_already_completed()
+    {
+        var task = NewTask();
+        task.Assign(AssigneeId, CreatorId);
+        task.Accept(AssigneeId);
+        task.Complete(AssigneeId);
+        var act = () => task.Skip(AssigneeId);
+        act.Should().Throw<InvalidOperationException>();
+    }
 }
