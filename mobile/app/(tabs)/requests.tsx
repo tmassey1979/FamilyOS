@@ -207,11 +207,47 @@ export default function RequestsScreen() {
           onPress={() =>
             void run(item.id, async () => {
               const pol = await requestsApi.evaluatePolicy(item.id);
+              const label = pol.autoApproved
+                ? 'auto-approve'
+                : pol.requiresOwner
+                  ? 'requires owner'
+                  : pol.isAllowed
+                    ? 'allowed'
+                    : 'needs approval';
               setError(
-                `Policy: ${pol.autoApproved ? 'auto-approve' : pol.isAllowed ? 'allowed' : 'needs approval'}`
-                  + (pol.explanation ? ` — ${pol.explanation}` : ''),
+                `Policy: ${label}` + (pol.explanation ? ` — ${pol.explanation}` : ''),
               );
             })
+          }
+        />,
+      );
+      nodes.push(
+        <Button
+          key="ov-ap"
+          title="Override✓"
+          variant="secondary"
+          onPress={() =>
+            void run(item.id, () =>
+              requestsApi.overridePolicy(item.id, {
+                approve: true,
+                reason: 'Owner override from app',
+              }),
+            )
+          }
+        />,
+      );
+      nodes.push(
+        <Button
+          key="ov-dn"
+          title="Override✗"
+          variant="secondary"
+          onPress={() =>
+            void run(item.id, () =>
+              requestsApi.overridePolicy(item.id, {
+                approve: false,
+                reason: 'Owner override deny from app',
+              }),
+            )
           }
         />,
       );
@@ -250,7 +286,7 @@ export default function RequestsScreen() {
     if (isQueue && (APPROVABLE.has(s) || s === 'WaitingForInformation' || PLANABLE.has(s))) {
       nodes.push(
         <Button
-          key="cond"
+          key="addcond"
           title="Add condition"
           variant="secondary"
           onPress={() =>
