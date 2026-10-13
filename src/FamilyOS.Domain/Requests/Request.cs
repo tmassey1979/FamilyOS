@@ -128,6 +128,18 @@ public class Request : Entity
         MarkUpdated();
     }
 
+    /// <summary>
+    /// All linked conditions satisfied → leave ConditionallyApproved and become fully Approved.
+    /// </summary>
+    public void PromoteFromConditions(Guid actorMemberId)
+    {
+        if (Status != RequestStatus.ConditionallyApproved)
+            throw new InvalidOperationException($"Cannot promote from status {Status}; expected ConditionallyApproved.");
+        Status = RequestStatus.Approved;
+        AddHistory(RequestStatus.Approved, actorMemberId, "All conditions satisfied — fully approved");
+        MarkUpdated();
+    }
+
     public void MarkExecutable()
     {
         if (Status is not (RequestStatus.Approved or RequestStatus.ConditionallyApproved))
