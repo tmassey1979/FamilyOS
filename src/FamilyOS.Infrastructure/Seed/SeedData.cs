@@ -22,6 +22,9 @@ public static class SeedData
 
         await db.Database.MigrateAsync();
 
+        // Additive schema for quiet hours without a full EF migration cycle (#46).
+        await EnsureQuietHoursColumnsAsync(db, logger);
+
         // Idempotent: fill any missing request-type catalog entries on every boot.
         await EnsureRequestTypesAsync(db, logger);
 
@@ -135,6 +138,24 @@ public static class SeedData
             await db.SaveChangesAsync();
             var after = await db.RequestTypeDefinitions.CountAsync();
             logger.LogInformation("Request type catalog updated: {Before} → {After}", before, after);
+        }
+    }
+
+    /// <summary>Additive schema for #46 without a full EF migration cycle.</summary>
+    private static async Task EnsureQuietHoursColumnsAsync(FamilyOsDbContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEnabled\" boolean NOT NULL DEFAULT false;
+                ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursStartMinutes\" integer NULL;
+                ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEndMinutes\" integer NULL;
+                """);
+            logger.LogInformation("Quiet hours columns ensured on FamilyMembers");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not ensure quiet hours columns (may already exist or non-Postgres)");
         }
     }
 
