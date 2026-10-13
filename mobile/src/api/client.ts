@@ -144,8 +144,30 @@ export type MeDto = {
   role?: string;
 };
 
+export type QuietHoursDto = {
+  enabled: boolean;
+  startMinutes?: number | null;
+  endMinutes?: number | null;
+  startLabel?: string | null;
+  endLabel?: string | null;
+};
+
 export const meApi = {
   get: () => api<MeDto>('/api/me'),
+  getQuietHours: () => api<QuietHoursDto>('/api/me/quiet-hours'),
+  setQuietHours: (body: {
+    enabled: boolean;
+    startMinutes?: number | null;
+    endMinutes?: number | null;
+  }) =>
+    api<QuietHoursDto>('/api/me/quiet-hours', {
+      method: 'PUT',
+      body: JSON.stringify({
+        enabled: body.enabled,
+        startMinutes: body.startMinutes ?? null,
+        endMinutes: body.endMinutes ?? null,
+      }),
+    }),
 };
 
 export const pulseApi = {
