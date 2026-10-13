@@ -146,11 +146,11 @@ public static class SeedData
     {
         try
         {
-            await db.Database.ExecuteSqlRawAsync("""
-                ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEnabled\" boolean NOT NULL DEFAULT false;
-                ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursStartMinutes\" integer NULL;
-                ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEndMinutes\" integer NULL;
-                """);
+            // Use regular string (not raw) so JSON transport cannot mangle quotes.
+            await db.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEnabled\" boolean NOT NULL DEFAULT false;" +
+                "ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursStartMinutes\" integer NULL;" +
+                "ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEndMinutes\" integer NULL;");
             logger.LogInformation("Quiet hours columns ensured on FamilyMembers");
         }
         catch (Exception ex)
@@ -212,7 +212,7 @@ public static class SeedData
         {
             new() { Key = "what", Label = "What is needed?", Type = QuestionType.Text, Required = true, SortOrder = 1 },
             new() { Key = "when", Label = "Appointment / needed by", Type = QuestionType.DateTime, Required = false, SortOrder = 2 },
-            new() { Key = "urgent", Label = "Is this urgent?", Type = QuestionType.YesNo, Required = true, SortOrder = 3 },
+            new() { Key = "urgent", Label = "Is this urgent?", Type = QuestionType.Text, Required = true, SortOrder = 3 },
         }, 7);
 
         Add(RequestTypeCode.Household, "Household", new List<QuestionDefinition>
