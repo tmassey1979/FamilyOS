@@ -2,7 +2,6 @@
  * Typed API client for Family OS.
  * - Production: JWT via setAccessToken (Keycloak PKCE)
  * - Optional dev: setDevUser('terry.owner') or EXPO_PUBLIC_DEV_USER → X-Dev-User
- *   (does NOT auto-login; login screen is shown until the user signs in)
  */
 
 const DEFAULT_BASE =
@@ -14,11 +13,6 @@ const DEFAULT_BASE =
 export type ApiError = { error: string; status: number };
 
 let accessToken: string | null = null;
-/**
- * Dev bypass identity. Only set when user taps a Dev user on login,
- * or EXPO_PUBLIC_DEV_USER is explicitly set (pair with EXPO_PUBLIC_SKIP_LOGIN=1 to auto-skip).
- * Never default to terry.owner — that skipped the login screen.
- */
 let devUser: string | null = process.env.EXPO_PUBLIC_DEV_USER ?? null;
 
 export function setAccessToken(token: string | null) {
@@ -83,7 +77,6 @@ export type PulseAttentionItem = {
 
 export type PulseDto = {
   greeting: string;
-  /** Current member role (#59) */
   role?: string;
   roleHint?: string;
   nextAction?: {
@@ -95,7 +88,6 @@ export type PulseDto = {
     dueLabel?: string;
   };
   needsAttention: PulseAttentionItem[];
-  /** Waiting / blockers: answers needed, pending conditions, overdue (#30) */
   waitingBlockers?: PulseAttentionItem[];
   comingUp: Array<{
     kind: string;
@@ -544,7 +536,6 @@ export const requestsApi = {
     api<PolicyEvaluationDto>(`/api/requests/${id}/policy`),
   history: (id: string) =>
     api<RequestHistoryDto[]>(`/api/requests/${id}/history`),
-  /** Owner-only: force approve/deny and record PolicyOverride audit. */
   overridePolicy: (id: string, body: { approve: boolean; reason?: string; conditional?: boolean }) =>
     api<RequestDto>(`/api/requests/${id}/override-policy`, {
       method: 'POST',
@@ -622,4 +613,25 @@ export const procurementApi = {
       method: 'POST',
       body: JSON.stringify({ actualPrice, store }),
     }),
+};
+
+export type NotificationDto = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  relatedEntityId?: string;
+  relatedEntityType?: string;
+  isRead: boolean;
+  readAtUtc?: string;
+  createdAtUtc: string;
+};
+
+export const notificationsApi = {
+  mine: (unreadOnly = false) =>
+    api<NotificationDto[]>(`/api/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+  markRead: (id: string) =>
+    api<NotificationDto>(`/api/notifications/${id}/read`, { method: 'POST' }),
+  markAllRead: () =>
+    api<{ marked: number }>('/api/notifications/read-all', { method: 'POST' }),
 };
