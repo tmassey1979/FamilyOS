@@ -83,6 +83,9 @@ export type PulseAttentionItem = {
 
 export type PulseDto = {
   greeting: string;
+  /** Current member role (#59) */
+  role?: string;
+  roleHint?: string;
   nextAction?: {
     kind: string;
     entityId: string;
