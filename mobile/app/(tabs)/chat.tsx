@@ -72,16 +72,20 @@ export default function ChatScreen() {
         <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
       ) : (
         <FlatList
-          data={messages}
+          data={[...messages].reverse()}
+          inverted
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             const mine = memberId != null && item.senderMemberId === memberId;
             return (
               <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
                 {!mine ? <Text style={styles.sender}>{item.senderName}</Text> : null}
                 <Text style={[styles.body, mine && styles.bodyMine]}>{item.body}</Text>
-                <Text style={styles.time}>{new Date(item.sentAtUtc).toLocaleTimeString()}</Text>
+                <Text style={[styles.time, mine && { color: 'rgba(255,255,255,0.75)' }]}>
+                  {new Date(item.sentAtUtc).toLocaleTimeString()}
+                </Text>
               </View>
             );
           }}
