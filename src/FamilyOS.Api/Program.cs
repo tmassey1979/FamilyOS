@@ -1,5 +1,7 @@
+using System.Text;
 using System.Text.Json.Serialization;
 using FamilyOS.Api.Middleware;
+using FamilyOS.Application.Calendar;
 using FamilyOS.Application.Family;
 using FamilyOS.Application.Notifications;
 using FamilyOS.Application.Interfaces;
@@ -219,6 +221,61 @@ try
         await mediator.Send(new UnregisterDeviceCommand(token), ct);
         return Results.NoContent();
     }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    // Google Calendar — per-member OAuth + sync (#32)
+    app.MapGet("/api/me/google-calendar", async (IMediator mediator, CancellationToken ct) =>
+        Results.Ok(await mediator.Send(new GetGoogleCalendarStatusQuery(), ct)))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapGet("/api/me/google-calendar/auth-url", async (IMediator mediator, CancellationToken ct) =>
+        Results.Ok(new { url = await mediator.Send(new GetGoogleCalendarAuthUrlQuery(), ct) }))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapDelete("/api/me/google-calendar", async (IMediator mediator, CancellationToken ct) =>
+    {
+        await mediator.Send(new DisconnectGoogleCalendarCommand(), ct);
+        return Results.NoContent();
+    }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    app.MapPost("/api/me/google-calendar/sync", async (IMediator mediator, CancellationToken ct) =>
+        Results.Ok(new { changed = await mediator.Send(new TriggerGoogleCalendarSyncCommand(), ct) }))
+        .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+
+    // Public OAuth callback from Google (state carries member + family ids)
+    app.MapGet("/api/integrations/google/callback", async (string? code, string? state, string? error, IMediator mediator) =>
+    {
+        if (!string.IsNullOrWhiteSpace(error))
+            return Results.BadRequest(new { error });
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
+            return Results.BadRequest(new { error = "code and state are required" });
+
+        try
+        {
+            var raw = Encoding.UTF8.GetString(Convert.FromBase64String(state));
+            var parts = raw.Split('|');
+            if (parts.Length < 2
+                || !Guid.TryParse(parts[0], out var memberId)
+                || !Guid.TryParse(parts[1], out var familyId))
+            {
+                return Results.BadRequest(new { error = "invalid state" });
+            }
+
+            var status = await mediator.Send(new CompleteGoogleCalendarOAuthCommand(code, memberId, familyId));
+            return Results.Content(
+                "<!DOCTYPE html><html><body style=\"font-family:system-ui;padding:2rem\">" +
+                "<h2>Google Calendar connected</h2>" +
+                $"<p>{(status.Email ?? "account")} is linked. You can close this window and return to Family OS.</p>" +
+                "</body></html>",
+                "text/html");
+        }
+        catch (Exception ex)
+        {
+            return Results.Content(
+                "<!DOCTYPE html><html><body style=\"font-family:system-ui;padding:2rem\">" +
+                $"<h2>Connection failed</h2><p>{System.Net.WebUtility.HtmlEncode(ex.Message)}</p></body></html>",
+                "text/html");
+        }
+    }).AllowAnonymous();
 
     var seedEnabled = app.Environment.IsDevelopment()
         || string.Equals(app.Configuration["Seed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
