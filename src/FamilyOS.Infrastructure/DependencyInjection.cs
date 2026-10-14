@@ -15,11 +15,16 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<FamilyOsDbContext>(options =>
+        services.AddSingleton<NotificationPushInterceptor>();
+
+        services.AddDbContext<FamilyOsDbContext>((sp, options) =>
+        {
             options.UseNpgsql(
                 configuration.GetConnectionString("DefaultConnection")
                 ?? "Host=localhost;Port=5432;Database=familyos;Username=familyos;Password=familyos_dev_password",
-                npgsql => npgsql.MigrationsAssembly(typeof(FamilyOsDbContext).Assembly.FullName)));
+                npgsql => npgsql.MigrationsAssembly(typeof(FamilyOsDbContext).Assembly.FullName));
+            options.AddInterceptors(sp.GetRequiredService<NotificationPushInterceptor>());
+        });
 
         services.AddScoped<IFamilyOsDbContext>(sp => sp.GetRequiredService<FamilyOsDbContext>());
         services.AddScoped<ICurrentUserService, CurrentUserService>();
