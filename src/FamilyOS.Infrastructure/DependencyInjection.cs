@@ -1,4 +1,5 @@
 using FamilyOS.Application.Interfaces;
+using FamilyOS.Infrastructure.Chat;
 using FamilyOS.Infrastructure.Google;
 using FamilyOS.Infrastructure.Identity;
 using FamilyOS.Infrastructure.Persistence;
@@ -24,10 +25,12 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddFamilyAuthorization();
 
+        // Default no-op; API host replaces with SignalRFamilyChatNotifier after AddSignalR.
+        services.AddSingleton<IFamilyChatNotifier, NullFamilyChatNotifier>();
+
         services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
         services.AddHostedService<GoogleCalendarSyncWorker>();
 
-        // MassTransit + RabbitMQ
         services.AddMassTransit(x =>
         {
             x.UsingRabbitMq((context, cfg) =>

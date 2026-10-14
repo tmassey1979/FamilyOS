@@ -10,13 +10,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { chatApi, meApi, type ChatMessageDto } from '../../src/api/client';
+import { meApi } from '../../src/api/client';
+import { chatApi, type ChatMessageDto } from '../../src/api/chatApi';
 import { colors, spacing, typography } from '../../src/theme';
 
-/**
- * Family chat — shared household channel.
- * Polls for new messages; SignalR live updates can be wired later on device builds.
- */
+/** Family chat — shared household channel (poll refresh; SignalR ready on API). */
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [text, setText] = useState('');
@@ -123,10 +121,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: spacing.xs,
   },
-  mine: {
-    alignSelf: 'flex-end',
-    backgroundColor: colors.primary,
-  },
+  mine: { alignSelf: 'flex-end', backgroundColor: colors.primary },
   theirs: {
     alignSelf: 'flex-start',
     backgroundColor: colors.surface,
