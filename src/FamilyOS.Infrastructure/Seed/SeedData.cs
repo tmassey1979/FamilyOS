@@ -25,6 +25,7 @@ public static class SeedData
         await EnsureQuietHoursColumnsAsync(db, logger);
         await EnsureDeviceRegistrationsTableAsync(db, logger);
         await EnsureGoogleCalendarSchemaAsync(db, logger);
+        await EnsureChatSchemaAsync(db, logger);
         await EnsureRequestTypesAsync(db, logger);
 
         if (await db.Families.AnyAsync())
@@ -184,7 +185,6 @@ public static class SeedData
         }
     }
 
-    /// <summary>Google Calendar sync schema: connection tokens + external ids on events.</summary>
     private static async Task EnsureGoogleCalendarSchemaAsync(FamilyOsDbContext db, ILogger logger)
     {
         try
@@ -216,6 +216,44 @@ public static class SeedData
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not ensure Google Calendar schema (may already exist or non-Postgres)");
+        }
+    }
+
+    /// <summary>Family chat tables (#31).</summary>
+    private static async Task EnsureChatSchemaAsync(FamilyOsDbContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "CREATE TABLE IF NOT EXISTS familyos.\"ChatChannels\" (" +
+                "\"Id\" uuid NOT NULL, " +
+                "\"FamilyId\" uuid NOT NULL, " +
+                "\"Name\" character varying(120) NOT NULL, " +
+                "\"Kind\" character varying(20) NOT NULL, " +
+                "\"IsActive\" boolean NOT NULL DEFAULT true, " +
+                "\"CreatedAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"UpdatedAtUtc\" timestamp with time zone NULL, " +
+                "\"IsDeleted\" boolean NOT NULL DEFAULT false, " +
+                "CONSTRAINT \"PK_ChatChannels\" PRIMARY KEY (\"Id\"));" +
+                "CREATE INDEX IF NOT EXISTS \"IX_ChatChannels_FamilyId_Kind\" ON familyos.\"ChatChannels\" (\"FamilyId\", \"Kind\");" +
+                "CREATE TABLE IF NOT EXISTS familyos.\"ChatMessages\" (" +
+                "\"Id\" uuid NOT NULL, " +
+                "\"FamilyId\" uuid NOT NULL, " +
+                "\"ChannelId\" uuid NOT NULL, " +
+                "\"SenderMemberId\" uuid NOT NULL, " +
+                "\"Body\" character varying(4000) NOT NULL, " +
+                "\"SentAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"CreatedAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"UpdatedAtUtc\" timestamp with time zone NULL, " +
+                "\"IsDeleted\" boolean NOT NULL DEFAULT false, " +
+                "CONSTRAINT \"PK_ChatMessages\" PRIMARY KEY (\"Id\"));" +
+                "CREATE INDEX IF NOT EXISTS \"IX_ChatMessages_ChannelId_SentAtUtc\" ON familyos.\"ChatMessages\" (\"ChannelId\", \"SentAtUtc\");" +
+                "CREATE INDEX IF NOT EXISTS \"IX_ChatMessages_FamilyId\" ON familyos.\"ChatMessages\" (\"FamilyId\");");
+            logger.LogInformation("Chat schema ensured");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not ensure Chat schema (may already exist or non-Postgres)");
         }
     }
 
