@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
+  ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -10,6 +10,7 @@ import {
   meApi,
   notificationsApi,
   type DeviceRegistrationDto,
+  type GoogleCalendarStatusDto,
   type MeDto,
   type NotificationDto,
   type QuietHoursDto,
@@ -31,10 +32,7 @@ async function getOrCreateLocalDeviceToken(): Promise<string> {
   return token;
 }
 
-/**
- * Settings hub — account, family, security, notifications, quiet hours, devices (#37 #46 #50 #27).
- * Tap a notification to mark read and deep-link to the related tab (#9 #55).
- */
+/** Settings hub — account, family, Google Calendar, quiet hours, devices, notifications. */
 export default function SettingsScreen() {
   const router = useRouter();
   const [me, setMe] = useState<MeDto | null>(null);
@@ -48,6 +46,7 @@ export default function SettingsScreen() {
   const [notifs, setNotifs] = useState<NotificationDto[]>([]);
   const [devices, setDevices] = useState<DeviceRegistrationDto[]>([]);
   const [localToken, setLocalToken] = useState<string | null>(null);
+  const [gcal, setGcal] = useState<GoogleCalendarStatusDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,19 +55,21 @@ export default function SettingsScreen() {
     setRefreshing(true);
     setError(null);
     try {
-      const [who, fam, mems, bioOn, qh, tok] = await Promise.all([
+      const [who, fam, mems, bioOn, qh, tok, gc] = await Promise.all([
         meApi.get().catch(() => null),
         familyApi.get().catch(() => null),
         familyApi.members().catch(() => []),
         isBiometricUnlockEnabled(),
         meApi.getQuietHours().catch(() => null),
         getOrCreateLocalDeviceToken(),
+        meApi.googleCalendarStatus().catch(() => null),
       ]);
       setMe(who);
       setFamilyName(fam?.name ?? '');
       setMemberCount(mems.filter((m) => m.isActive !== false).length);
       setBio(bioOn);
       setLocalToken(tok);
+      setGcal(gc);
       if (qh) {
         setQuiet(qh);
         setQuietOn(qh.enabled);
@@ -185,6 +186,49 @@ export default function SettingsScreen() {
     }
   };
 
+  const connectGoogleCalendar = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { url } = await meApi.googleCalendarAuthUrl();
+      const can = await Linking.canOpenURL(url);
+      if (!can) throw new Error('Cannot open Google auth URL');
+      await Linking.openURL(url);
+      setError(null);
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not start Google Calendar connect');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnectGoogleCalendar = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await meApi.disconnectGoogleCalendar();
+      setGcal(await meApi.googleCalendarStatus().catch(() => null));
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not disconnect Google Calendar');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncGoogleCalendar = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { changed } = await meApi.syncGoogleCalendar();
+      setGcal(await meApi.googleCalendarStatus().catch(() => null));
+      setError(changed > 0 ? null : null);
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Sync failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onSignOut = async () => {
     setBusy(true);
     try {
@@ -215,23 +259,14 @@ export default function SettingsScreen() {
         /* still navigate */
       }
     }
-
     const kind = (n.relatedEntityType ?? '').toLowerCase();
-    if (kind === 'request') {
-      router.push('/(tabs)/requests');
-    } else if (kind === 'task') {
-      router.push('/(tabs)/tasks');
-    } else if (kind === 'procurement' || kind === 'product' || kind === 'cart') {
-      router.push('/(tabs)/family');
-    } else if (kind === 'calendar' || kind === 'calendarevent') {
-      router.push('/(tabs)/calendar');
-    }
-    // else stay on Settings (general notices)
+    if (kind === 'request') router.push('/(tabs)/requests');
+    else if (kind === 'task') router.push('/(tabs)/tasks');
+    else if (kind === 'procurement' || kind === 'product' || kind === 'cart') router.push('/(tabs)/family');
+    else if (kind === 'calendar' || kind === 'calendarevent') router.push('/(tabs)/calendar');
   };
 
-  const thisDeviceRegistered = localToken
-    ? devices.some((d) => d.isActive)
-    : false;
+  const thisDeviceRegistered = localToken ? devices.some((d) => d.isActive) : false;
 
   return (
     <ScrollView
@@ -271,9 +306,7 @@ export default function SettingsScreen() {
         <Text style={typography.caption}>
           {memberCount} active member{memberCount === 1 ? '' : 's'}
         </Text>
-        <Text style={typography.caption}>
-          Manage members and shopping from the Family tab.
-        </Text>
+        <Text style={typography.caption}>Manage members and shopping from the Family tab.</Text>
       </Card>
 
       <SectionTitle>Security</SectionTitle>
@@ -293,11 +326,45 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
+      <SectionTitle>Google Calendar</SectionTitle>
+      <Card style={styles.card}>
+        <Text style={typography.body}>
+          {gcal?.connected
+            ? `Connected · ${gcal.email ?? 'account'}`
+            : gcal?.configured === false
+              ? 'Not configured on server (need Google:ClientId/Secret)'
+              : 'Not connected'}
+        </Text>
+        {gcal?.lastSyncAtUtc ? (
+          <Text style={typography.caption}>
+            Last sync {new Date(gcal.lastSyncAtUtc).toLocaleString()}
+          </Text>
+        ) : null}
+        <Text style={typography.caption}>
+          Per-member OAuth. FamilyOS events push to your calendar; the poller pulls Google events in.
+        </Text>
+        <View style={styles.row}>
+          {gcal?.connected ? (
+            <>
+              <Button title={busy ? '…' : 'Sync now'} onPress={() => void syncGoogleCalendar()} />
+              <Button title="Disconnect" variant="secondary" onPress={() => void disconnectGoogleCalendar()} />
+            </>
+          ) : (
+            <Button
+              title={busy ? '…' : 'Connect Google Calendar'}
+              onPress={() => void connectGoogleCalendar()}
+            />
+          )}
+          <Button title="Refresh status" variant="secondary" onPress={() => void load()} />
+        </View>
+        {gcal?.connected ? <Badge label="Linked" tone="success" /> : null}
+      </Card>
+
       <SectionTitle>This device</SectionTitle>
       <Card style={styles.card}>
         <Text style={typography.body}>Platform · {Platform.OS}</Text>
         <Text style={typography.caption}>
-          Registers a local device id for push foundation (#27). Expo push tokens can replace this later.
+          Registers a local device id for push foundation (#27).
         </Text>
         {localToken ? (
           <Text style={typography.caption}>Token · {localToken.slice(0, 24)}…</Text>
@@ -350,11 +417,6 @@ export default function SettingsScreen() {
                 {n.relatedEntityType ? <Badge label={n.relatedEntityType} /> : null}
               </View>
               <Text style={typography.caption}>{new Date(n.createdAtUtc).toLocaleString()}</Text>
-              {n.relatedEntityType ? (
-                <Text style={[typography.caption, { color: colors.primary }]}>
-                  Tap to open {n.relatedEntityType} →
-                </Text>
-              ) : null}
             </Card>
           </Pressable>
         ))
@@ -365,9 +427,7 @@ export default function SettingsScreen() {
         <View style={styles.rowBetween}>
           <View style={{ flex: 1, paddingRight: spacing.sm }}>
             <Text style={typography.body}>Do not disturb</Text>
-            <Text style={typography.caption}>
-              Suppress non-urgent alerts overnight (server-side).
-            </Text>
+            <Text style={typography.caption}>Suppress non-urgent alerts overnight.</Text>
           </View>
           <Switch
             value={quietOn}
@@ -399,11 +459,6 @@ export default function SettingsScreen() {
         </Text>
         {quietOn ? (
           <Button title="Save window" variant="secondary" onPress={() => void saveQuietHours(true)} />
-        ) : null}
-        {quiet?.startLabel && quiet?.endLabel ? (
-          <Text style={typography.caption}>
-            Active window: {quiet.startLabel} – {quiet.endLabel}
-          </Text>
         ) : null}
       </Card>
 
