@@ -1,10 +1,11 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using FamilyOS.Api.Hubs;
 using FamilyOS.Api.Middleware;
 using FamilyOS.Application.Calendar;
 using FamilyOS.Application.Family;
-using FamilyOS.Application.Notifications;
 using FamilyOS.Application.Interfaces;
+using FamilyOS.Application.Notifications;
 using FamilyOS.Application.Tasks;
 using FamilyOS.Infrastructure;
 using FamilyOS.Infrastructure.Identity;
@@ -112,6 +113,18 @@ try
             ValidateIssuerSigningKey = true,
             NameClaimType = "preferred_username"
         };
+        // Allow SignalR to pass access_token on the query string
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    context.Token = accessToken;
+                return Task.CompletedTask;
+            }
+        };
     });
 
     if (useDevBypass)
@@ -133,6 +146,8 @@ try
     builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
         p.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin()));
     builder.Services.AddSignalR();
+    // Replace null notifier with SignalR broadcast
+    builder.Services.AddSingleton<IFamilyChatNotifier, SignalRFamilyChatNotifier>();
 
     builder.Services.AddHealthChecks()
         .AddCheck("self", () => HealthCheckResult.Healthy("API process is running"))
@@ -172,6 +187,7 @@ try
     app.UseMiddleware<FamilyContextMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHub<FamilyChatHub>("/hubs/chat");
 
     app.MapHealthChecks("/health", new HealthCheckOptions
     {
@@ -222,7 +238,6 @@ try
         return Results.NoContent();
     }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
 
-    // Google Calendar — per-member OAuth + sync (#32)
     app.MapGet("/api/me/google-calendar", async (IMediator mediator, CancellationToken ct) =>
         Results.Ok(await mediator.Send(new GetGoogleCalendarStatusQuery(), ct)))
         .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
@@ -241,7 +256,6 @@ try
         Results.Ok(new { changed = await mediator.Send(new TriggerGoogleCalendarSyncCommand(), ct) }))
         .RequireAuthorization(FamilyAuthPolicies.FamilyMember);
 
-    // Public OAuth callback from Google (state carries member + family ids)
     app.MapGet("/api/integrations/google/callback", async (string? code, string? state, string? error, IMediator mediator) =>
     {
         if (!string.IsNullOrWhiteSpace(error))
@@ -324,7 +338,6 @@ static async Task WriteDetailedHealth(HttpContext ctx, HealthReport report)
 file record UpdateQuietHoursBody(bool Enabled, int? StartMinutes, int? EndMinutes);
 file record RegisterDeviceBody(string Token, string Platform, string? DeviceName);
 
-/// <summary>Checks Postgres connectivity via EF Core.</summary>
 file sealed class PostgresHealthCheck : IHealthCheck
 {
     private readonly IServiceScopeFactory _scopeFactory;
