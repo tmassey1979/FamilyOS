@@ -3,7 +3,6 @@ import {
   ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
   familyApi,
@@ -20,17 +19,8 @@ import {
   setBiometricUnlockEnabled,
   signOut,
 } from '../../src/auth/keycloak';
+import { getStoredDeviceToken, resolveDevicePushToken } from '../../src/push/registerPush';
 import { colors, spacing, typography } from '../../src/theme';
-
-const DEVICE_TOKEN_KEY = 'familyos.device.localToken';
-
-async function getOrCreateLocalDeviceToken(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(DEVICE_TOKEN_KEY);
-  if (existing) return existing;
-  const token = `local-${Platform.OS}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  await SecureStore.setItemAsync(DEVICE_TOKEN_KEY, token);
-  return token;
-}
 
 /** Settings hub — account, family, Google Calendar, quiet hours, devices, notifications. */
 export default function SettingsScreen() {
@@ -61,7 +51,7 @@ export default function SettingsScreen() {
         familyApi.members().catch(() => []),
         isBiometricUnlockEnabled(),
         meApi.getQuietHours().catch(() => null),
-        getOrCreateLocalDeviceToken(),
+        getStoredDeviceToken(),
         meApi.googleCalendarStatus().catch(() => null),
       ]);
       setMe(who);
@@ -157,13 +147,16 @@ export default function SettingsScreen() {
     setBusy(true);
     setError(null);
     try {
-      const token = localToken ?? (await getOrCreateLocalDeviceToken());
-      setLocalToken(token);
+      const resolved = await resolveDevicePushToken();
+      setLocalToken(resolved.token);
       await meApi.registerDevice({
-        token,
-        platform: Platform.OS,
-        deviceName: `${Platform.OS} device`,
+        token: resolved.token,
+        platform: resolved.platform,
+        deviceName: resolved.deviceName,
       });
+      if (!resolved.isExpoPush) {
+        setError('Registered local device id (no Expo push token yet — use a dev/production build for real push).');
+      }
       await loadDevices();
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not register device');
@@ -219,9 +212,8 @@ export default function SettingsScreen() {
     setBusy(true);
     setError(null);
     try {
-      const { changed } = await meApi.syncGoogleCalendar();
+      await meApi.syncGoogleCalendar();
       setGcal(await meApi.googleCalendarStatus().catch(() => null));
-      setError(changed > 0 ? null : null);
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Sync failed');
     } finally {
@@ -267,6 +259,9 @@ export default function SettingsScreen() {
   };
 
   const thisDeviceRegistered = localToken ? devices.some((d) => d.isActive) : false;
+  const isExpoPushToken =
+    !!localToken &&
+    (localToken.startsWith('ExponentPushToken') || localToken.startsWith('ExpoPushToken'));
 
   return (
     <ScrollView
@@ -364,10 +359,12 @@ export default function SettingsScreen() {
       <Card style={styles.card}>
         <Text style={typography.body}>Platform · {Platform.OS}</Text>
         <Text style={typography.caption}>
-          Registers a local device id for push foundation (#27).
+          Registers this device for Expo push (#27). Real ExponentPushToken on device builds; local fallback in simulators.
         </Text>
         {localToken ? (
-          <Text style={typography.caption}>Token · {localToken.slice(0, 24)}…</Text>
+          <Text style={typography.caption}>
+            Token · {isExpoPushToken ? 'Expo push · ' : 'local · '}{localToken.slice(0, 28)}…
+          </Text>
         ) : null}
         <View style={styles.row}>
           <Button
