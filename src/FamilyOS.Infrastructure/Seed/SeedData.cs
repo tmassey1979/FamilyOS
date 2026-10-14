@@ -22,13 +22,9 @@ public static class SeedData
 
         await db.Database.MigrateAsync();
 
-        // Additive schema for quiet hours without a full EF migration cycle (#46).
         await EnsureQuietHoursColumnsAsync(db, logger);
-
-        // Additive schema for push device tokens (#27).
         await EnsureDeviceRegistrationsTableAsync(db, logger);
-
-        // Idempotent: fill any missing request-type catalog entries on every boot.
+        await EnsureGoogleCalendarSchemaAsync(db, logger);
         await EnsureRequestTypesAsync(db, logger);
 
         if (await db.Families.AnyAsync())
@@ -144,12 +140,10 @@ public static class SeedData
         }
     }
 
-    /// <summary>Additive schema for #46 without a full EF migration cycle.</summary>
     private static async Task EnsureQuietHoursColumnsAsync(FamilyOsDbContext db, ILogger logger)
     {
         try
         {
-            // Use regular string (not raw) so JSON transport cannot mangle quotes.
             await db.Database.ExecuteSqlRawAsync(
                 "ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursEnabled\" boolean NOT NULL DEFAULT false;" +
                 "ALTER TABLE familyos.\"FamilyMembers\" ADD COLUMN IF NOT EXISTS \"QuietHoursStartMinutes\" integer NULL;" +
@@ -162,7 +156,6 @@ public static class SeedData
         }
     }
 
-    /// <summary>Additive schema for device push tokens (#27) without a full EF migration cycle.</summary>
     private static async Task EnsureDeviceRegistrationsTableAsync(FamilyOsDbContext db, ILogger logger)
     {
         try
@@ -188,6 +181,41 @@ public static class SeedData
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not ensure DeviceRegistrations table (may already exist or non-Postgres)");
+        }
+    }
+
+    /// <summary>Google Calendar sync schema: connection tokens + external ids on events.</summary>
+    private static async Task EnsureGoogleCalendarSchemaAsync(FamilyOsDbContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "CREATE TABLE IF NOT EXISTS familyos.\"GoogleCalendarConnections\" (" +
+                "\"Id\" uuid NOT NULL, " +
+                "\"FamilyId\" uuid NOT NULL, " +
+                "\"MemberId\" uuid NOT NULL, " +
+                "\"GoogleAccountEmail\" character varying(320) NOT NULL DEFAULT '', " +
+                "\"AccessToken\" character varying(4000) NOT NULL, " +
+                "\"RefreshToken\" character varying(4000) NOT NULL, " +
+                "\"AccessTokenExpiresAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"CalendarId\" character varying(256) NOT NULL DEFAULT 'primary', " +
+                "\"SyncToken\" character varying(1024) NULL, " +
+                "\"LastSyncAtUtc\" timestamp with time zone NULL, " +
+                "\"IsActive\" boolean NOT NULL DEFAULT true, " +
+                "\"CreatedAtUtc\" timestamp with time zone NOT NULL, " +
+                "\"UpdatedAtUtc\" timestamp with time zone NULL, " +
+                "\"IsDeleted\" boolean NOT NULL DEFAULT false, " +
+                "CONSTRAINT \"PK_GoogleCalendarConnections\" PRIMARY KEY (\"Id\"));" +
+                "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_GoogleCalendarConnections_MemberId\" ON familyos.\"GoogleCalendarConnections\" (\"MemberId\");" +
+                "CREATE INDEX IF NOT EXISTS \"IX_GoogleCalendarConnections_FamilyId_IsActive\" ON familyos.\"GoogleCalendarConnections\" (\"FamilyId\", \"IsActive\");" +
+                "ALTER TABLE familyos.\"CalendarEvents\" ADD COLUMN IF NOT EXISTS \"ExternalProvider\" character varying(40) NULL;" +
+                "ALTER TABLE familyos.\"CalendarEvents\" ADD COLUMN IF NOT EXISTS \"ExternalEventId\" character varying(256) NULL;" +
+                "ALTER TABLE familyos.\"CalendarEvents\" ADD COLUMN IF NOT EXISTS \"ExternalCalendarId\" character varying(256) NULL;");
+            logger.LogInformation("Google Calendar schema ensured");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not ensure Google Calendar schema (may already exist or non-Postgres)");
         }
     }
 
