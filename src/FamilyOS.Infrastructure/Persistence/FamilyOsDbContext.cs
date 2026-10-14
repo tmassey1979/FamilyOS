@@ -1,5 +1,6 @@
 using FamilyOS.Domain.Approvals;
 using FamilyOS.Domain.Calendar;
+using FamilyOS.Domain.Chat;
 using FamilyOS.Domain.Conditions;
 using FamilyOS.Domain.Execution;
 using FamilyOS.Domain.Family;
@@ -26,6 +27,8 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
     public DbSet<RecurrenceDefinition> RecurrenceDefinitions => Set<RecurrenceDefinition>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
     public DbSet<GoogleCalendarConnection> GoogleCalendarConnections => Set<GoogleCalendarConnection>();
+    public DbSet<ChatChannel> ChatChannels => Set<ChatChannel>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<Request> Requests => Set<Request>();
     public DbSet<RequestHistoryEntry> RequestHistory => Set<RequestHistoryEntry>();
     public DbSet<RequestQuestionInstance> RequestQuestions => Set<RequestQuestionInstance>();
@@ -147,6 +150,24 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
             e.Property(x => x.RefreshToken).HasMaxLength(4000).IsRequired();
             e.Property(x => x.CalendarId).HasMaxLength(256).IsRequired();
             e.Property(x => x.SyncToken).HasMaxLength(1024);
+            e.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<ChatChannel>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.FamilyId, x.Kind });
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            e.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<ChatMessage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ChannelId, x.SentAtUtc });
+            e.HasIndex(x => x.FamilyId);
+            e.Property(x => x.Body).HasMaxLength(4000).IsRequired();
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
