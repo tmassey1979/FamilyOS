@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.familyos.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Unlock Family OS with Face ID after you sign in."
+        "NSFaceIDUsageDescription": "Unlock Family OS with Face ID after you sign in.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -21,7 +22,8 @@
         "backgroundColor": "#0F172A"
       },
       "package": "com.familyos.app",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE"]
     },
     "plugins": [
       "expo-router",
@@ -30,6 +32,14 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow Family OS to use Face ID / fingerprint to unlock your session."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0F172A",
+          "sounds": []
         }
       ]
     ],
