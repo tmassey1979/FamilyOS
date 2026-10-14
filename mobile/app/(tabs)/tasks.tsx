@@ -26,6 +26,13 @@ function priorityTone(priority: string): 'default' | 'warning' | 'success' | 'da
 }
 
 const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'] as const;
+const FREQUENCIES = [
+  { key: 'None', label: 'Once' },
+  { key: 'Daily', label: 'Daily' },
+  { key: 'Weekly', label: 'Weekly' },
+  { key: 'BiWeekly', label: 'Biweekly' },
+  { key: 'Monthly', label: 'Monthly' },
+] as const;
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
@@ -39,6 +46,7 @@ export default function TasksScreen() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Chores');
   const [priority, setPriority] = useState<'Low' | 'Normal' | 'High' | 'Urgent'>('Normal');
+  const [frequency, setFrequency] = useState<(typeof FREQUENCIES)[number]['key']>('None');
   const [estMin, setEstMin] = useState('');
   const [assignTo, setAssignTo] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
@@ -101,15 +109,21 @@ export default function TasksScreen() {
     setCreating(true);
     try {
       const est = parseInt(estMin, 10);
-      await tasksApi.create({
+      const body: Parameters<typeof tasksApi.create>[0] = {
         title: title.trim(),
         category: category.trim() || undefined,
         assignToMemberId: assignTo,
         priority,
         estimatedDurationMinutes: Number.isFinite(est) && est > 0 ? est : undefined,
-      });
+      };
+      if (frequency !== 'None') {
+        body.frequency = frequency;
+        body.interval = 1;
+      }
+      await tasksApi.create(body);
       setTitle('');
       setPriority('Normal');
+      setFrequency('None');
       setEstMin('');
       setCreateOpen(false);
       await load();
@@ -235,6 +249,9 @@ export default function TasksScreen() {
               <Badge label={item.status} tone={statusTone(item.status)} />
               {item.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
               <Badge label={item.priority || 'Normal'} tone={priorityTone(item.priority || 'Normal')} />
+              {item.isRecurring || item.recurrenceDefinitionId ? (
+                <Badge label={item.recurrenceFrequency ? `↻ ${item.recurrenceFrequency}` : '↻ Recurring'} tone="warning" />
+              ) : null}
               {item.category ? <Badge label={item.category} /> : null}
               {item.assignedToName ? <Badge label={item.assignedToName} /> : null}
             </View>
@@ -285,6 +302,18 @@ export default function TasksScreen() {
               {PRIORITIES.map((p) => (
                 <Pressable key={p} style={[styles.chip, priority === p && styles.chipOn]} onPress={() => setPriority(p)}>
                   <Text style={styles.chipText}>{p}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={typography.caption}>Repeat</Text>
+            <View style={styles.memberRow}>
+              {FREQUENCIES.map((f) => (
+                <Pressable
+                  key={f.key}
+                  style={[styles.chip, frequency === f.key && styles.chipOn]}
+                  onPress={() => setFrequency(f.key)}
+                >
+                  <Text style={styles.chipText}>{f.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -425,7 +454,7 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    padding: spacing.lg, gap: spacing.md, maxHeight: '80%',
+    padding: spacing.lg, gap: spacing.md, maxHeight: '85%',
   },
   input: {
     borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm,
