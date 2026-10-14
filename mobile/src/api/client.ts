@@ -23,6 +23,10 @@ export function getAccessToken() {
   return accessToken;
 }
 
+export function getApiBaseUrl() {
+  return DEFAULT_BASE;
+}
+
 export function setDevUser(externalId: string | null) {
   devUser = externalId;
 }
@@ -136,7 +140,6 @@ export const meApi = {
     api<{ changed: number }>('/api/me/google-calendar/sync', { method: 'POST' }),
 };
 
-// TEMP: full APIs restored in next commit — this unblocks SEE_NEXT
 export type PulseDto = any;
 export type TaskDto = any;
 export type TaskHistoryDto = any;
