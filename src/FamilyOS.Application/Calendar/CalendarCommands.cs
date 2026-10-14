@@ -34,11 +34,16 @@ public class CalendarCommandHandlers :
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
+    private readonly IGoogleCalendarClient _google;
 
-    public CalendarCommandHandlers(IFamilyOsDbContext db, ICurrentUserService current)
+    public CalendarCommandHandlers(
+        IFamilyOsDbContext db,
+        ICurrentUserService current,
+        IGoogleCalendarClient google)
     {
         _db = db;
         _current = current;
+        _google = google;
     }
 
     public async Task<CalendarEventDto> Handle(CreateCalendarEventCommand cmd, CancellationToken ct)
@@ -56,10 +61,15 @@ public class CalendarCommandHandlers :
             cmd.AllDay,
             cmd.Location,
             cmd.LinkedTaskId,
-            cmd.LinkedRequestId);
+            cmd.LinkedRequestId,
+            cmd.Description);
 
         _db.CalendarEvents.Add(ev);
         await _db.SaveChangesAsync(ct);
+
+        // Best-effort push to the creator's Google Calendar when connected.
+        await GoogleCalendarSync.TryPushEventAsync(_db, _google, ev, ct);
+
         return ToDto(ev);
     }
 
@@ -78,6 +88,29 @@ public class CalendarCommandHandlers :
 
         ev.Update(cmd.Title, cmd.StartUtc, cmd.EndUtc, cmd.AllDay, cmd.Location);
         await _db.SaveChangesAsync(ct);
+
+        // Best-effort update on Google when linked
+        if (!string.IsNullOrWhiteSpace(ev.ExternalEventId)
+            && string.Equals(ev.ExternalProvider, GoogleCalendarSync.Provider, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var conn = await _db.GoogleCalendarConnections
+                    .FirstOrDefaultAsync(c => c.MemberId == ev.CreatedByMemberId && c.IsActive, ct);
+                if (conn is not null)
+                {
+                    await GoogleCalendarSync.EnsureValidAccessTokenAsync(_db, _google, conn, ct);
+                    await _google.UpdateEventAsync(
+                        conn.AccessToken,
+                        ev.ExternalCalendarId ?? conn.CalendarId,
+                        ev.ExternalEventId!,
+                        new GoogleEventInput(ev.Title, ev.StartUtc, ev.EndUtc, ev.AllDay, ev.Location, ev.Description),
+                        ct);
+                }
+            }
+            catch { /* best-effort */ }
+        }
+
         return ToDto(ev);
     }
 
@@ -93,6 +126,26 @@ public class CalendarCommandHandlers :
 
         ev.Cancel();
         await _db.SaveChangesAsync(ct);
+
+        if (!string.IsNullOrWhiteSpace(ev.ExternalEventId)
+            && string.Equals(ev.ExternalProvider, GoogleCalendarSync.Provider, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var conn = await _db.GoogleCalendarConnections
+                    .FirstOrDefaultAsync(c => c.MemberId == ev.CreatedByMemberId && c.IsActive, ct);
+                if (conn is not null)
+                {
+                    await GoogleCalendarSync.EnsureValidAccessTokenAsync(_db, _google, conn, ct);
+                    await _google.DeleteEventAsync(
+                        conn.AccessToken,
+                        ev.ExternalCalendarId ?? conn.CalendarId,
+                        ev.ExternalEventId!,
+                        ct);
+                }
+            }
+            catch { /* best-effort */ }
+        }
     }
 
     private static CalendarEventDto ToDto(CalendarEvent e) =>

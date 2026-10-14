@@ -23,6 +23,7 @@ public interface IFamilyOsDbContext
     DbSet<TaskTimeSegment> TaskTimeSegments { get; }
     DbSet<RecurrenceDefinition> RecurrenceDefinitions { get; }
     DbSet<CalendarEvent> CalendarEvents { get; }
+    DbSet<GoogleCalendarConnection> GoogleCalendarConnections { get; }
     DbSet<Request> Requests { get; }
     DbSet<RequestHistoryEntry> RequestHistory { get; }
     DbSet<RequestQuestionInstance> RequestQuestions { get; }
