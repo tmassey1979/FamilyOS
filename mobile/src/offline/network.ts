@@ -2,6 +2,7 @@
  * Network reachability for offline-tolerant mobile (#52).
  * Uses NetInfo when available; otherwise infers from fetch failures.
  */
+import NetInfo from '@react-native-community/netinfo';
 
 type NetListener = (online: boolean) => void;
 
@@ -46,17 +47,16 @@ export async function ensureStarted(): Promise<void> {
   if (started) return;
   started = true;
   try {
-    const NetInfo = await import('@react-native-community/netinfo');
-    const state = await NetInfo.default.fetch();
+    const state = await NetInfo.fetch();
     setOnline(state.isConnected !== false && state.isInternetReachable !== false);
-    NetInfo.default.addEventListener((s) => {
+    NetInfo.addEventListener((s) => {
       const next =
         s.isConnected !== false &&
         (s.isInternetReachable === null || s.isInternetReachable === true);
       setOnline(!!next);
     });
   } catch {
-    // No NetInfo — stay optimistic until a fetch fails
+    // NetInfo unavailable — stay optimistic until a fetch fails
     setOnline(true);
   }
 }
@@ -67,7 +67,6 @@ export function isNetworkError(err: unknown): boolean {
     const any = err as { name?: string; message?: string; status?: number };
     if (any.name === 'TypeError' && /network|fetch|failed/i.test(any.message ?? '')) return true;
     if (/network request failed/i.test(any.message ?? '')) return true;
-    // Abort / timeout style
     if (any.name === 'AbortError') return true;
   }
   return false;

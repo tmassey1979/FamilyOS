@@ -2,6 +2,7 @@
  * Lightweight key-value store for offline cache/queue.
  * Prefer AsyncStorage; fall back to in-memory if the native module is unavailable.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Store = {
   getItem: (key: string) => Promise<string | null>;
@@ -21,40 +22,31 @@ const memoryStore: Store = {
   },
 };
 
-let store: Store = memoryStore;
-let resolved = false;
-
-async function resolveStore(): Promise<Store> {
-  if (resolved) return store;
-  resolved = true;
+function resolveStore(): Store {
   try {
-    // Dynamic import so typecheck works even if types lag; Expo bundles the module.
-    const mod = await import('@react-native-async-storage/async-storage');
-    const AsyncStorage = mod.default;
     if (AsyncStorage?.getItem) {
-      store = {
+      return {
         getItem: (k) => AsyncStorage.getItem(k),
         setItem: (k, v) => AsyncStorage.setItem(k, v),
         removeItem: (k) => AsyncStorage.removeItem(k),
       };
     }
   } catch {
-    store = memoryStore;
+    /* fall through */
   }
-  return store;
+  return memoryStore;
 }
 
+const store = resolveStore();
+
 export async function kvGet(key: string): Promise<string | null> {
-  const s = await resolveStore();
-  return s.getItem(key);
+  return store.getItem(key);
 }
 
 export async function kvSet(key: string, value: string): Promise<void> {
-  const s = await resolveStore();
-  await s.setItem(key, value);
+  await store.setItem(key, value);
 }
 
 export async function kvRemove(key: string): Promise<void> {
-  const s = await resolveStore();
-  await s.removeItem(key);
+  await store.removeItem(key);
 }
