@@ -25,6 +25,7 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
     public DbSet<TaskTimeSegment> TaskTimeSegments => Set<TaskTimeSegment>();
     public DbSet<RecurrenceDefinition> RecurrenceDefinitions => Set<RecurrenceDefinition>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
+    public DbSet<GoogleCalendarConnection> GoogleCalendarConnections => Set<GoogleCalendarConnection>();
     public DbSet<Request> Requests => Set<Request>();
     public DbSet<RequestHistoryEntry> RequestHistory => Set<RequestHistoryEntry>();
     public DbSet<RequestQuestionInstance> RequestQuestions => Set<RequestQuestionInstance>();
@@ -128,7 +129,24 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
         {
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.FamilyId, x.StartUtc });
+            e.HasIndex(x => new { x.FamilyId, x.ExternalProvider, x.ExternalEventId });
             e.Property(x => x.Title).HasMaxLength(300).IsRequired();
+            e.Property(x => x.ExternalProvider).HasMaxLength(40);
+            e.Property(x => x.ExternalEventId).HasMaxLength(256);
+            e.Property(x => x.ExternalCalendarId).HasMaxLength(256);
+            e.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<GoogleCalendarConnection>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.MemberId).IsUnique();
+            e.HasIndex(x => new { x.FamilyId, x.IsActive });
+            e.Property(x => x.GoogleAccountEmail).HasMaxLength(320);
+            e.Property(x => x.AccessToken).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.RefreshToken).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.CalendarId).HasMaxLength(256).IsRequired();
+            e.Property(x => x.SyncToken).HasMaxLength(1024);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
