@@ -1,5 +1,6 @@
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Infrastructure.Chat;
+using FamilyOS.Infrastructure.Notifications;
 using FamilyOS.Infrastructure.Google;
 using FamilyOS.Infrastructure.Identity;
 using FamilyOS.Infrastructure.Persistence;
@@ -27,6 +28,9 @@ public static class DependencyInjection
 
         // Default no-op; API host replaces with SignalRFamilyChatNotifier after AddSignalR.
         services.AddSingleton<IFamilyChatNotifier, NullFamilyChatNotifier>();
+
+        services.AddHttpClient("ExpoPush");
+        services.AddScoped<IPushNotificationSender, ExpoPushNotificationSender>();
 
         services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
         services.AddHostedService<GoogleCalendarSyncWorker>();
