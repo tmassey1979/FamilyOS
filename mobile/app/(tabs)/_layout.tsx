@@ -47,6 +47,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ focused }) => <TabIcon label="💬" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="calendar"
         options={{
           title: 'Calendar',

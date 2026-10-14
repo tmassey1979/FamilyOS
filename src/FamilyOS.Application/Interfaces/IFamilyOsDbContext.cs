@@ -1,5 +1,6 @@
 using FamilyOS.Domain.Approvals;
 using FamilyOS.Domain.Calendar;
+using FamilyOS.Domain.Chat;
 using FamilyOS.Domain.Conditions;
 using FamilyOS.Domain.Execution;
 using FamilyOS.Domain.Family;
@@ -24,6 +25,8 @@ public interface IFamilyOsDbContext
     DbSet<RecurrenceDefinition> RecurrenceDefinitions { get; }
     DbSet<CalendarEvent> CalendarEvents { get; }
     DbSet<GoogleCalendarConnection> GoogleCalendarConnections { get; }
+    DbSet<ChatChannel> ChatChannels { get; }
+    DbSet<ChatMessage> ChatMessages { get; }
     DbSet<Request> Requests { get; }
     DbSet<RequestHistoryEntry> RequestHistory { get; }
     DbSet<RequestQuestionInstance> RequestQuestions { get; }

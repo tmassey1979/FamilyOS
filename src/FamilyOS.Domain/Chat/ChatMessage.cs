@@ -9,7 +9,6 @@ public class ChatMessage : Entity
     public Guid SenderMemberId { get; private set; }
     public string Body { get; private set; } = string.Empty;
     public DateTime SentAtUtc { get; private set; } = DateTime.UtcNow;
-    public bool IsDeleted { get; private set; }
 
     private ChatMessage() { }
 
@@ -29,11 +28,5 @@ public class ChatMessage : Entity
             Body = trimmed,
             SentAtUtc = DateTime.UtcNow
         };
-    }
-
-    public void SoftDelete()
-    {
-        IsDeleted = true;
-        MarkUpdated();
     }
 }
