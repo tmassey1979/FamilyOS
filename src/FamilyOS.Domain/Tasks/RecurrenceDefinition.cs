@@ -84,7 +84,7 @@ public class RecurrenceDefinition : Entity
         if (DefaultAssigneeMemberId.HasValue)
             task.Assign(DefaultAssigneeMemberId.Value, createdByMemberId);
 
-        AdvanceNextOccurrence(from: when.Date);
+        AdvanceSchedule(from: when.Date);
         return task;
     }
 
@@ -103,7 +103,6 @@ public class RecurrenceDefinition : Entity
 
         if (frequency is RecurrenceFrequency.Weekly or RecurrenceFrequency.BiWeekly && dayOfWeek.HasValue)
         {
-            // Snap forward to the preferred weekday if we landed off-day (e.g. first advance).
             var guard = 0;
             while (next.DayOfWeek != dayOfWeek.Value && guard++ < 7)
                 next = next.AddDays(1);
@@ -112,7 +111,8 @@ public class RecurrenceDefinition : Entity
         return next.Date;
     }
 
-    private void AdvanceNextOccurrence(DateTime? from = null)
+    /// <summary>Advance NextOccurrenceUtc without creating a task (e.g. after manually creating the first instance).</summary>
+    public void AdvanceSchedule(DateTime? from = null)
     {
         var cursor = from ?? NextOccurrenceUtc?.Date ?? DateTime.UtcNow.Date;
         NextOccurrenceUtc = ComputeNext(cursor, Frequency, Interval, DayOfWeek);
