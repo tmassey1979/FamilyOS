@@ -24,6 +24,18 @@ public class TasksController : ControllerBase
     public async Task<ActionResult<List<TaskDto>>> GetFamily([FromQuery] FamilyTaskStatus? status, CancellationToken ct)
         => Ok(await _mediator.Send(new GetFamilyTasksQuery(status), ct));
 
+    [HttpGet("recurrences")]
+    public async Task<ActionResult<List<RecurrenceDto>>> GetRecurrences(CancellationToken ct)
+        => Ok(await _mediator.Send(new GetRecurrencesQuery(), ct));
+
+    [HttpPost("recurrences")]
+    public async Task<ActionResult<RecurrenceDto>> CreateRecurrence([FromBody] CreateRecurrenceCommand cmd, CancellationToken ct)
+        => Ok(await _mediator.Send(cmd, ct));
+
+    [HttpPost("recurrences/{id:guid}/deactivate")]
+    public async Task<ActionResult<RecurrenceDto>> DeactivateRecurrence(Guid id, CancellationToken ct)
+        => Ok(await _mediator.Send(new DeactivateRecurrenceCommand(id), ct));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<TaskDto>> Get(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new GetTaskQuery(id), ct));
