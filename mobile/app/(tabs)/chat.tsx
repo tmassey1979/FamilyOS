@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { meApi } from '../../src/api/client';
 import { chatApi, type ChatMessageDto } from '../../src/api/chatApi';
+import { isChatHubConnected, startChatHub, stopChatHub } from '../../src/api/chatHub';
 import { colors, spacing, typography } from '../../src/theme';
 
-/** Family chat — shared household channel (poll refresh; SignalR ready on API). */
+/** Family chat — SignalR when JWT available; REST poll fallback. */
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [text, setText] = useState('');
@@ -22,6 +23,18 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [live, setLive] = useState(false);
+  const seen = useRef<Set<string>>(new Set());
+  const liveRef = useRef(false);
+
+  const mergeMessage = useCallback((msg: ChatMessageDto) => {
+    if (seen.current.has(msg.id)) return;
+    seen.current.add(msg.id);
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -30,6 +43,7 @@ export default function ChatScreen() {
         chatApi.messages(undefined, 80),
         meApi.get().catch(() => null),
       ]);
+      seen.current = new Set(msgs.map((m) => m.id));
       setMessages(msgs);
       setMemberId(me?.memberId ?? null);
     } catch (e: unknown) {
@@ -41,9 +55,36 @@ export default function ChatScreen() {
 
   useEffect(() => {
     void load();
-    const id = setInterval(() => void load(), 8000);
-    return () => clearInterval(id);
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await startChatHub((msg) => {
+        if (!cancelled) mergeMessage(msg);
+      });
+      const connected = ok && isChatHubConnected();
+      if (!cancelled) {
+        liveRef.current = connected;
+        setLive(connected);
+      }
+    })();
+
+    const id = setInterval(() => {
+      void load();
+      const c = isChatHubConnected();
+      if (c !== liveRef.current) {
+        liveRef.current = c;
+        setLive(c);
+      }
+    }, 8000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      void stopChatHub();
+    };
+  }, [load, mergeMessage]);
 
   const send = async () => {
     const body = text.trim();
@@ -51,7 +92,7 @@ export default function ChatScreen() {
     setSending(true);
     try {
       const msg = await chatApi.send(body);
-      setMessages((prev) => [...prev.filter((m) => m.id !== msg.id), msg]);
+      mergeMessage(msg);
       setText('');
       setError(null);
     } catch (e: unknown) {
@@ -68,6 +109,9 @@ export default function ChatScreen() {
       keyboardVerticalOffset={88}
     >
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.statusRow}>
+        <Text style={styles.status}>{live ? '● Live' : '○ Polling'}</Text>
+      </View>
       {loading && messages.length === 0 ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
       ) : (
@@ -118,6 +162,8 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  statusRow: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },
+  status: { ...typography.caption, opacity: 0.6, fontSize: 11 },
   list: { padding: spacing.md, paddingBottom: spacing.lg, gap: spacing.sm },
   bubble: {
     maxWidth: '82%',
