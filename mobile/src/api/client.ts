@@ -2,7 +2,18 @@
  * Typed API client for Family OS.
  * - Production: JWT via setAccessToken (Keycloak PKCE)
  * - Optional dev: setDevUser('terry.owner') or EXPO_PUBLIC_DEV_USER → X-Dev-User
+ * - Offline (#52): GET serves last-known cache on network failure; mutations enqueue
  */
+
+import {
+  cacheGet,
+  cacheSet,
+  enqueueMutation,
+  ensureStarted,
+  isNetworkError,
+  markOffline,
+  markOnline,
+} from '../offline';
 
 const DEFAULT_BASE =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -10,7 +21,17 @@ const DEFAULT_BASE =
     ? 'http://localhost:5080'
     : 'https://api.18.226.226.118.sslip.io');
 
-export type ApiError = { error: string; status: number };
+export type ApiError = { error: string; status: number; fromCache?: boolean; queued?: boolean };
+
+export class OfflineQueuedError extends Error {
+  readonly queued = true;
+  readonly queueId: string;
+  constructor(queueId: string) {
+    super('Saved offline — will sync when you are back online');
+    this.name = 'OfflineQueuedError';
+    this.queueId = queueId;
+  }
+}
 
 let accessToken: string | null = null;
 let devUser: string | null = process.env.EXPO_PUBLIC_DEV_USER ?? null;
@@ -35,10 +56,18 @@ export function getDevUser() {
   return devUser;
 }
 
+function isMutation(method: string) {
+  const m = method.toUpperCase();
+  return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  void ensureStarted();
+
+  const method = (options.method ?? 'GET').toUpperCase();
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -50,25 +79,67 @@ export async function api<T>(
     headers['X-Dev-User'] = devUser;
   }
 
-  const res = await fetch(`${DEFAULT_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const res = await fetch(`${DEFAULT_BASE}${path}`, {
+      ...options,
+      method,
+      headers,
+    });
 
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      message = body.detail ?? body.error ?? body.title ?? message;
-    } catch {
-      /* ignore */
+    markOnline();
+
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const body = await res.json();
+        message = body.detail ?? body.error ?? body.title ?? message;
+      } catch {
+        /* ignore */
+      }
+      const err: ApiError = { error: message, status: res.status };
+      throw err;
     }
-    const err: ApiError = { error: message, status: res.status };
+
+    if (res.status === 204) {
+      return undefined as T;
+    }
+
+    const data = (await res.json()) as T;
+
+    // Cache successful GETs for offline read
+    if (method === 'GET') {
+      void cacheSet(path, data);
+    }
+
+    return data;
+  } catch (e) {
+    const network = isNetworkError(e);
+    if (network) markOffline();
+
+    if (network && method === 'GET') {
+      const cached = await cacheGet<T>(path);
+      if (cached) {
+        return cached.data;
+      }
+    }
+
+    if (network && isMutation(method)) {
+      const item = await enqueueMutation({
+        path,
+        method,
+        body: typeof options.body === 'string' ? options.body : null,
+      });
+      throw new OfflineQueuedError(item.id);
+    }
+
+    if (e && typeof e === 'object' && 'status' in e) throw e;
+
+    const err: ApiError = {
+      error: e instanceof Error ? e.message : 'Network error',
+      status: 0,
+    };
     throw err;
   }
-
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
 }
 
 export type MeDto = {
