@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { colors } from '../../src/theme';
+import { OfflineBanner } from '../../src/components/OfflineBanner';
 
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   return (
@@ -12,68 +13,71 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
 
 export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          minHeight: 56,
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => <TabIcon label="●" focused={focused} />,
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <OfflineBanner />
+      <Tabs
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.bg },
+          headerTintColor: colors.text,
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            minHeight: 56,
+          },
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
         }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          title: 'Tasks',
-          tabBarIcon: ({ focused }) => <TabIcon label="✓" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="requests"
-        options={{
-          title: 'Requests',
-          tabBarIcon: ({ focused }) => <TabIcon label="?" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: 'Chat',
-          tabBarIcon: ({ focused }) => <TabIcon label="💬" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: 'Calendar',
-          tabBarIcon: ({ focused }) => <TabIcon label="▦" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="family"
-        options={{
-          title: 'Family',
-          tabBarIcon: ({ focused }) => <TabIcon label="◎" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ focused }) => <TabIcon label="⚙" focused={focused} />,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Home',
+            tabBarIcon: ({ focused }) => <TabIcon label="●" focused={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="tasks"
+          options={{
+            title: 'Tasks',
+            tabBarIcon: ({ focused }) => <TabIcon label="✓" focused={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="requests"
+          options={{
+            title: 'Requests',
+            tabBarIcon: ({ focused }) => <TabIcon label="?" focused={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="chat"
+          options={{
+            title: 'Chat',
+            tabBarIcon: ({ focused }) => <TabIcon label="💬" focused={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="calendar"
+          options={{
+            title: 'Calendar',
+            tabBarIcon: ({ focused }) => <TabIcon label="▦" focused={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="family"
+          options={{
+            title: 'Family',
+            tabBarIcon: ({ focused }) => <TabIcon label="◎" focused={focused} />,
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+            tabBarIcon: ({ focused }) => <TabIcon label="⚙" focused={focused} />,
+          }}
+        />
+      </Tabs>
+    </View>
   );
 }
