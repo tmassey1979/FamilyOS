@@ -44,12 +44,13 @@ public class GoogleCalendarHandlers :
         _config = config;
     }
 
-    public Task<string> Handle(GetGoogleCalendarAuthUrlQuery query, CancellationToken ct)
+    public async Task<string> Handle(GetGoogleCalendarAuthUrlQuery query, CancellationToken ct)
     {
         EnsureConfigured();
-        return Task.FromResult(_current.IsAuthenticated && _current.MemberId.HasValue && _current.FamilyId.HasValue
-            ? BuildAuthUrlFor(_current.MemberId.Value, _current.FamilyId.Value)
-            : throw new ForbiddenException("Not authenticated."));
+        await _current.EnsureLoadedAsync(ct);
+        if (!_current.IsAuthenticated || !_current.MemberId.HasValue || !_current.FamilyId.HasValue)
+            throw new ForbiddenException("Not authenticated.");
+        return BuildAuthUrlFor(_current.MemberId.Value, _current.FamilyId.Value);
     }
 
     public async Task<GoogleCalendarStatusDto> Handle(GetGoogleCalendarStatusQuery query, CancellationToken ct)
@@ -94,11 +95,6 @@ public class GoogleCalendarHandlers :
         else
         {
             existing.UpdateTokens(tokens.AccessToken, expires, tokens.RefreshToken);
-            if (!string.IsNullOrWhiteSpace(email))
-            {
-                // email is private set — reconnect path via Disconnect + Create is cleaner,
-                // but UpdateTokens already re-activates. Store email via recreate if empty.
-            }
         }
 
         await _db.SaveChangesAsync(ct);
@@ -184,7 +180,6 @@ public static class GoogleCalendarSync
         }
         catch (InvalidOperationException) when (conn.SyncToken is not null)
         {
-            // Sync token expired — full window resync
             conn.MarkSynced(null);
             await db.SaveChangesAsync(ct);
             list = await google.ListEventsAsync(
