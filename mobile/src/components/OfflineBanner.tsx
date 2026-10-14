@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import {
   ensureStarted,
   flushMutationQueue,
-  isOnline,
   subscribeOnline,
   subscribeQueueCount,
   type QueuedMutation,
@@ -28,8 +27,7 @@ async function replayItem(item: QueuedMutation): Promise<void> {
     body: item.body ?? undefined,
   });
   if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    throw err;
+    throw new Error(`HTTP ${res.status}`);
   }
 }
 
@@ -118,6 +116,3 @@ const styles = StyleSheet.create({
   text: { ...typography.caption, color: colors.text, flex: 1 },
   action: { ...typography.caption, color: colors.primary, fontWeight: '700' },
 });
-
-// silence unused isOnline import if tree-shaken oddly
-void isOnline;
