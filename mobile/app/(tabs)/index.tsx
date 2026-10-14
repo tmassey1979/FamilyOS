@@ -80,19 +80,13 @@ export default function HomeScreen() {
       <Text style={typography.title}>{pulse?.greeting ?? 'Family OS'}</Text>
       {pulse?.role ? (
         <View style={styles.row}>
-          <Badge label={pulse.role} />
+          <Badge label={pulse.role} tone={pulse.role === 'Owner' ? 'success' : 'default'} />
+          {pulse.roleHint ? <Text style={typography.caption}>{pulse.roleHint}</Text> : null}
         </View>
       ) : null}
-      {pulse?.roleHint ? (
-        <Text style={[typography.caption, { marginBottom: spacing.md }]}>{pulse.roleHint}</Text>
-      ) : null}
-      {error ? (
-        <Text style={styles.hint} accessibilityLiveRegion="polite">
-          Offline demo mode · {error}
-        </Text>
-      ) : null}
+      {error ? <Text style={styles.hint}>{error} · showing demo shell</Text> : null}
 
-      <SectionTitle>Your next action</SectionTitle>
+      <SectionTitle>Next action</SectionTitle>
       {pulse?.nextAction ? (
         <Card style={styles.cardGap}>
           <Text style={typography.heading}>{pulse.nextAction.title}</Text>
@@ -111,7 +105,7 @@ export default function HomeScreen() {
 
       <SectionTitle>Needs your attention</SectionTitle>
       {pulse?.needsAttention?.length ? (
-        pulse.needsAttention.map((item) => (
+        pulse.needsAttention.map((item: any) => (
           <Card key={`att-${item.entityId}`} style={styles.cardGap}>
             <Text style={typography.heading}>{item.title}</Text>
             <Text style={typography.caption}>{item.reason}</Text>
@@ -127,7 +121,7 @@ export default function HomeScreen() {
 
       <SectionTitle>Waiting / blockers</SectionTitle>
       {pulse?.waitingBlockers?.length ? (
-        pulse.waitingBlockers.map((item) => (
+        pulse.waitingBlockers.map((item: any) => (
           <Card key={`blk-${item.entityId}-${item.kind}`} style={styles.cardGap}>
             <Text style={typography.heading}>{item.title}</Text>
             <Text style={typography.caption}>{item.reason}</Text>
@@ -144,7 +138,7 @@ export default function HomeScreen() {
       {(pulse?.comingUp?.length ?? 0) > 0 ? (
         <>
           <SectionTitle>Coming up</SectionTitle>
-          {pulse!.comingUp.map((item) => (
+          {pulse!.comingUp.map((item: any) => (
             <Card key={`up-${item.entityId}`} style={styles.cardGap}>
               <Text style={typography.heading}>{item.title}</Text>
               <Text style={typography.caption}>
