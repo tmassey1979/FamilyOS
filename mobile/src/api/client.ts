@@ -140,21 +140,216 @@ export const meApi = {
     api<{ changed: number }>('/api/me/google-calendar/sync', { method: 'POST' }),
 };
 
-export type PulseDto = any;
-export type TaskDto = any;
-export type TaskHistoryDto = any;
-export type DeclineReasonDto = any;
-export type CalendarEventDto = any;
-export type ConditionDto = any;
-export type RequestDto = any;
-export type RequestTypeDto = any;
-export type PolicyEvaluationDto = any;
-export type RequestHistoryDto = any;
-export type ExecutionPlanDto = any;
-export type ProductDto = any;
-export type ProcurementItemDto = any;
-export type CartDto = any;
-export type NotificationDto = any;
+export type PulseAttentionItem = {
+  kind: string;
+  entityId: string;
+  title: string;
+  reason: string;
+  actionLabel: string;
+};
+
+export type PulseDto = {
+  greeting: string;
+  role?: string;
+  roleHint?: string;
+  nextAction?: {
+    kind: string;
+    entityId: string;
+    title: string;
+    subtitle?: string;
+    primaryAction: string;
+    dueLabel?: string;
+  };
+  needsAttention: PulseAttentionItem[];
+  waitingBlockers?: PulseAttentionItem[];
+  comingUp: Array<{
+    kind: string;
+    entityId: string;
+    title: string;
+    whenUtc: string;
+    location?: string;
+  }>;
+  household: {
+    requestsAwaitingApproval: number;
+    tasksDueToday: number;
+    tasksNeedingAcceptance: number;
+    nextShoppingTrip?: string;
+  };
+  procurement?: {
+    approvedItems: number;
+    readyForStore: number;
+    primaryStore?: string;
+  };
+};
+
+export type TaskDto = {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  assignedToMemberId?: string;
+  assignedToName?: string;
+  dueDate?: string;
+  estimatedDurationMinutes?: number;
+  actualDurationMinutes?: number;
+  category?: string;
+  calendarBacked?: boolean;
+  createdAtUtc?: string;
+  isOverdue?: boolean;
+  plannedStartTime?: string;
+  plannedEndTime?: string;
+  varianceMinutes?: number;
+};
+
+export type TaskHistoryDto = {
+  id: string;
+  status: string;
+  actorMemberId: string;
+  detail: string;
+  timestampUtc: string;
+};
+
+export type DeclineReasonDto = {
+  id: string;
+  text: string;
+  sortOrder: number;
+  isEnabled: boolean;
+};
+
+export type CalendarEventDto = {
+  id: string;
+  title: string;
+  description?: string;
+  startUtc: string;
+  endUtc?: string;
+  allDay: boolean;
+  location?: string;
+  linkedTaskId?: string;
+  linkedRequestId?: string;
+};
+
+export type ConditionDto = {
+  id: string;
+  requestId?: string | null;
+  taskId?: string | null;
+  name: string;
+  description?: string | null;
+  type: string;
+  status: string;
+  logicGroup?: string;
+  groupOrder?: number;
+  deadlineUtc?: string | null;
+};
+
+export type PendingQuestionDto = {
+  id: string;
+  questionText: string;
+  isAnswered: boolean;
+  answer?: string | null;
+};
+
+export type RequestDto = {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  summary?: string;
+  amount?: number;
+  neededByUtc?: string;
+  requesterMemberId: string;
+  requesterName: string;
+  currentApproverMemberId?: string;
+  denialReason?: string;
+  createdAtUtc: string;
+  answers?: Record<string, unknown>;
+  executionPlanId?: string | null;
+  pendingQuestions?: PendingQuestionDto[];
+};
+
+export type RequestTypeDto = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  questions: Array<{ key: string; prompt: string; required?: boolean }>;
+};
+
+export type PolicyEvaluationDto = {
+  isAllowed: boolean;
+  requiresOwner?: boolean;
+  autoApproved?: boolean;
+  explanation?: string;
+};
+
+export type RequestHistoryDto = {
+  id: string;
+  status: string;
+  actorMemberId: string;
+  detail: string;
+  timestampUtc: string;
+};
+
+export type ExecutionItemDto = {
+  id: string;
+  type: string;
+  title: string;
+  assigneeMemberId?: string | null;
+  isSelected: boolean;
+  resultingEntityId?: string | null;
+};
+
+export type ExecutionPlanDto = {
+  id: string;
+  requestId: string;
+  status: string;
+  items: ExecutionItemDto[];
+};
+
+export type ProductDto = {
+  id: string;
+  name: string;
+  brand?: string;
+  size?: string;
+  category?: string;
+  typicalPrice?: number;
+  purchaseCount?: number;
+  lastPurchasedAtUtc?: string;
+};
+
+export type ProcurementItemDto = {
+  id: string;
+  name: string;
+  brand?: string;
+  size?: string;
+  category?: string;
+  quantity?: number;
+  estimatedPrice?: number;
+  actualPrice?: number;
+  preferredStore?: string;
+  status: string;
+  createdAtUtc?: string;
+  requestId?: string | null;
+};
+
+export type CartDto = {
+  id: string;
+  storeName: string;
+  items: ProcurementItemDto[];
+  isActive: boolean;
+};
+
+export type NotificationDto = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  relatedEntityId?: string;
+  relatedEntityType?: string;
+  isRead: boolean;
+  readAtUtc?: string;
+  createdAtUtc: string;
+};
 
 export const pulseApi = { get: () => api<PulseDto>('/api/pulse') };
 export const tasksApi = {
