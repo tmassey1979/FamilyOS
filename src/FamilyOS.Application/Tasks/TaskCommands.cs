@@ -78,11 +78,32 @@ public class TaskCommandHandlers :
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
+    private readonly IPushNotificationSender _push;
 
-    public TaskCommandHandlers(IFamilyOsDbContext db, ICurrentUserService current)
+    public TaskCommandHandlers(IFamilyOsDbContext db, ICurrentUserService current, IPushNotificationSender push)
     {
         _db = db;
         _current = current;
+        _push = push;
+    }
+
+    private async Task TryPushAsync(
+        Guid memberId, string title, string body,
+        Guid? relatedEntityId, string? relatedEntityType, CancellationToken ct)
+    {
+        try
+        {
+            var data = new Dictionary<string, string>();
+            if (relatedEntityId.HasValue)
+                data["relatedEntityId"] = relatedEntityId.Value.ToString();
+            if (!string.IsNullOrWhiteSpace(relatedEntityType))
+                data["relatedEntityType"] = relatedEntityType!;
+            await _push.SendToMemberAsync(memberId, title, body, data, ct);
+        }
+        catch
+        {
+            /* never fail the API on push */
+        }
     }
 
     public async Task<TaskDto> Handle(CreateTaskCommand cmd, CancellationToken ct)
@@ -116,6 +137,8 @@ public class TaskCommandHandlers :
 
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync(ct);
+        if (cmd.AssignToMemberId.HasValue && cmd.AssignToMemberId.Value != _current.MemberId)
+            await TryPushAsync(cmd.AssignToMemberId.Value, $"Assigned: {task.Title}", "You have a new task to accept.", task.Id, "Task", ct);
         return await ToDto(task, ct);
     }
 
@@ -127,19 +150,25 @@ public class TaskCommandHandlers :
         await EnsureMemberInFamily(cmd.AssignToMemberId, ct);
         task.Assign(cmd.AssignToMemberId, _current.MemberId!.Value);
 
+        string? asTitle = null;
+        string? asBody = null;
         if (cmd.AssignToMemberId != _current.MemberId)
         {
+            asTitle = $"Assigned: {task.Title}";
+            asBody = "You have a new task to accept.";
             _db.Notifications.Add(Notification.Create(
                 _current.FamilyId!.Value,
                 cmd.AssignToMemberId,
                 NotificationType.TaskAssigned,
-                $"Assigned: {task.Title}",
-                "You have a new task to accept.",
+                asTitle,
+                asBody,
                 task.Id,
                 "Task"));
         }
 
         await _db.SaveChangesAsync(ct);
+        if (asTitle is not null && asBody is not null)
+            await TryPushAsync(cmd.AssignToMemberId, asTitle, asBody, task.Id, "Task", ct);
         return await ToDto(task, ct);
     }
 
@@ -158,20 +187,25 @@ public class TaskCommandHandlers :
         var task = await GetTaskForFamily(cmd.TaskId, ct);
         task.Decline(_current.MemberId!.Value, cmd.ReasonId, cmd.Note);
 
+        string? dlTitle = null;
+        string? dlBody = null;
         if (task.CreatedByMemberId != _current.MemberId)
         {
-            var note = string.IsNullOrWhiteSpace(cmd.Note) ? "Task was declined." : cmd.Note;
+            dlTitle = $"Declined: {task.Title}";
+            dlBody = string.IsNullOrWhiteSpace(cmd.Note) ? "Task was declined." : cmd.Note;
             _db.Notifications.Add(Notification.Create(
                 _current.FamilyId!.Value,
                 task.CreatedByMemberId,
                 NotificationType.TaskDeclined,
-                $"Declined: {task.Title}",
-                note,
+                dlTitle,
+                dlBody,
                 task.Id,
                 "Task"));
         }
 
         await _db.SaveChangesAsync(ct);
+        if (dlTitle is not null && dlBody is not null)
+            await TryPushAsync(task.CreatedByMemberId, dlTitle, dlBody, task.Id, "Task", ct);
         return await ToDto(task, ct);
     }
 
@@ -261,19 +295,25 @@ public class TaskCommandHandlers :
         await EnsureMemberInFamily(cmd.NewAssigneeMemberId, ct);
         task.Reassign(cmd.NewAssigneeMemberId, _current.MemberId!.Value);
 
+        string? raTitle = null;
+        string? raBody = null;
         if (cmd.NewAssigneeMemberId != _current.MemberId)
         {
+            raTitle = $"Reassigned: {task.Title}";
+            raBody = "A task was reassigned to you.";
             _db.Notifications.Add(Notification.Create(
                 _current.FamilyId!.Value,
                 cmd.NewAssigneeMemberId,
                 NotificationType.TaskReassigned,
-                $"Reassigned: {task.Title}",
-                "A task was reassigned to you.",
+                raTitle,
+                raBody,
                 task.Id,
                 "Task"));
         }
 
         await _db.SaveChangesAsync(ct);
+        if (raTitle is not null && raBody is not null)
+            await TryPushAsync(cmd.NewAssigneeMemberId, raTitle, raBody, task.Id, "Task", ct);
         return await ToDto(task, ct);
     }
 
