@@ -15,6 +15,7 @@ public sealed class NotificationPushInterceptor : SaveChangesInterceptor
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<NotificationPushInterceptor> _logger;
+    private List<Notification>? _pending;
 
     public NotificationPushInterceptor(
         IServiceScopeFactory scopeFactory,
@@ -23,22 +24,6 @@ public sealed class NotificationPushInterceptor : SaveChangesInterceptor
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
-
-    public override async ValueTask<int> SavedChangesAsync(
-        SaveChangesCompletedEventData eventData,
-        int result,
-        CancellationToken cancellationToken = default)
-    {
-        if (eventData.Context is null || result <= 0)
-            return await base.SavedChangesAsync(eventData, result, cancellationToken);
-
-        // Entries already saved; use ChangeTracker for entities that were Added this round.
-        // After save they are Unchanged — capture from Entries that still have Entity type Notification.
-        // Safer: collect before save via SavingChanges.
-        return await base.SavedChangesAsync(eventData, result, cancellationToken);
-    }
-
-    private List<Notification>? _pending;
 
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
@@ -68,8 +53,15 @@ public sealed class NotificationPushInterceptor : SaveChangesInterceptor
 
     public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
     {
-        // fire-and-forget sync path not used in API
-        _ = PushPendingAsync(CancellationToken.None);
+        // Sync path rarely used; still attempt push without blocking forever
+        try
+        {
+            PushPendingAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Notification push interceptor (sync) failed");
+        }
         return base.SavedChanges(eventData, result);
     }
 
