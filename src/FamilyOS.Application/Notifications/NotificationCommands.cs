@@ -37,11 +37,13 @@ public class NotificationHandlers :
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
+    private readonly IPushNotificationSender _push;
 
-    public NotificationHandlers(IFamilyOsDbContext db, ICurrentUserService current)
+    public NotificationHandlers(IFamilyOsDbContext db, ICurrentUserService current, IPushNotificationSender push)
     {
         _db = db;
         _current = current;
+        _push = push;
     }
 
     public async Task<List<NotificationDto>> Handle(GetMyNotificationsQuery query, CancellationToken ct)
@@ -116,6 +118,23 @@ public class NotificationHandlers :
 
         _db.Notifications.Add(n);
         await _db.SaveChangesAsync(ct);
+
+        // Best-effort Expo push (no-op for local-* tokens)
+        var data = new Dictionary<string, string>();
+        if (cmd.RelatedEntityId.HasValue)
+            data["relatedEntityId"] = cmd.RelatedEntityId.Value.ToString();
+        if (!string.IsNullOrWhiteSpace(cmd.RelatedEntityType))
+            data["relatedEntityType"] = cmd.RelatedEntityType!;
+        data["notificationId"] = n.Id.ToString();
+        try
+        {
+            await _push.SendToMemberAsync(cmd.RecipientMemberId, cmd.Title, cmd.Body, data, ct);
+        }
+        catch
+        {
+            /* never fail the API on push */
+        }
+
         return ToDto(n);
     }
 
