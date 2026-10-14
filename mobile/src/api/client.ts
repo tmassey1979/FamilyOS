@@ -106,7 +106,6 @@ export async function api<T>(
 
     const data = (await res.json()) as T;
 
-    // Cache successful GETs for offline read
     if (method === 'GET') {
       void cacheSet(path, data);
     }
@@ -166,7 +165,6 @@ export type DeviceRegistrationDto = {
   isActive: boolean;
 };
 
-/** Per-member Google Calendar OAuth status (#32). */
 export type GoogleCalendarStatusDto = {
   connected: boolean;
   email?: string | null;
@@ -271,6 +269,9 @@ export type TaskDto = {
   plannedStartTime?: string;
   plannedEndTime?: string;
   varianceMinutes?: number;
+  recurrenceDefinitionId?: string | null;
+  isRecurring?: boolean;
+  recurrenceFrequency?: string | null;
 };
 
 export type TaskHistoryDto = {
@@ -279,6 +280,20 @@ export type TaskHistoryDto = {
   actorMemberId: string;
   detail: string;
   timestampUtc: string;
+};
+
+export type RecurrenceDto = {
+  id: string;
+  title: string;
+  description?: string | null;
+  frequency: string;
+  interval: number;
+  dayOfWeek?: number | null;
+  defaultAssigneeMemberId?: string | null;
+  declinePolicy: string;
+  isActive: boolean;
+  nextOccurrenceUtc?: string | null;
+  category?: string | null;
 };
 
 export type DeclineReasonDto = {
@@ -428,40 +443,72 @@ export const tasksApi = {
   family: (status?: string) => api<TaskDto[]>(`/api/tasks${status ? `?status=${status}` : ''}`),
   get: (id: string) => api<TaskDto>(`/api/tasks/${id}`),
   history: (id: string) => api<TaskHistoryDto[]>(`/api/tasks/${id}/history`),
-  create: (body: any) => api<TaskDto>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: {
+    title: string;
+    description?: string;
+    assignToMemberId?: string;
+    priority?: string;
+    dueDate?: string;
+    category?: string;
+    calendarBacked?: boolean;
+    estimatedDurationMinutes?: number;
+    frequency?: string;
+    interval?: number;
+    dayOfWeek?: number;
+  }) => api<TaskDto>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
+  recurrences: () => api<RecurrenceDto[]>('/api/tasks/recurrences'),
+  createRecurrence: (body: {
+    title: string;
+    frequency: string;
+    interval?: number;
+    dayOfWeek?: number;
+    defaultAssigneeMemberId?: string;
+    category?: string;
+    description?: string;
+    generateFirstInstance?: boolean;
+  }) => api<RecurrenceDto>('/api/tasks/recurrences', { method: 'POST', body: JSON.stringify(body) }),
+  deactivateRecurrence: (id: string) =>
+    api<RecurrenceDto>(`/api/tasks/recurrences/${id}/deactivate`, { method: 'POST' }),
   assign: (id: string, assignToMemberId: string) => api<TaskDto>(`/api/tasks/${id}/assign`, { method: 'POST', body: JSON.stringify({ assignToMemberId }) }),
   accept: (id: string) => api<TaskDto>(`/api/tasks/${id}/accept`, { method: 'POST' }),
   start: (id: string) => api<TaskDto>(`/api/tasks/${id}/start`, { method: 'POST' }),
   pause: (id: string) => api<TaskDto>(`/api/tasks/${id}/pause`, { method: 'POST' }),
   resume: (id: string) => api<TaskDto>(`/api/tasks/${id}/resume`, { method: 'POST' }),
   complete: (id: string) => api<TaskDto>(`/api/tasks/${id}/complete`, { method: 'POST' }),
-  decline: (id: string, body?: any) => api<TaskDto>(`/api/tasks/${id}/decline`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  decline: (id: string, body?: { reasonId?: string; note?: string }) =>
+    api<TaskDto>(`/api/tasks/${id}/decline`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   defer: (id: string, note?: string) => api<TaskDto>(`/api/tasks/${id}/defer`, { method: 'POST', body: JSON.stringify({ note: note ?? null }) }),
   cancel: (id: string, reason?: string) => api<TaskDto>(`/api/tasks/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason ?? null }) }),
   reassign: (id: string, assignToMemberId: string) => api<TaskDto>(`/api/tasks/${id}/reassign`, { method: 'POST', body: JSON.stringify({ assignToMemberId }) }),
   skip: (id: string, note?: string) => api<TaskDto>(`/api/tasks/${id}/skip`, { method: 'POST', body: JSON.stringify({ note: note ?? null }) }),
-  updateDetails: (id: string, body: any) => api<TaskDto>(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  setPlannedTimes: (id: string, body: any) => api<TaskDto>(`/api/tasks/${id}/planned-times`, { method: 'PUT', body: JSON.stringify(body) }),
+  updateDetails: (id: string, body: Record<string, unknown>) =>
+    api<TaskDto>(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  setPlannedTimes: (id: string, body: Record<string, unknown>) =>
+    api<TaskDto>(`/api/tasks/${id}/planned-times`, { method: 'PUT', body: JSON.stringify(body) }),
 };
 export const familyApi = {
   get: () => api<{ id: string; name: string; timeZone?: string; currency?: string }>('/api/family'),
   members: () => api<Array<{ id: string; userId: string; displayName: string; role: string; isActive: boolean }>>('/api/family/members'),
   declineReasons: () => api<DeclineReasonDto[]>('/api/family/decline-reasons'),
-  addMember: (body: any) => api<any>('/api/family/members', { method: 'POST', body: JSON.stringify(body) }),
-  changeRole: (memberId: string, role: string) => api<any>(`/api/family/members/${memberId}/change-role`, { method: 'POST', body: JSON.stringify({ role }) }),
-  deactivate: (memberId: string) => api<any>(`/api/family/members/${memberId}/deactivate`, { method: 'POST' }),
+  addMember: (body: Record<string, unknown>) => api<unknown>('/api/family/members', { method: 'POST', body: JSON.stringify(body) }),
+  changeRole: (memberId: string, role: string) =>
+    api<unknown>(`/api/family/members/${memberId}/change-role`, { method: 'POST', body: JSON.stringify({ role }) }),
+  deactivate: (memberId: string) => api<unknown>(`/api/family/members/${memberId}/deactivate`, { method: 'POST' }),
 };
 export const calendarApi = {
   upcoming: (days = 14) => api<CalendarEventDto[]>(`/api/calendar/upcoming?days=${days}`),
-  create: (body: any) => api<CalendarEventDto>('/api/calendar', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: Record<string, unknown>) =>
+    api<CalendarEventDto>('/api/calendar', { method: 'POST', body: JSON.stringify(body) }),
   cancel: (id: string) => api<void>(`/api/calendar/${id}/cancel`, { method: 'POST' }),
 };
 export const conditionsApi = {
   pending: () => api<ConditionDto[]>('/api/conditions/pending'),
   byRequest: (requestId: string) => api<ConditionDto[]>(`/api/conditions/by-request/${requestId}`),
-  create: (body: any) => api<ConditionDto>('/api/conditions', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: Record<string, unknown>) =>
+    api<ConditionDto>('/api/conditions', { method: 'POST', body: JSON.stringify(body) }),
   satisfy: (id: string) => api<ConditionDto>(`/api/conditions/${id}/satisfy`, { method: 'POST' }),
-  fail: (id: string, reason?: string) => api<ConditionDto>(`/api/conditions/${id}/fail`, { method: 'POST', body: JSON.stringify({ reason: reason ?? null }) }),
+  fail: (id: string, reason?: string) =>
+    api<ConditionDto>(`/api/conditions/${id}/fail`, { method: 'POST', body: JSON.stringify({ reason: reason ?? null }) }),
   cancel: (id: string) => api<ConditionDto>(`/api/conditions/${id}/cancel`, { method: 'POST' }),
 };
 export const requestsApi = {
@@ -469,36 +516,62 @@ export const requestsApi = {
   mine: () => api<RequestDto[]>('/api/requests/mine'),
   approvalQueue: () => api<RequestDto[]>('/api/requests/approval-queue'),
   get: (id: string) => api<RequestDto>(`/api/requests/${id}`),
-  create: (body: any) => api<RequestDto>('/api/requests', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: Record<string, unknown>) =>
+    api<RequestDto>('/api/requests', { method: 'POST', body: JSON.stringify(body) }),
   submit: (id: string) => api<RequestDto>(`/api/requests/${id}/submit`, { method: 'POST' }),
-  updateDraft: (id: string, body: any) => api<RequestDto>(`/api/requests/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  approve: (id: string, conditional = false) => api<RequestDto>(`/api/requests/${id}/approve`, { method: 'POST', body: JSON.stringify({ conditional }) }),
-  deny: (id: string, reason: string) => api<RequestDto>(`/api/requests/${id}/deny`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  cancel: (id: string, reason?: string) => api<RequestDto>(`/api/requests/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason ?? null }) }),
-  askQuestion: (id: string, questionText: string) => api<RequestDto>(`/api/requests/${id}/ask-question`, { method: 'POST', body: JSON.stringify({ questionText }) }),
-  answer: (id: string, questionId: string, answer: string) => api<RequestDto>(`/api/requests/${id}/answer`, { method: 'POST', body: JSON.stringify({ questionId, answer }) }),
+  updateDraft: (id: string, body: Record<string, unknown>) =>
+    api<RequestDto>(`/api/requests/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  approve: (id: string, conditional = false) =>
+    api<RequestDto>(`/api/requests/${id}/approve`, { method: 'POST', body: JSON.stringify({ conditional }) }),
+  deny: (id: string, reason: string) =>
+    api<RequestDto>(`/api/requests/${id}/deny`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  cancel: (id: string, reason?: string) =>
+    api<RequestDto>(`/api/requests/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason ?? null }) }),
+  askQuestion: (id: string, questionText: string) =>
+    api<RequestDto>(`/api/requests/${id}/ask-question`, { method: 'POST', body: JSON.stringify({ questionText }) }),
+  answer: (id: string, questionId: string, answer: string) =>
+    api<RequestDto>(`/api/requests/${id}/answer`, { method: 'POST', body: JSON.stringify({ questionId, answer }) }),
   evaluatePolicy: (id: string) => api<PolicyEvaluationDto>(`/api/requests/${id}/policy`),
   history: (id: string) => api<RequestHistoryDto[]>(`/api/requests/${id}/history`),
-  overridePolicy: (id: string, body: any) => api<RequestDto>(`/api/requests/${id}/override-policy`, { method: 'POST', body: JSON.stringify(body) }),
+  overridePolicy: (id: string, body: Record<string, unknown>) =>
+    api<RequestDto>(`/api/requests/${id}/override-policy`, { method: 'POST', body: JSON.stringify(body) }),
   generatePlan: (id: string) => api<ExecutionPlanDto>(`/api/requests/${id}/execution-plan`, { method: 'POST' }),
-  commitPlan: (planId: string, deselectedItemIds?: string[]) => api<ExecutionPlanDto>(`/api/requests/execution-plans/${planId}/commit`, { method: 'POST', body: JSON.stringify({ deselectedItemIds: deselectedItemIds ?? null }) }),
+  commitPlan: (planId: string, deselectedItemIds?: string[]) =>
+    api<ExecutionPlanDto>(`/api/requests/execution-plans/${planId}/commit`, {
+      method: 'POST',
+      body: JSON.stringify({ deselectedItemIds: deselectedItemIds ?? null }),
+    }),
 };
 export const procurementApi = {
   products: () => api<ProductDto[]>('/api/procurement/products'),
   queue: () => api<ProcurementItemDto[]>('/api/procurement/queue'),
   carts: () => api<CartDto[]>('/api/procurement/carts'),
-  createCart: (storeName: string) => api<CartDto>('/api/procurement/carts', { method: 'POST', body: JSON.stringify({ storeName }) }),
-  createQueueItem: (body: any) => api<ProcurementItemDto>('/api/procurement/items', { method: 'POST', body: JSON.stringify(body) }),
-  addToCart: (id: string, cartId: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/add-to-cart`, { method: 'POST', body: JSON.stringify({ cartId }) }),
+  createCart: (storeName: string) =>
+    api<CartDto>('/api/procurement/carts', { method: 'POST', body: JSON.stringify({ storeName }) }),
+  createQueueItem: (body: Record<string, unknown>) =>
+    api<ProcurementItemDto>('/api/procurement/items', { method: 'POST', body: JSON.stringify(body) }),
+  addToCart: (id: string, cartId: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/add-to-cart`, {
+      method: 'POST',
+      body: JSON.stringify({ cartId }),
+    }),
   hold: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/hold`, { method: 'POST' }),
   defer: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/defer`, { method: 'POST' }),
-  noLongerNeeded: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/no-longer-needed`, { method: 'POST' }),
-  removeFromCart: (id: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/remove-from-cart`, { method: 'POST' }),
-  abandonCart: (cartId: string) => api<CartDto>(`/api/procurement/carts/${cartId}/abandon`, { method: 'POST' }),
-  purchase: (id: string, actualPrice: number, store?: string) => api<ProcurementItemDto>(`/api/procurement/items/${id}/purchase`, { method: 'POST', body: JSON.stringify({ actualPrice, store }) }),
+  noLongerNeeded: (id: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/no-longer-needed`, { method: 'POST' }),
+  removeFromCart: (id: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/remove-from-cart`, { method: 'POST' }),
+  abandonCart: (cartId: string) =>
+    api<CartDto>(`/api/procurement/carts/${cartId}/abandon`, { method: 'POST' }),
+  purchase: (id: string, actualPrice: number, store?: string) =>
+    api<ProcurementItemDto>(`/api/procurement/items/${id}/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ actualPrice, store }),
+    }),
 };
 export const notificationsApi = {
-  mine: (unreadOnly = false) => api<NotificationDto[]>(`/api/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+  mine: (unreadOnly = false) =>
+    api<NotificationDto[]>(`/api/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
   markRead: (id: string) => api<NotificationDto>(`/api/notifications/${id}/read`, { method: 'POST' }),
   markAllRead: () => api<{ marked: number }>('/api/notifications/read-all', { method: 'POST' }),
 };
