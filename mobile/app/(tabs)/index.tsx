@@ -2,66 +2,82 @@ import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
+import { cacheGet } from '../../src/offline';
 import { colors, spacing, typography } from '../../src/theme';
 
 /**
  * Family Pulse — "What matters to me right now?"
- * Uses live API when authenticated; falls back to demo shell offline.
+ * Live API → offline cache → demo shell (last resort).
  */
 export default function HomeScreen() {
   const [pulse, setPulse] = useState<PulseDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     setRefreshing(true);
     setError(null);
+    setFromCache(false);
     try {
       const data = await pulseApi.get();
       setPulse(data);
+      // If we got data while offline, api() returned cache transparently
+      const cached = await cacheGet<PulseDto>('/api/pulse');
+      if (cached && JSON.stringify(cached.data) === JSON.stringify(data)) {
+        // Heuristic only when identical; prefer not flashing cache label on live hits
+      }
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'error' in e
           ? String((e as { error: string }).error)
           : 'Unable to load Pulse';
-      setError(msg);
-      setPulse({
-        greeting: 'Welcome to Family OS',
-        role: 'Owner',
-        roleHint: 'You see the full household — approvals, shopping, and blockers.',
-        nextAction: {
-          kind: 'Task',
-          entityId: 'demo',
-          title: 'Take out trash',
-          subtitle: 'Due today',
-          primaryAction: 'Start',
-          dueLabel: 'Due today',
-        },
-        needsAttention: [
-          {
-            kind: 'Request',
-            entityId: 'demo-req',
-            title: "Mia's ride request",
-            reason: 'Waiting for your review',
-            actionLabel: 'Review',
+
+      const cached = await cacheGet<PulseDto>('/api/pulse');
+      if (cached) {
+        setPulse(cached.data);
+        setFromCache(true);
+        setError(`Offline · last synced ${new Date(cached.savedAtUtc).toLocaleString()}`);
+      } else {
+        setError(msg);
+        setPulse({
+          greeting: 'Welcome to Family OS',
+          role: 'Owner',
+          roleHint: 'You see the full household — approvals, shopping, and blockers.',
+          nextAction: {
+            kind: 'Task',
+            entityId: 'demo',
+            title: 'Take out trash',
+            subtitle: 'Due today',
+            primaryAction: 'Start',
+            dueLabel: 'Due today',
           },
-        ],
-        waitingBlockers: [
-          {
-            kind: 'Condition',
-            entityId: 'demo-cond',
-            title: 'Permission slip',
-            reason: 'Pending condition',
-            actionLabel: 'Satisfy',
+          needsAttention: [
+            {
+              kind: 'Request',
+              entityId: 'demo-req',
+              title: "Mia's ride request",
+              reason: 'Waiting for your review',
+              actionLabel: 'Review',
+            },
+          ],
+          waitingBlockers: [
+            {
+              kind: 'Condition',
+              entityId: 'demo-cond',
+              title: 'Permission slip',
+              reason: 'Pending condition',
+              actionLabel: 'Satisfy',
+            },
+          ],
+          comingUp: [],
+          household: {
+            requestsAwaitingApproval: 2,
+            tasksDueToday: 3,
+            tasksNeedingAcceptance: 1,
           },
-        ],
-        comingUp: [],
-        household: {
-          requestsAwaitingApproval: 2,
-          tasksDueToday: 3,
-          tasksNeedingAcceptance: 1,
-        },
-      });
+        });
+      }
     } finally {
       setRefreshing(false);
     }
@@ -84,7 +100,12 @@ export default function HomeScreen() {
           {pulse.roleHint ? <Text style={typography.caption}>{pulse.roleHint}</Text> : null}
         </View>
       ) : null}
-      {error ? <Text style={styles.hint}>{error} · showing demo shell</Text> : null}
+      {error ? (
+        <Text style={styles.hint}>
+          {error}
+          {fromCache ? '' : ' · showing demo shell'}
+        </Text>
+      ) : null}
 
       <SectionTitle>Next action</SectionTitle>
       {pulse?.nextAction ? (
@@ -105,7 +126,7 @@ export default function HomeScreen() {
 
       <SectionTitle>Needs your attention</SectionTitle>
       {pulse?.needsAttention?.length ? (
-        pulse.needsAttention.map((item: any) => (
+        pulse.needsAttention.map((item) => (
           <Card key={`att-${item.entityId}`} style={styles.cardGap}>
             <Text style={typography.heading}>{item.title}</Text>
             <Text style={typography.caption}>{item.reason}</Text>
@@ -121,7 +142,7 @@ export default function HomeScreen() {
 
       <SectionTitle>Waiting / blockers</SectionTitle>
       {pulse?.waitingBlockers?.length ? (
-        pulse.waitingBlockers.map((item: any) => (
+        pulse.waitingBlockers.map((item) => (
           <Card key={`blk-${item.entityId}-${item.kind}`} style={styles.cardGap}>
             <Text style={typography.heading}>{item.title}</Text>
             <Text style={typography.caption}>{item.reason}</Text>
@@ -138,7 +159,7 @@ export default function HomeScreen() {
       {(pulse?.comingUp?.length ?? 0) > 0 ? (
         <>
           <SectionTitle>Coming up</SectionTitle>
-          {pulse!.comingUp.map((item: any) => (
+          {pulse!.comingUp.map((item) => (
             <Card key={`up-${item.entityId}`} style={styles.cardGap}>
               <Text style={typography.heading}>{item.title}</Text>
               <Text style={typography.caption}>
