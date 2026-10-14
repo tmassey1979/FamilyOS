@@ -1,4 +1,5 @@
 using FamilyOS.Application.Interfaces;
+using FamilyOS.Infrastructure.Google;
 using FamilyOS.Infrastructure.Identity;
 using FamilyOS.Infrastructure.Persistence;
 using MassTransit;
@@ -22,6 +23,9 @@ public static class DependencyInjection
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddHttpContextAccessor();
         services.AddFamilyAuthorization();
+
+        services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
+        services.AddHostedService<GoogleCalendarSyncWorker>();
 
         // MassTransit + RabbitMQ
         services.AddMassTransit(x =>
