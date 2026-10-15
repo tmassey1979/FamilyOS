@@ -15,6 +15,7 @@ import {
   type QuietHoursDto,
 } from '../../src/api/client';
 import { invitesApi, type InviteDto } from '../../src/api/onboarding';
+import { shareInviteCode } from '../../src/inviteShare';
 import {
   isBiometricUnlockEnabled,
   setBiometricUnlockEnabled,
@@ -129,6 +130,7 @@ export default function SettingsScreen() {
       const inv = await invitesApi.create({ role });
       setLastInviteCode(inv.code);
       await loadInvites();
+      await shareInviteCode(inv.code, familyName || undefined);
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not create invite');
     } finally {
@@ -360,7 +362,14 @@ export default function SettingsScreen() {
               Create a one-time code. Share it so someone can sign in and join this household.
             </Text>
             {lastInviteCode ? (
-              <Text style={typography.heading}>Code · {lastInviteCode}</Text>
+              <>
+                <Text style={typography.heading}>Code · {lastInviteCode}</Text>
+                <Button
+                  title="Share again"
+                  variant="secondary"
+                  onPress={() => void shareInviteCode(lastInviteCode, familyName || undefined)}
+                />
+              </>
             ) : null}
             <View style={styles.row}>
               <Button title={busy ? '…' : 'Invite Adult'} onPress={() => void createInvite('Adult')} />
@@ -381,7 +390,14 @@ export default function SettingsScreen() {
                     <Text style={typography.caption}>
                       Expires {new Date(i.expiresAtUtc).toLocaleDateString()}
                     </Text>
-                    <Button title="Revoke" variant="secondary" onPress={() => void revokeInvite(i.id)} />
+                    <View style={styles.row}>
+                      <Button
+                        title="Share"
+                        variant="secondary"
+                        onPress={() => void shareInviteCode(i.code, familyName || undefined)}
+                      />
+                      <Button title="Revoke" variant="secondary" onPress={() => void revokeInvite(i.id)} />
+                    </View>
                   </View>
                 ))
             )}
