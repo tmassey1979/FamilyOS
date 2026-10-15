@@ -12,6 +12,13 @@ public class ForbiddenException : Exception
         : base(message) { }
 }
 
+/// <summary>Not signed in or missing required identity context.</summary>
+public class UnauthorizedException : Exception
+{
+    public UnauthorizedException(string message = "Authentication required.")
+        : base(message) { }
+}
+
 public class DomainException : Exception
 {
     public DomainException(string message) : base(message) { }
