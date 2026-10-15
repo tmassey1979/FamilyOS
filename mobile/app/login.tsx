@@ -20,7 +20,7 @@ import {
   useAuthRequestConfig,
   getKeycloakAuthority,
 } from '../src/auth/keycloak';
-import { setDevUser } from '../src/api/client';
+import { meApi, setAccessToken, setDevUser } from '../src/api/client';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -47,9 +47,14 @@ export default function LoginScreen() {
   const finish = useCallback(
     async (access: string, refresh?: string) => {
       await persistTokens(access, refresh);
+      setAccessToken(access);
       await setBiometricUnlockEnabled(true);
-      // Root layout routes to /onboarding when familyId is missing
-      router.replace('/(tabs)');
+      try {
+        const me = await meApi.get();
+        router.replace(me.familyId ? '/(tabs)' : '/onboarding');
+      } catch {
+        router.replace('/onboarding');
+      }
     },
     [router],
   );
