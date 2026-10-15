@@ -1,118 +1,99 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ensureStarted,
   flushMutationQueue,
+  getQueue,
+  isOnline,
   subscribeOnline,
   subscribeQueueCount,
-  type QueuedMutation,
 } from '../offline';
 import { getAccessToken, getApiBaseUrl, getDevUser } from '../api/client';
 import { colors, spacing, typography } from '../theme';
 
-async function replayItem(item: QueuedMutation): Promise<void> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    ...(item.body ? { 'Content-Type': 'application/json' } : {}),
-    ...(item.headers ?? {}),
-  };
-  const token = getAccessToken();
-  const dev = getDevUser();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  else if (dev) headers['X-Dev-User'] = dev;
-
-  const res = await fetch(`${getApiBaseUrl()}${item.path}`, {
-    method: item.method,
-    headers,
-    body: item.body ?? undefined,
-  });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
-  }
-}
-
+/**
+ * Top-of-app banner when offline or when mutations are queued (#52).
+ */
 export function OfflineBanner() {
   const [online, setOnline] = useState(true);
-  const [pending, setPending] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
+  const [queued, setQueued] = useState(0);
+  const [flushing, setFlushing] = useState(false);
 
   useEffect(() => {
     void ensureStarted();
-    const offNet = subscribeOnline(setOnline);
-    const offQ = subscribeQueueCount(setPending);
+    const unsubNet = subscribeOnline(setOnline);
+    const unsubQ = subscribeQueueCount(setQueued);
+    void getQueue().then((q) => setQueued(q.length));
     return () => {
-      offNet();
-      offQ();
+      unsubNet();
+      unsubQ();
     };
   }, []);
 
+  // Auto-flush when we come back online
   useEffect(() => {
-    if (!online || pending === 0) return;
-    let cancelled = false;
-    (async () => {
-      setSyncing(true);
-      try {
-        const result = await flushMutationQueue(replayItem);
-        if (!cancelled && result.flushed > 0) {
-          setHint(`Synced ${result.flushed} change${result.flushed === 1 ? '' : 's'}`);
-          setTimeout(() => setHint(null), 2500);
-        }
-      } finally {
-        if (!cancelled) setSyncing(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [online, pending]);
+    if (!online || queued === 0) return;
+    void doFlush();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online]);
 
-  if (online && pending === 0 && !hint) return null;
+  const doFlush = async () => {
+    if (flushing) return;
+    setFlushing(true);
+    try {
+      await flushMutationQueue(async (item) => {
+        const headers: Record<string, string> = {
+          Accept: 'application/json',
+          ...(item.body ? { 'Content-Type': 'application/json' } : {}),
+        };
+        const token = getAccessToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+        else if (getDevUser()) headers['X-Dev-User'] = getDevUser()!;
+
+        const res = await fetch(`${getApiBaseUrl()}${item.path}`, {
+          method: item.method,
+          headers,
+          body: item.body ?? undefined,
+        });
+        if (!res.ok) {
+          const err = new Error(`HTTP ${res.status}`);
+          throw err;
+        }
+      });
+      setQueued((await getQueue()).length);
+    } catch {
+      /* banner stays */
+    } finally {
+      setFlushing(false);
+    }
+  };
+
+  if (online && queued === 0) return null;
 
   const label = !online
-    ? pending > 0
-      ? `Offline · ${pending} waiting to sync`
-      : 'Offline · showing cached data'
-    : syncing
-      ? 'Syncing…'
-      : hint
-        ? hint
-        : pending > 0
-          ? `${pending} change${pending === 1 ? '' : 's'} pending`
-          : null;
-
-  if (!label) return null;
+    ? queued > 0
+      ? `Offline · ${queued} change${queued === 1 ? '' : 's'} saved`
+      : 'Offline · showing last known data'
+    : flushing
+      ? `Syncing ${queued}…`
+      : `${queued} waiting to sync · Tap to retry`;
 
   return (
-    <Pressable
-      accessibilityRole="summary"
-      onPress={() => {
-        if (online && pending > 0 && !syncing) {
-          setSyncing(true);
-          void flushMutationQueue(replayItem).finally(() => setSyncing(false));
-        }
-      }}
-      style={[styles.banner, !online ? styles.offline : styles.pending]}
-    >
-      <Text style={styles.text}>{label}</Text>
-      {online && pending > 0 && !syncing ? (
-        <Text style={styles.action}>Tap to sync</Text>
-      ) : null}
+    <Pressable onPress={() => void doFlush()} disabled={!online || queued === 0}>
+      <View style={[styles.bar, !online ? styles.offline : styles.queued]}>
+        <Text style={styles.text}>{label}</Text>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  banner: {
-    paddingHorizontal: spacing.md,
+  bar: {
     paddingVertical: spacing.sm,
-    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
   },
-  offline: { backgroundColor: '#7C2D12' },
-  pending: { backgroundColor: '#1E3A5F' },
-  text: { ...typography.caption, color: colors.text, flex: 1 },
-  action: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  offline: { backgroundColor: '#92400e' },
+  queued: { backgroundColor: colors.primary },
+  text: { ...typography.caption, color: '#fff', fontWeight: '600' },
 });

@@ -11,6 +11,8 @@ import {
   unlockWithBiometrics,
 } from '../src/auth/keycloak';
 import { setAccessToken, getDevUser } from '../src/api/client';
+import { OfflineBanner } from '../src/components/OfflineBanner';
+import { ensureStarted } from '../src/offline';
 
 /** Only skip login automatically when explicitly requested via env. */
 const AUTO_SKIP_LOGIN =
@@ -22,6 +24,10 @@ export default function RootLayout() {
   const [signedIn, setSignedIn] = useState(false);
   const segments = useSegments();
   const router = useRouter();
+
+  useEffect(() => {
+    void ensureStarted();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +94,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="light" />
+      <OfflineBanner />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
