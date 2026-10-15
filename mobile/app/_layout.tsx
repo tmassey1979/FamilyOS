@@ -10,11 +10,10 @@ import {
   refreshAccessToken,
   unlockWithBiometrics,
 } from '../src/auth/keycloak';
-import { setAccessToken, getDevUser } from '../src/api/client';
+import { setAccessToken, getDevUser, meApi } from '../src/api/client';
 import { OfflineBanner } from '../src/components/OfflineBanner';
 import { ensureStarted } from '../src/offline';
 
-/** Only skip login automatically when explicitly requested via env. */
 const AUTO_SKIP_LOGIN =
   process.env.EXPO_PUBLIC_SKIP_LOGIN === '1' ||
   process.env.EXPO_PUBLIC_SKIP_LOGIN === 'true';
@@ -22,6 +21,7 @@ const AUTO_SKIP_LOGIN =
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const segments = useSegments();
   const router = useRouter();
 
@@ -33,10 +33,10 @@ export default function RootLayout() {
     let cancelled = false;
     (async () => {
       try {
-        // Explicit opt-in only: EXPO_PUBLIC_SKIP_LOGIN=1 + EXPO_PUBLIC_DEV_USER
         if (AUTO_SKIP_LOGIN && getDevUser()) {
           if (!cancelled) {
             setSignedIn(true);
+            setNeedsOnboarding(false);
             setReady(true);
           }
           return;
@@ -58,8 +58,16 @@ export default function RootLayout() {
         if (token) {
           setAccessToken(token);
           if (!cancelled) setSignedIn(true);
+          try {
+            const me = await meApi.get();
+            if (!cancelled) setNeedsOnboarding(!me.familyId);
+          } catch {
+            if (!cancelled) setNeedsOnboarding(true);
+          }
         } else if (!cancelled) {
-          setSignedIn(!!getDevUser());
+          const dev = !!getDevUser();
+          setSignedIn(dev);
+          setNeedsOnboarding(false);
         }
       } catch {
         if (!cancelled) setSignedIn(false);
@@ -75,13 +83,25 @@ export default function RootLayout() {
   useEffect(() => {
     if (!ready) return;
     const onLogin = segments[0] === 'login';
+    const onOnboarding = segments[0] === 'onboarding';
     const hasSession = signedIn || !!getDevUser();
+
     if (!hasSession && !onLogin) {
       router.replace('/login');
-    } else if (hasSession && onLogin) {
+      return;
+    }
+    if (hasSession && onLogin) {
+      router.replace(needsOnboarding ? '/onboarding' : '/(tabs)');
+      return;
+    }
+    if (hasSession && needsOnboarding && !onOnboarding && !onLogin) {
+      router.replace('/onboarding');
+      return;
+    }
+    if (hasSession && !needsOnboarding && onOnboarding) {
       router.replace('/(tabs)');
     }
-  }, [ready, signedIn, segments, router]);
+  }, [ready, signedIn, needsOnboarding, segments, router]);
 
   if (!ready) {
     return (
@@ -103,6 +123,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, title: 'Welcome' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </>

@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button, Card } from '../src/components/ui';
-import { familyApi, invitesApi, meApi } from '../src/api/client';
+import { meApi } from '../src/api/client';
+import { invitesApi, onboardingFamilyApi } from '../src/api/onboarding';
 import { colors, spacing, typography } from '../src/theme';
 
 type Mode = 'choose' | 'create' | 'join';
@@ -21,12 +22,10 @@ export default function OnboardingScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Create household
   const [familyName, setFamilyName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
 
-  // Join
   const [code, setCode] = useState('');
   const [joinName, setJoinName] = useState('');
   const [preview, setPreview] = useState<{ familyName: string; role: string; isOpen: boolean } | null>(null);
@@ -41,7 +40,7 @@ export default function OnboardingScreen() {
     setBusy(true);
     setError(null);
     try {
-      await familyApi.create({
+      await onboardingFamilyApi.create({
         name: familyName.trim(),
         ownerDisplayName: displayName.trim() || undefined,
         ownerEmail: email.trim() || undefined,
