@@ -57,7 +57,7 @@ public class MealCommandHandlers :
         await _current.EnsureLoadedAsync(ct);
         EnsureAuth();
         if (!Enum.TryParse<MealSlot>(cmd.Slot, ignoreCase: true, out var slot))
-            throw new ValidationException("Slot must be Breakfast, Lunch, Dinner, or Snack.");
+            throw new ValidationException("Slot", "Slot must be Breakfast, Lunch, Dinner, or Snack.");
 
         var week = MealPlan.ToMonday(cmd.WeekStartUtc ?? cmd.DayUtc);
         var plan = await LoadOrCreateAsync(week, ct);
@@ -108,14 +108,15 @@ public class MealCommandHandlers :
         var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
 
         var added = 0;
+        var approver = _current.MemberId!.Value;
         foreach (var name in names)
         {
             if (existingSet.Contains(name)) continue;
             _db.ProcurementItems.Add(ProcurementItem.Create(
                 _current.FamilyId!.Value,
                 name,
-                category: "Meal plan",
-                preferredStore: null));
+                approver,
+                category: "Meal plan"));
             existingSet.Add(name);
             added++;
         }
