@@ -14,6 +14,7 @@ import {
   type NotificationDto,
   type QuietHoursDto,
 } from '../../src/api/client';
+import { invitesApi, type InviteDto } from '../../src/api/onboarding';
 import {
   isBiometricUnlockEnabled,
   setBiometricUnlockEnabled,
@@ -22,7 +23,7 @@ import {
 import { getStoredDeviceToken, resolveDevicePushToken } from '../../src/push/registerPush';
 import { colors, spacing, typography } from '../../src/theme';
 
-/** Settings hub — account, family, Google Calendar, quiet hours, devices, notifications. */
+/** Settings hub — account, family, invites, Google Calendar, quiet hours, devices, notifications. */
 export default function SettingsScreen() {
   const router = useRouter();
   const [me, setMe] = useState<MeDto | null>(null);
@@ -37,9 +38,25 @@ export default function SettingsScreen() {
   const [devices, setDevices] = useState<DeviceRegistrationDto[]>([]);
   const [localToken, setLocalToken] = useState<string | null>(null);
   const [gcal, setGcal] = useState<GoogleCalendarStatusDto | null>(null);
+  const [invites, setInvites] = useState<InviteDto[]>([]);
+  const [lastInviteCode, setLastInviteCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const canInvite = me?.role === 'Owner' || me?.role === 'Adult';
+
+  const loadInvites = useCallback(async () => {
+    if (!canInvite) {
+      setInvites([]);
+      return;
+    }
+    try {
+      setInvites(await invitesApi.list());
+    } catch {
+      setInvites([]);
+    }
+  }, [canInvite]);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -100,6 +117,36 @@ export default function SettingsScreen() {
   useEffect(() => {
     void loadDevices();
   }, [loadDevices]);
+
+  useEffect(() => {
+    void loadInvites();
+  }, [loadInvites]);
+
+  const createInvite = async (role: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const inv = await invitesApi.create({ role });
+      setLastInviteCode(inv.code);
+      await loadInvites();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not create invite');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revokeInvite = async (id: string) => {
+    setBusy(true);
+    try {
+      await invitesApi.revoke(id);
+      await loadInvites();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not revoke');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onToggleBio = async (on: boolean) => {
     setBio(on);
@@ -274,6 +321,7 @@ export default function SettingsScreen() {
             void load();
             void loadNotifs();
             void loadDevices();
+            void loadInvites();
           }}
         />
       }
@@ -303,6 +351,43 @@ export default function SettingsScreen() {
         </Text>
         <Text style={typography.caption}>Manage members and shopping from the Family tab.</Text>
       </Card>
+
+      {canInvite ? (
+        <>
+          <SectionTitle>Invite family</SectionTitle>
+          <Card style={styles.card}>
+            <Text style={typography.caption}>
+              Create a one-time code. Share it so someone can sign in and join this household.
+            </Text>
+            {lastInviteCode ? (
+              <Text style={typography.heading}>Code · {lastInviteCode}</Text>
+            ) : null}
+            <View style={styles.row}>
+              <Button title={busy ? '…' : 'Invite Adult'} onPress={() => void createInvite('Adult')} />
+              <Button title="Invite Teen" variant="secondary" onPress={() => void createInvite('Teen')} />
+              <Button title="Invite Child" variant="secondary" onPress={() => void createInvite('Child')} />
+            </View>
+            {invites.filter((i) => i.isOpen).length === 0 ? (
+              <Text style={typography.caption}>No open invites.</Text>
+            ) : (
+              invites
+                .filter((i) => i.isOpen)
+                .slice(0, 8)
+                .map((i) => (
+                  <View key={i.id} style={{ marginTop: spacing.xs }}>
+                    <Text style={typography.body}>
+                      {i.code} · {i.role}
+                    </Text>
+                    <Text style={typography.caption}>
+                      Expires {new Date(i.expiresAtUtc).toLocaleDateString()}
+                    </Text>
+                    <Button title="Revoke" variant="secondary" onPress={() => void revokeInvite(i.id)} />
+                  </View>
+                ))
+            )}
+          </Card>
+        </>
+      ) : null}
 
       <SectionTitle>Security</SectionTitle>
       <Card style={styles.card}>
