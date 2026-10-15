@@ -109,18 +109,25 @@ export default function TasksScreen() {
     setCreating(true);
     try {
       const est = parseInt(estMin, 10);
-      const body: Parameters<typeof tasksApi.create>[0] = {
-        title: title.trim(),
-        category: category.trim() || undefined,
-        assignToMemberId: assignTo,
-        priority,
-        estimatedDurationMinutes: Number.isFinite(est) && est > 0 ? est : undefined,
-      };
       if (frequency !== 'None') {
-        body.frequency = frequency;
-        body.interval = 1;
+        // Dedicated recurrence API advances schedule correctly on first instance
+        await tasksApi.createRecurrence({
+          title: title.trim(),
+          frequency,
+          interval: 1,
+          category: category.trim() || undefined,
+          defaultAssigneeMemberId: assignTo,
+          generateFirstInstance: true,
+        });
+      } else {
+        await tasksApi.create({
+          title: title.trim(),
+          category: category.trim() || undefined,
+          assignToMemberId: assignTo,
+          priority,
+          estimatedDurationMinutes: Number.isFinite(est) && est > 0 ? est : undefined,
+        });
       }
-      await tasksApi.create(body);
       setTitle('');
       setPriority('Normal');
       setFrequency('None');
