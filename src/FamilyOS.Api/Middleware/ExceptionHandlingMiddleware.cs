@@ -70,6 +70,7 @@ public sealed class ExceptionHandlingMiddleware
     {
         NotFoundException nfe => (HttpStatusCode.NotFound, "Not Found", nfe.Message),
         ForbiddenException fe => (HttpStatusCode.Forbidden, "Forbidden", fe.Message),
+        UnauthorizedException ue => (HttpStatusCode.Unauthorized, "Unauthorized", ue.Message),
         ValidationException ve => (HttpStatusCode.BadRequest, "Validation Error", ve.Message),
         DomainException de => (HttpStatusCode.Conflict, "Domain Rule Violation", de.Message),
         UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized", "Authentication required."),
