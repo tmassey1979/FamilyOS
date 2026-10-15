@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Common;
+using FamilyOS.Domain.Family;
 using FamilyOS.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -41,10 +42,35 @@ public class CurrentUserService : ICurrentUserService
         var externalId = ExternalIdentityId;
         if (string.IsNullOrEmpty(externalId)) return;
 
-        var user = await _db.Users.AsNoTracking()
+        var user = await _db.Users
             .FirstOrDefaultAsync(u => u.ExternalIdentityId == externalId, ct);
 
-        if (user == null) return;
+        if (user is null)
+        {
+            var principal = _http.HttpContext?.User;
+            var email = principal?.FindFirstValue(ClaimTypes.Email)
+                ?? principal?.FindFirstValue("email")
+                ?? $"{externalId}@familyos.local";
+            var given = principal?.FindFirstValue(ClaimTypes.GivenName)
+                ?? principal?.FindFirstValue("given_name")
+                ?? principal?.FindFirstValue("preferred_username")
+                ?? "Member";
+            var familyName = principal?.FindFirstValue(ClaimTypes.Surname)
+                ?? principal?.FindFirstValue("family_name")
+                ?? "";
+
+            user = User.Create(externalId, email, given, familyName);
+            _db.Users.Add(user);
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch
+            {
+                user = await _db.Users.FirstOrDefaultAsync(u => u.ExternalIdentityId == externalId, ct);
+                if (user is null) return;
+            }
+        }
 
         _userId = user.Id;
         _familyId = user.FamilyId;
