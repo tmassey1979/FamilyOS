@@ -20,6 +20,7 @@ public interface IFamilyOsDbContext
     DbSet<Domain.Family.Family> Families { get; }
     DbSet<FamilyMember> FamilyMembers { get; }
     DbSet<DeclineReason> DeclineReasons { get; }
+    DbSet<FamilyInvite> FamilyInvites { get; }
     DbSet<TaskItem> Tasks { get; }
     DbSet<TaskHistoryEntry> TaskHistory { get; }
     DbSet<TaskTimeSegment> TaskTimeSegments { get; }
