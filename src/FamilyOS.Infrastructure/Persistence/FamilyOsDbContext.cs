@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FamilyOS.Infrastructure.Persistence;
 
-public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFamilyOsDbContext
+public partial class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFamilyOsDbContext
 {
     public FamilyOsDbContext(DbContextOptions<FamilyOsDbContext> options) : base(options) { }
 
@@ -315,5 +315,7 @@ public class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfaces.IFam
             e.Property(x => x.DeviceName).HasMaxLength(120);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
+
+        ConfigureMeals(modelBuilder);
     }
 }
