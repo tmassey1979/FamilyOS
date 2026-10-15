@@ -1,3 +1,4 @@
+using FamilyOS.Contracts.Events;
 using FamilyOS.Domain.Common;
 
 namespace FamilyOS.Domain.Tasks;
@@ -67,6 +68,7 @@ public class TaskItem : Entity
         };
 
         task.AddHistory(FamilyTaskStatus.Created, createdByMemberId, "Task created");
+        task.AddDomainEvent(new TaskCreated(task.Id, familyId, task.Title, createdByMemberId, DateTime.UtcNow));
         return task;
     }
 
@@ -78,6 +80,7 @@ public class TaskItem : Entity
         AssignedToMemberId = assigneeMemberId;
         Status = FamilyTaskStatus.Assigned;
         AddHistory(FamilyTaskStatus.Assigned, actorMemberId, $"Assigned to member {assigneeMemberId}");
+        AddDomainEvent(new TaskAssigned(Id, FamilyId, assigneeMemberId, actorMemberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -89,6 +92,7 @@ public class TaskItem : Entity
 
         Status = FamilyTaskStatus.Accepted;
         AddHistory(FamilyTaskStatus.Accepted, memberId, "Task accepted");
+        AddDomainEvent(new TaskAccepted(Id, FamilyId, memberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -102,6 +106,7 @@ public class TaskItem : Entity
         var detail = reasonId.HasValue ? $"ReasonId={reasonId}" : "No reason";
         if (!string.IsNullOrWhiteSpace(note)) detail += $"; Note={note}";
         AddHistory(FamilyTaskStatus.Declined, memberId, detail);
+        AddDomainEvent(new TaskDeclined(Id, FamilyId, memberId, reasonId, note, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -114,6 +119,7 @@ public class TaskItem : Entity
         Status = FamilyTaskStatus.InProgress;
         _timeSegments.Add(TaskTimeSegment.Start(Id, memberId));
         AddHistory(FamilyTaskStatus.InProgress, memberId, "Work started");
+        AddDomainEvent(new TaskStarted(Id, FamilyId, memberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -126,6 +132,7 @@ public class TaskItem : Entity
         Status = FamilyTaskStatus.Paused;
         CloseOpenSegment(memberId);
         AddHistory(FamilyTaskStatus.Paused, memberId, "Work paused");
+        AddDomainEvent(new TaskPaused(Id, FamilyId, memberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -138,6 +145,7 @@ public class TaskItem : Entity
         Status = FamilyTaskStatus.InProgress;
         _timeSegments.Add(TaskTimeSegment.Start(Id, memberId));
         AddHistory(FamilyTaskStatus.InProgress, memberId, "Work resumed");
+        AddDomainEvent(new TaskResumed(Id, FamilyId, memberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -156,6 +164,7 @@ public class TaskItem : Entity
             .Sum(s => (int)(s.EndedAtUtc!.Value - s.StartedAtUtc).TotalMinutes);
 
         AddHistory(FamilyTaskStatus.Completed, memberId, $"Completed. Actual duration: {ActualDurationMinutes} min");
+        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, ActualDurationMinutes, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -174,6 +183,7 @@ public class TaskItem : Entity
 
         Status = FamilyTaskStatus.Cancelled;
         AddHistory(FamilyTaskStatus.Cancelled, actorMemberId, reason ?? "Cancelled");
+        AddDomainEvent(new TaskCancelled(Id, FamilyId, actorMemberId, reason, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -190,6 +200,7 @@ public class TaskItem : Entity
 
         Status = FamilyTaskStatus.Skipped;
         AddHistory(FamilyTaskStatus.Skipped, actorMemberId, note ?? "Skipped this occurrence");
+        AddDomainEvent(new TaskSkipped(Id, FamilyId, actorMemberId, note, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -203,13 +214,10 @@ public class TaskItem : Entity
         Status = FamilyTaskStatus.Reassigned;
         AddHistory(FamilyTaskStatus.Reassigned, actorMemberId, $"Reassigned from {previous} to {newAssigneeMemberId}");
         Status = FamilyTaskStatus.Assigned;
+        AddDomainEvent(new TaskReassigned(Id, FamilyId, previous ?? Guid.Empty, newAssigneeMemberId, actorMemberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
-    /// <summary>
-    /// True when due date is in the past and the task is still open (not completed/cancelled/skipped).
-    /// Overdue is derived state — not a stored status (FamilyTaskStatus.Overdue is reserved for explicit marking).
-    /// </summary>
     public bool IsOverdue(DateTime? utcNow = null)
     {
         if (!DueDate.HasValue) return false;
