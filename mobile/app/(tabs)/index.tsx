@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
 import { outcomesApi, type OutcomesDto } from '../../src/api/outcomes';
+import { mealsApi, type MealEntryDto } from '../../src/api/meals';
 import { cacheGet } from '../../src/offline';
 import { colors, spacing, typography } from '../../src/theme';
 
@@ -19,10 +20,16 @@ function routeForKind(kind: string): string {
   return '/(tabs)/tasks';
 }
 
+function todayUtcDateKey(): string {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())).toISOString().slice(0, 10);
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const [pulse, setPulse] = useState<PulseDto | null>(null);
   const [outcomes, setOutcomes] = useState<OutcomesDto | null>(null);
+  const [todayMeals, setTodayMeals] = useState<MealEntryDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,6 +45,13 @@ export default function HomeScreen() {
         setOutcomes(await outcomesApi.get());
       } catch {
         setOutcomes(null);
+      }
+      try {
+        const plan = await mealsApi.week();
+        const key = todayUtcDateKey();
+        setTodayMeals(plan.entries.filter((e) => e.dayUtc.slice(0, 10) === key));
+      } catch {
+        setTodayMeals([]);
       }
     } catch (e: unknown) {
       const msg =
@@ -136,6 +150,24 @@ export default function HomeScreen() {
         </Card>
       ) : (
         <EmptyState title="You're clear" subtitle="No urgent next action right now." />
+      )}
+
+      <SectionTitle>Today's meals</SectionTitle>
+      {todayMeals.length > 0 ? (
+        <Card style={styles.cardGap}>
+          {todayMeals.map((m) => (
+            <View key={m.id} style={styles.row}>
+              <Badge label={m.slot} />
+              <Text style={typography.body}>{m.dishName}</Text>
+            </View>
+          ))}
+          <Button title="Open meal plan" variant="secondary" onPress={() => router.push('/(tabs)/meals')} />
+        </Card>
+      ) : (
+        <EmptyState
+          title="Nothing planned for today"
+          subtitle="Add dishes on the Meals tab."
+        />
       )}
 
       <SectionTitle>Needs your attention</SectionTitle>
@@ -241,6 +273,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
   cardGap: { marginBottom: spacing.md, gap: spacing.sm },
-  row: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.sm, flexWrap: 'wrap' },
+  row: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.sm, flexWrap: 'wrap', alignItems: 'center' },
   hint: { ...typography.caption, marginBottom: spacing.md },
 });
