@@ -44,9 +44,9 @@ public static class DependencyInjection
         services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
         services.AddHostedService<GoogleCalendarSyncWorker>();
 
-        // Domain events (#51): Rabbit when enabled, else in-memory so CI / local API still boots
-        var rabbitEnabled = !string.Equals(
-            configuration["RabbitMQ:Enabled"], "false", StringComparison.OrdinalIgnoreCase);
+        // Domain events (#51): opt-in RabbitMQ — default in-memory so CI/local boot without broker
+        var rabbitEnabled = string.Equals(
+            configuration["RabbitMQ:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
 
         services.AddMassTransit(x =>
         {
