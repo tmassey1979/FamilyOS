@@ -48,6 +48,7 @@ export default function LoginScreen() {
     async (access: string, refresh?: string) => {
       await persistTokens(access, refresh);
       await setBiometricUnlockEnabled(true);
+      // Root layout routes to /onboarding when familyId is missing
       router.replace('/(tabs)');
     },
     [router],
@@ -80,6 +81,23 @@ export default function LoginScreen() {
     }
   };
 
+  /** Keycloak registration (requires realm user registration enabled). */
+  const createAccount = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await promptAsync({
+        showInRecents: true,
+        // Keycloak 17+ registration prompt; falls back to login if disabled
+        extraParams: { prompt: 'create' },
+      });
+    } catch (e: unknown) {
+      setError((e as Error)?.message ?? 'Registration failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const devLogin = (user: string) => {
     setDevUser(user);
     router.replace('/(tabs)');
@@ -94,7 +112,7 @@ export default function LoginScreen() {
           resizeMode="contain"
         />
         <Text style={styles.title}>Family OS</Text>
-        <Text style={styles.sub}>Sign in with your family account</Text>
+        <Text style={styles.sub}>Sign in or create a family account</Text>
       </View>
 
       <Card style={styles.card}>
@@ -105,11 +123,19 @@ export default function LoginScreen() {
         {busy ? (
           <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
         ) : (
-          <Button title="Sign in with Keycloak" onPress={() => void signIn()} disabled={!request} />
+          <>
+            <Button title="Sign in" onPress={() => void signIn()} disabled={!request} />
+            <Button
+              title="Create account"
+              variant="secondary"
+              onPress={() => void createAccount()}
+              disabled={!request}
+            />
+          </>
         )}
         <Text style={[typography.caption, { marginTop: spacing.md }]}>
-          After password, Keycloak can prompt for fingerprint / Face ID (WebAuthn) if you enrolled a
-          device authenticator in Account settings.
+          New here? Create account, then set up a household or join with an invite code. Keycloak may
+          prompt for fingerprint / Face ID if WebAuthn is enrolled.
         </Text>
       </Card>
 
