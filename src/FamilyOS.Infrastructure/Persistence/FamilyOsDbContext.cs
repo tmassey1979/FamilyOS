@@ -317,5 +317,6 @@ public partial class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfa
         });
 
         ConfigureMeals(modelBuilder);
+        ConfigureInvites(modelBuilder);
     }
 }
