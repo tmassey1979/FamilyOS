@@ -1,9 +1,6 @@
-using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Procurement;
-using FamilyOS.Domain.Requests;
-using FamilyOS.Domain.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,18 +42,19 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             .ToListAsync(ct);
 
         var completed7 = tasks.Count(t =>
-            t.Status == TaskStatus.Completed
-            && t.CompletedAtUtc is { } c && c >= d7);
+            t.Status == FamilyTaskStatus.Completed
+            && t.UpdatedAtUtc is { } c && c >= d7);
         var completed30 = tasks.Count(t =>
-            t.Status == TaskStatus.Completed
-            && t.CompletedAtUtc is { } c && c >= d30);
+            t.Status == FamilyTaskStatus.Completed
+            && t.UpdatedAtUtc is { } c && c >= d30);
         var open = tasks.Count(t =>
-            t.Status is TaskStatus.Assigned or TaskStatus.Accepted or TaskStatus.InProgress);
+            t.Status is FamilyTaskStatus.Assigned or FamilyTaskStatus.Accepted
+                or FamilyTaskStatus.InProgress or FamilyTaskStatus.Paused
+                or FamilyTaskStatus.Created or FamilyTaskStatus.Reassigned);
 
         var durations = tasks
-            .Where(t => t.Status == TaskStatus.Completed && t.CompletedAtUtc.HasValue && t.StartedAtUtc.HasValue)
-            .Select(t => (t.CompletedAtUtc!.Value - t.StartedAtUtc!.Value).TotalMinutes)
-            .Where(m => m is > 0 and < 24 * 60)
+            .Where(t => t.Status == FamilyTaskStatus.Completed && t.ActualDurationMinutes is > 0)
+            .Select(t => (double)t.ActualDurationMinutes!)
             .ToList();
         double? avg = durations.Count > 0 ? durations.Average() : null;
 
@@ -71,7 +69,8 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             r.Status == RequestStatus.Denied
             && r.UpdatedAtUtc is { } u && u >= d7);
         var pending = requests.Count(r =>
-            r.Status is RequestStatus.Submitted or RequestStatus.PendingApproval or RequestStatus.Conditional);
+            r.Status is RequestStatus.Submitted or RequestStatus.UnderReview
+                or RequestStatus.WaitingForInformation or RequestStatus.ConditionallyApproved);
 
         var shop = await _db.ProcurementItems.AsNoTracking()
             .Where(i => i.FamilyId == familyId)
@@ -80,7 +79,8 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             i.Status == ProcurementItemStatus.Purchased
             && i.UpdatedAtUtc is { } u && u >= d7);
         var queued = shop.Count(i =>
-            i.Status is ProcurementItemStatus.Queued or ProcurementItemStatus.InCart);
+            i.Status is ProcurementItemStatus.Queued or ProcurementItemStatus.InCart
+                or ProcurementItemStatus.Approved);
 
         return new OutcomesDto(
             completed7,
