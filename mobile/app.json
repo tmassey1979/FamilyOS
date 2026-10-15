@@ -23,7 +23,25 @@
       },
       "package": "com.familyos.app",
       "versionCode": 1,
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE"]
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE"],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "familyos",
+              "host": "invite",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "familyos",
+              "pathPrefix": "/invite"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "plugins": [
       "expo-router",
