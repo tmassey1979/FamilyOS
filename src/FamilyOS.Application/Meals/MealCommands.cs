@@ -1,5 +1,6 @@
 using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Meals;
 using FamilyOS.Domain.Procurement;
 using MediatR;
