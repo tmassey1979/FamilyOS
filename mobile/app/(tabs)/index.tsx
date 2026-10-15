@@ -33,6 +33,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [livePulse, setLivePulse] = useState(false);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -41,6 +42,7 @@ export default function HomeScreen() {
     try {
       const data = await pulseApi.get();
       setPulse(data);
+      setLivePulse(true);
       try {
         setOutcomes(await outcomesApi.get());
       } catch {
@@ -54,6 +56,7 @@ export default function HomeScreen() {
         setTodayMeals([]);
       }
     } catch (e: unknown) {
+      setLivePulse(false);
       const msg =
         e && typeof e === 'object' && 'error' in e
           ? String((e as { error: string }).error)
@@ -115,6 +118,12 @@ export default function HomeScreen() {
 
   const go = (kind: string) => router.push(routeForKind(kind) as never);
 
+  const isQuietHousehold =
+    livePulse &&
+    !pulse?.nextAction &&
+    !(pulse?.needsAttention?.length) &&
+    (pulse?.household?.tasksDueToday ?? 0) === 0;
+
   return (
     <ScrollView
       style={styles.container}
@@ -133,6 +142,23 @@ export default function HomeScreen() {
           {error}
           {fromCache ? '' : ' · showing demo shell'}
         </Text>
+      ) : null}
+
+      {isQuietHousehold ? (
+        <>
+          <SectionTitle>Getting started</SectionTitle>
+          <Card style={styles.cardGap}>
+            <Text style={typography.heading}>Your household is ready</Text>
+            <Text style={typography.caption}>
+              Invite family from Settings, plan meals, create a task, or open a request.
+            </Text>
+            <View style={styles.row}>
+              <Button title="Invite" onPress={() => router.push('/(tabs)/settings')} />
+              <Button title="Add task" variant="secondary" onPress={() => router.push('/(tabs)/tasks')} />
+              <Button title="Meals" variant="secondary" onPress={() => router.push('/(tabs)/meals')} />
+            </View>
+          </Card>
+        </>
       ) : null}
 
       <SectionTitle>Next action</SectionTitle>
