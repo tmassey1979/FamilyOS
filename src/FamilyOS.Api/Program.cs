@@ -113,7 +113,6 @@ try
             ValidateIssuerSigningKey = true,
             NameClaimType = "preferred_username"
         };
-        // Allow SignalR to pass access_token on the query string
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -146,7 +145,6 @@ try
     builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
         p.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin()));
     builder.Services.AddSignalR();
-    // Replace null notifier with SignalR broadcast
     builder.Services.AddSingleton<IFamilyChatNotifier, SignalRFamilyChatNotifier>();
 
     builder.Services.AddHealthChecks()
@@ -201,6 +199,7 @@ try
 
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
+    // Authenticated only — familyId may be null (pre-onboarding)
     app.MapGet("/api/me", async (ICurrentUserService current) =>
     {
         await current.EnsureLoadedAsync();
@@ -214,7 +213,7 @@ try
             current.MemberId,
             Role = current.Role?.ToString()
         });
-    }).RequireAuthorization(FamilyAuthPolicies.FamilyMember);
+    }).RequireAuthorization();
 
     app.MapGet("/api/me/quiet-hours", async (IMediator mediator, CancellationToken ct) =>
         Results.Ok(await mediator.Send(new GetQuietHoursQuery(), ct)))
@@ -297,6 +296,20 @@ try
     {
         try { await SeedData.InitializeAsync(app.Services); }
         catch (Exception ex) { Log.Warning(ex, "Seed failed — ensure Postgres is up."); }
+    }
+
+    // Additive tables for invites + meal plan (IF NOT EXISTS)
+    try
+    {
+        using var schemaScope = app.Services.CreateScope();
+        var db = schemaScope.ServiceProvider.GetRequiredService<FamilyOsDbContext>();
+        var schemaLog = schemaScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaEnsure");
+        await EnsureFamilyInvitesSchema.RunAsync(db, schemaLog);
+        await EnsureMealSchema.RunAsync(db, schemaLog);
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Schema ensure failed");
     }
 
     app.Run();
