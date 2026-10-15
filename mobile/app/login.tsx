@@ -81,18 +81,24 @@ export default function LoginScreen() {
     }
   };
 
-  /** Keycloak registration (requires realm user registration enabled). */
+  /**
+   * Open Keycloak registration endpoint in the system browser.
+   * After register, user returns and taps Sign in (realm must allow registration).
+   */
   const createAccount = async () => {
     setError(null);
     setBusy(true);
     try {
-      await promptAsync({
-        showInRecents: true,
-        // Keycloak 17+ registration prompt; falls back to login if disabled
-        extraParams: { prompt: 'create' },
-      });
+      const authority = getKeycloakAuthority().replace(/\/$/, '');
+      const url =
+        `${authority}/protocol/openid-connect/registrations` +
+        `?client_id=${encodeURIComponent(cfg.clientId)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(cfg.scopes.join(' '))}` +
+        `&redirect_uri=${encodeURIComponent(cfg.redirectUri)}`;
+      await WebBrowser.openBrowserAsync(url);
     } catch (e: unknown) {
-      setError((e as Error)?.message ?? 'Registration failed');
+      setError((e as Error)?.message ?? 'Could not open registration');
     } finally {
       setBusy(false);
     }
@@ -129,13 +135,12 @@ export default function LoginScreen() {
               title="Create account"
               variant="secondary"
               onPress={() => void createAccount()}
-              disabled={!request}
             />
           </>
         )}
         <Text style={[typography.caption, { marginTop: spacing.md }]}>
-          New here? Create account, then set up a household or join with an invite code. Keycloak may
-          prompt for fingerprint / Face ID if WebAuthn is enrolled.
+          New here? Create account, then Sign in and set up a household or join with an invite code.
+          Keycloak may prompt for fingerprint / Face ID if WebAuthn is enrolled.
         </Text>
       </Card>
 
