@@ -7,6 +7,7 @@ public record TaskStarted(Guid TaskId, Guid FamilyId, Guid MemberId, DateTime Oc
 public record TaskPaused(Guid TaskId, Guid FamilyId, Guid MemberId, DateTime OccurredAtUtc);
 public record TaskResumed(Guid TaskId, Guid FamilyId, Guid MemberId, DateTime OccurredAtUtc);
 public record TaskCompleted(Guid TaskId, Guid FamilyId, Guid MemberId, int? ActualDurationMinutes, DateTime OccurredAtUtc);
+public record TaskSkipped(Guid TaskId, Guid FamilyId, Guid MemberId, string? Note, DateTime OccurredAtUtc);
 public record TaskDeclined(Guid TaskId, Guid FamilyId, Guid MemberId, Guid? ReasonId, string? Note, DateTime OccurredAtUtc);
 public record TaskReassigned(Guid TaskId, Guid FamilyId, Guid FromMemberId, Guid ToMemberId, Guid ByMemberId, DateTime OccurredAtUtc);
 public record TaskCancelled(Guid TaskId, Guid FamilyId, Guid ByMemberId, string? Reason, DateTime OccurredAtUtc);

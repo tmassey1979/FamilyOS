@@ -3,6 +3,7 @@ using FamilyOS.Infrastructure.Chat;
 using FamilyOS.Infrastructure.Notifications;
 using FamilyOS.Infrastructure.Google;
 using FamilyOS.Infrastructure.Identity;
+using FamilyOS.Infrastructure.Messaging;
 using FamilyOS.Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -40,23 +41,41 @@ public static class DependencyInjection
         services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
         services.AddHostedService<GoogleCalendarSyncWorker>();
 
+        // Domain events (#51): Rabbit when enabled, else in-memory so CI / local API still boots
+        var rabbitEnabled = !string.Equals(
+            configuration["RabbitMQ:Enabled"], "false", StringComparison.OrdinalIgnoreCase);
+
         services.AddMassTransit(x =>
         {
-            x.UsingRabbitMq((context, cfg) =>
+            x.AddConsumer<TaskCompletedConsumer>();
+
+            if (rabbitEnabled)
             {
-                var rabbitHost = configuration["RabbitMQ:Host"] ?? "localhost";
-                var rabbitUser = configuration["RabbitMQ:Username"] ?? "familyos";
-                var rabbitPass = configuration["RabbitMQ:Password"] ?? "familyos_dev_password";
-
-                cfg.Host(rabbitHost, "/", h =>
+                x.UsingRabbitMq((context, cfg) =>
                 {
-                    h.Username(rabbitUser);
-                    h.Password(rabbitPass);
-                });
+                    var rabbitHost = configuration["RabbitMQ:Host"] ?? "localhost";
+                    var rabbitUser = configuration["RabbitMQ:Username"] ?? "familyos";
+                    var rabbitPass = configuration["RabbitMQ:Password"] ?? "familyos_dev_password";
 
-                cfg.ConfigureEndpoints(context);
-            });
+                    cfg.Host(rabbitHost, "/", h =>
+                    {
+                        h.Username(rabbitUser);
+                        h.Password(rabbitPass);
+                    });
+
+                    cfg.ConfigureEndpoints(context);
+                });
+            }
+            else
+            {
+                x.UsingInMemory((context, cfg) =>
+                {
+                    cfg.ConfigureEndpoints(context);
+                });
+            }
         });
+
+        services.AddScoped<IDomainEventBus, MassTransitDomainEventBus>();
 
         return services;
     }
