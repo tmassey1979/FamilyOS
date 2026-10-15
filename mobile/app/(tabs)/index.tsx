@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
+import { outcomesApi, type OutcomesDto } from '../../src/api/outcomes';
 import { cacheGet } from '../../src/offline';
 import { colors, spacing, typography } from '../../src/theme';
 
-/**
- * Family Pulse — "What matters to me right now?"
- * Live API → offline cache → demo shell (last resort).
- */
+function routeForKind(kind: string): string {
+  const k = kind.toLowerCase();
+  if (k.includes('request') || k.includes('approval')) return '/(tabs)/requests';
+  if (k.includes('task')) return '/(tabs)/tasks';
+  if (k.includes('meal')) return '/(tabs)/meals';
+  if (k.includes('calendar') || k.includes('event')) return '/(tabs)/calendar';
+  if (k.includes('shop') || k.includes('procure') || k.includes('cart') || k.includes('product'))
+    return '/(tabs)/family';
+  if (k.includes('chat')) return '/(tabs)/chat';
+  return '/(tabs)/tasks';
+}
+
 export default function HomeScreen() {
+  const router = useRouter();
   const [pulse, setPulse] = useState<PulseDto | null>(null);
+  const [outcomes, setOutcomes] = useState<OutcomesDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -22,10 +34,10 @@ export default function HomeScreen() {
     try {
       const data = await pulseApi.get();
       setPulse(data);
-      // If we got data while offline, api() returned cache transparently
-      const cached = await cacheGet<PulseDto>('/api/pulse');
-      if (cached && JSON.stringify(cached.data) === JSON.stringify(data)) {
-        // Heuristic only when identical; prefer not flashing cache label on live hits
+      try {
+        setOutcomes(await outcomesApi.get());
+      } catch {
+        setOutcomes(null);
       }
     } catch (e: unknown) {
       const msg =
@@ -87,6 +99,8 @@ export default function HomeScreen() {
     void load();
   }, [load]);
 
+  const go = (kind: string) => router.push(routeForKind(kind) as never);
+
   return (
     <ScrollView
       style={styles.container}
@@ -118,7 +132,7 @@ export default function HomeScreen() {
             <Badge label={pulse.nextAction.kind} />
             {pulse.nextAction.dueLabel ? <Badge label={pulse.nextAction.dueLabel} tone="warning" /> : null}
           </View>
-          <Button title={pulse.nextAction.primaryAction} onPress={() => {}} />
+          <Button title={pulse.nextAction.primaryAction} onPress={() => go(pulse.nextAction!.kind)} />
         </Card>
       ) : (
         <EmptyState title="You're clear" subtitle="No urgent next action right now." />
@@ -133,7 +147,7 @@ export default function HomeScreen() {
             <View style={styles.row}>
               <Badge label={item.kind} />
             </View>
-            <Button title={item.actionLabel} variant="secondary" onPress={() => {}} />
+            <Button title={item.actionLabel} variant="secondary" onPress={() => go(item.kind)} />
           </Card>
         ))
       ) : (
@@ -149,7 +163,7 @@ export default function HomeScreen() {
             <View style={styles.row}>
               <Badge label={item.kind} tone="warning" />
             </View>
-            <Button title={item.actionLabel} variant="secondary" onPress={() => {}} />
+            <Button title={item.actionLabel} variant="secondary" onPress={() => go(item.kind)} />
           </Card>
         ))
       ) : (
@@ -173,7 +187,7 @@ export default function HomeScreen() {
       ) : null}
 
       <SectionTitle>Household</SectionTitle>
-      <Card>
+      <Card style={styles.cardGap}>
         {(pulse?.role === 'Owner' || pulse?.role === 'Adult' || !pulse?.role) ? (
           <Text style={typography.body}>
             {pulse?.household.requestsAwaitingApproval ?? 0} requests awaiting approval
@@ -192,6 +206,33 @@ export default function HomeScreen() {
           </Text>
         ) : null}
       </Card>
+
+      {outcomes ? (
+        <>
+          <SectionTitle>Outcomes</SectionTitle>
+          <Card style={styles.cardGap}>
+            <Text style={typography.body}>
+              Tasks done · 7d {outcomes.tasksCompletedLast7Days} · 30d {outcomes.tasksCompletedLast30Days}
+            </Text>
+            <Text style={typography.body}>
+              Requests · approved {outcomes.requestsApprovedLast7Days} · denied{' '}
+              {outcomes.requestsDeniedLast7Days} (7d)
+            </Text>
+            <Text style={typography.body}>
+              Shopping purchased (7d) · {outcomes.shoppingItemsPurchasedLast7Days}
+            </Text>
+            {outcomes.avgTaskCompletionMinutes != null ? (
+              <Text style={typography.caption}>
+                Avg task time · {Math.round(outcomes.avgTaskCompletionMinutes)} min
+              </Text>
+            ) : null}
+            <Text style={typography.caption}>
+              Open tasks {outcomes.openTasks} · pending requests {outcomes.pendingRequests} · queue{' '}
+              {outcomes.queuedShoppingItems}
+            </Text>
+          </Card>
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -200,6 +241,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
   cardGap: { marginBottom: spacing.md, gap: spacing.sm },
-  row: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.sm },
+  row: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.sm, flexWrap: 'wrap' },
   hint: { ...typography.caption, marginBottom: spacing.md },
 });
