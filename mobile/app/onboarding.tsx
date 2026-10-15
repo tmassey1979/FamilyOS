@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button, Card } from '../src/components/ui';
 import { meApi } from '../src/api/client';
 import { invitesApi, onboardingFamilyApi } from '../src/api/onboarding';
@@ -16,8 +17,30 @@ import { colors, spacing, typography } from '../src/theme';
 
 type Mode = 'choose' | 'create' | 'join';
 
+function extractInviteCode(url: string): string | null {
+  try {
+    // familyos://invite/ABCD1234 or familyos://onboarding?code=ABCD1234
+    const lower = url.toLowerCase();
+    const inviteIdx = lower.indexOf('invite/');
+    if (inviteIdx >= 0) {
+      const rest = url.slice(inviteIdx + 'invite/'.length).split(/[?#/]/)[0];
+      return rest ? rest.toUpperCase().replace(/\s/g, '') : null;
+    }
+    const q = url.split('?')[1];
+    if (q) {
+      const params = new URLSearchParams(q);
+      const c = params.get('code');
+      if (c) return c.toUpperCase().replace(/\s/g, '');
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export default function OnboardingScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ code?: string }>();
   const [mode, setMode] = useState<Mode>('choose');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +52,28 @@ export default function OnboardingScreen() {
   const [code, setCode] = useState('');
   const [joinName, setJoinName] = useState('');
   const [preview, setPreview] = useState<{ familyName: string; role: string; isOpen: boolean } | null>(null);
+
+  useEffect(() => {
+    const fromParam = typeof params.code === 'string' ? params.code : undefined;
+    if (fromParam) {
+      setCode(fromParam.toUpperCase().replace(/\s/g, ''));
+      setMode('join');
+    }
+  }, [params.code]);
+
+  useEffect(() => {
+    const applyUrl = (url: string | null) => {
+      if (!url) return;
+      const c = extractInviteCode(url);
+      if (c) {
+        setCode(c);
+        setMode('join');
+      }
+    };
+    void Linking.getInitialURL().then(applyUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => applyUrl(url));
+    return () => sub.remove();
+  }, []);
 
   const goHome = () => router.replace('/(tabs)');
 
