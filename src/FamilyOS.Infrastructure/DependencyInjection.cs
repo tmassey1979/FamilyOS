@@ -17,6 +17,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<NotificationPushInterceptor>();
+        services.AddSingleton<DomainEventDispatchInterceptor>();
 
         services.AddDbContext<FamilyOsDbContext>((sp, options) =>
         {
@@ -24,7 +25,9 @@ public static class DependencyInjection
                 configuration.GetConnectionString("DefaultConnection")
                 ?? "Host=localhost;Port=5432;Database=familyos;Username=familyos;Password=familyos_dev_password",
                 npgsql => npgsql.MigrationsAssembly(typeof(FamilyOsDbContext).Assembly.FullName));
-            options.AddInterceptors(sp.GetRequiredService<NotificationPushInterceptor>());
+            options.AddInterceptors(
+                sp.GetRequiredService<NotificationPushInterceptor>(),
+                sp.GetRequiredService<DomainEventDispatchInterceptor>());
         });
 
         services.AddScoped<IFamilyOsDbContext>(sp => sp.GetRequiredService<FamilyOsDbContext>());
