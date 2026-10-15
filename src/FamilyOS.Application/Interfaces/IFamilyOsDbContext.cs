@@ -4,6 +4,7 @@ using FamilyOS.Domain.Chat;
 using FamilyOS.Domain.Conditions;
 using FamilyOS.Domain.Execution;
 using FamilyOS.Domain.Family;
+using FamilyOS.Domain.Meals;
 using FamilyOS.Domain.Notifications;
 using FamilyOS.Domain.Procurement;
 using FamilyOS.Domain.Requests;
@@ -42,5 +43,7 @@ public interface IFamilyOsDbContext
     DbSet<Notification> Notifications { get; }
     DbSet<DeviceRegistration> DeviceRegistrations { get; }
     DbSet<TaskTimingRecord> TaskTimingRecords { get; }
+    DbSet<MealPlan> MealPlans { get; }
+    DbSet<MealEntry> MealEntries { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
