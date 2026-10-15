@@ -80,6 +80,23 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Re-check membership after create/join so we don't bounce back to onboarding
+  useEffect(() => {
+    if (!ready || !signedIn || !!getDevUser()) return;
+    let cancelled = false;
+    void meApi
+      .get()
+      .then((me) => {
+        if (!cancelled) setNeedsOnboarding(!me.familyId);
+      })
+      .catch(() => {
+        /* keep prior */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [segments, ready, signedIn]);
+
   useEffect(() => {
     if (!ready) return;
     const onLogin = segments[0] === 'login';
