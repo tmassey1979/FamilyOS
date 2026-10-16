@@ -46,5 +46,6 @@ public interface IFamilyOsDbContext
     DbSet<TaskTimingRecord> TaskTimingRecords { get; }
     DbSet<MealPlan> MealPlans { get; }
     DbSet<MealEntry> MealEntries { get; }
+    DbSet<Recipe> Recipes { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

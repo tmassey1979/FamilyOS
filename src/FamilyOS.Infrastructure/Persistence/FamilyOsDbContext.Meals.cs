@@ -7,6 +7,7 @@ public partial class FamilyOsDbContext
 {
     public DbSet<MealPlan> MealPlans => Set<MealPlan>();
     public DbSet<MealEntry> MealEntries => Set<MealEntry>();
+    public DbSet<Recipe> Recipes => Set<Recipe>();
 
     private static void ConfigureMeals(ModelBuilder modelBuilder)
     {
@@ -28,6 +29,16 @@ public partial class FamilyOsDbContext
             e.Property(x => x.Slot).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.IngredientsCsv).HasMaxLength(2000);
             e.Property(x => x.Notes).HasMaxLength(1000);
+            e.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<Recipe>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.FamilyId, x.Name });
+            e.Property(x => x.Name).HasMaxLength(300).IsRequired();
+            e.Property(x => x.IngredientsCsv).HasMaxLength(2000);
+            e.Property(x => x.Instructions).HasMaxLength(4000);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
     }
