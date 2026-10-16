@@ -24,7 +24,16 @@ public class InvitesController : ControllerBase
     [HttpPost]
     [Authorize(Policy = FamilyAuthPolicies.AdultOrOwner)]
     public async Task<ActionResult<InviteDto>> Create([FromBody] CreateInviteBody body, CancellationToken ct)
-        => Ok(await _mediator.Send(new CreateInviteCommand(body.Role, body.EmailHint, body.ValidDays ?? 14), ct));
+    {
+        if (!Enum.TryParse<FamilyRole>(body.Role, ignoreCase: true, out var role)
+            || role == FamilyRole.Owner)
+        {
+            return BadRequest(new { error = "Role must be Adult, Teen, or Child." });
+        }
+
+        return Ok(await _mediator.Send(
+            new CreateInviteCommand(role, body.EmailHint, body.ValidDays ?? 14), ct));
+    }
 
     [HttpGet]
     [Authorize(Policy = FamilyAuthPolicies.AdultOrOwner)]
@@ -44,6 +53,6 @@ public class InvitesController : ControllerBase
         return NoContent();
     }
 
-    public record CreateInviteBody(FamilyRole Role, string? EmailHint = null, int? ValidDays = 14);
+    public record CreateInviteBody(string Role, string? EmailHint = null, int? ValidDays = 14);
     public record AcceptInviteBody(string? DisplayName);
 }
