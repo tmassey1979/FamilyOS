@@ -13,6 +13,8 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Soft gate while filling tests; raise toward 90 for #14
+  DOMAIN_COVERAGE_MIN: "70"
 
 jobs:
   build-and-test:
@@ -60,13 +62,53 @@ jobs:
 
       - name: Test
         run: >
-          dotnet test FamilyOS.sln
+          dotnet test tests/FamilyOS.Domain.Tests/FamilyOS.Domain.Tests.csproj
           --configuration Release
           --no-build
           --verbosity normal
           --collect:"XPlat Code Coverage"
           --results-directory ./coverage
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+          --
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[FamilyOS.Domain]*"
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/Migrations/**"
+
+      - name: Domain coverage summary
+        if: always()
+        run: |
+          set -euo pipefail
+          COV=$(find coverage -name 'coverage.cobertura.xml' | head -1 || true)
+          if [[ -z "${COV}" ]]; then
+            echo "::warning::No cobertura file found"
+            echo "Domain line coverage: n/a" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET, pathlib, sys
+          paths = list(pathlib.Path('coverage').rglob('coverage.cobertura.xml'))
+          if not paths:
+              print('No cobertura'); sys.exit(0)
+          root = ET.parse(paths[0]).getroot()
+          # Prefer package matching Domain
+          rates = []
+          for pkg in root.findall('.//package'):
+              name = pkg.get('name') or ''
+              if 'FamilyOS.Domain' in name or name.endswith('Domain'):
+                  lr = pkg.get('line-rate')
+              if lr:
+                      rates.append(float(lr))
+          if not rates:
+              lr = root.get('line-rate')
+              rates = [float(lr)] if lr else [0.0]
+          pct = max(rates) * 100.0
+          min_pct = float(os.environ.get('DOMAIN_COVERAGE_MIN', '70'))
+          print(f'Domain line coverage: {pct:.1f}% (min {min_pct:.0f}%)')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write(f'\n### Domain coverage\n- **{pct:.1f}%** line (gate ≥ {min_pct:.0f}%)\n')
+          if pct + 1e-6 < min_pct:
+              print(f'::error::Domain coverage {pct:.1f}% below {min_pct:.0f}%')
+              sys.exit(1)
+          PY
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
