@@ -73,9 +73,10 @@ export default function HomeScreen() {
     void load();
   }, [load]);
 
-  const attention = pulse?.attention ?? [];
-  const blockers = pulse?.waitingBlockers ?? [];
-  const comingUp = pulse?.comingUp ?? [];
+  const attention = pulse?.attentionItems ?? [];
+  const blockers = pulse?.waitingOn ?? [];
+  const comingUp = pulse?.upcoming ?? [];
+  const next = pulse?.nextAction;
   const quiet =
     !pulse ||
     (attention.length === 0 && blockers.length === 0 && comingUp.length === 0 && todayMeals.length === 0);
@@ -97,16 +98,11 @@ export default function HomeScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {refreshing && !pulse ? <ActivityIndicator color={colors.primary} /> : null}
 
-      {pulse?.nextBestAction ? (
+      {next ? (
         <Card style={styles.cardGap}>
-          <Text style={typography.heading}>{pulse.nextBestAction.title}</Text>
-          {pulse.nextBestAction.subtitle ? (
-            <Text style={typography.caption}>{pulse.nextBestAction.subtitle}</Text>
-          ) : null}
-          <Button
-            title={pulse.nextBestAction.actionLabel || 'Open'}
-            onPress={() => router.push(routeForKind(pulse.nextBestAction!.kind))}
-          />
+          <Text style={typography.heading}>{next.title}</Text>
+          {next.subtitle ? <Text style={typography.caption}>{next.subtitle}</Text> : null}
+          <Button title={next.ctaLabel || 'Open'} onPress={() => router.push(routeForKind(next.kind))} />
         </Card>
       ) : null}
 
@@ -148,7 +144,7 @@ export default function HomeScreen() {
             >
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{b.title}</Text>
-                {b.subtitle ? <Text style={typography.caption}>{b.subtitle}</Text> : null}
+                {b.detail ? <Text style={typography.caption}>{b.detail}</Text> : null}
                 <Badge label={b.kind} tone="danger" />
               </Card>
             </Pressable>
@@ -191,8 +187,8 @@ export default function HomeScreen() {
 
       {pulse?.counts ? (
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Household — tasks {pulse.counts.openTasks} · requests {pulse.counts.pendingRequests} · shopping{' '}
-          {pulse.counts.queuedShopping}
+          Household — tasks {pulse.counts.openTaskCount} · requests {pulse.counts.pendingRequestCount} · shopping{' '}
+          {pulse.counts.shoppingQueueCount}
         </Text>
       ) : null}
 
