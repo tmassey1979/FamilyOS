@@ -13,6 +13,7 @@ import {
 import { setAccessToken, getDevUser, meApi } from '../src/api/client';
 import { OfflineBanner } from '../src/components/OfflineBanner';
 import { ensureStarted } from '../src/offline';
+import { setupNotificationNavigation } from '../src/push/notificationRouting';
 
 const AUTO_SKIP_LOGIN =
   process.env.EXPO_PUBLIC_SKIP_LOGIN === '1' ||
@@ -119,6 +120,18 @@ export default function RootLayout() {
       router.replace('/(tabs)');
     }
   }, [ready, signedIn, needsOnboarding, segments, router]);
+
+  // #50 — tap push → open related tab
+  useEffect(() => {
+    if (!ready || (!signedIn && !getDevUser()) || needsOnboarding) return;
+    return setupNotificationNavigation((href) => {
+      try {
+        router.push(href as never);
+      } catch {
+        /* navigation race during boot */
+      }
+    });
+  }, [ready, signedIn, needsOnboarding, router]);
 
   if (!ready) {
     return (
