@@ -16,6 +16,14 @@ export type MealPlanDto = {
   entries: MealEntryDto[];
 };
 
+export type RecipeDto = {
+  id: string;
+  name: string;
+  servings: number;
+  ingredientsCsv?: string | null;
+  instructions?: string | null;
+};
+
 export const mealsApi = {
   week: (weekStart?: string) =>
     api<MealPlanDto>(`/api/meals/week${weekStart ? `?weekStart=${encodeURIComponent(weekStart)}` : ''}`),
@@ -33,4 +41,23 @@ export const mealsApi = {
       `/api/meals/week/to-shopping${weekStart ? `?weekStart=${encodeURIComponent(weekStart)}` : ''}`,
       { method: 'POST' },
     ),
+};
+
+export const recipesApi = {
+  list: () => api<RecipeDto[]>('/api/recipes'),
+  create: (body: {
+    name: string;
+    servings?: number;
+    ingredientsCsv?: string;
+    instructions?: string;
+  }) => api<RecipeDto>('/api/recipes', { method: 'POST', body: JSON.stringify(body) }),
+  update: (
+    id: string,
+    body: { name: string; servings?: number; ingredientsCsv?: string; instructions?: string },
+  ) => api<RecipeDto>(`/api/recipes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  remove: (id: string) => api<void>(`/api/recipes/${id}`, { method: 'DELETE' }),
+  apply: (id: string, body: { dayUtc: string; slot: string; weekStartUtc?: string }) =>
+    api<MealEntryDto>(`/api/recipes/${id}/apply`, { method: 'POST', body: JSON.stringify(body) }),
+  toShopping: (id: string) =>
+    api<{ added: number }>(`/api/recipes/${id}/to-shopping`, { method: 'POST' }),
 };

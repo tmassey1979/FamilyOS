@@ -11,7 +11,13 @@ import {
   View,
 } from 'react-native';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
-import { mealsApi, type MealEntryDto, type MealPlanDto } from '../../src/api/meals';
+import {
+  mealsApi,
+  recipesApi,
+  type MealEntryDto,
+  type MealPlanDto,
+  type RecipeDto,
+} from '../../src/api/meals';
 import { colors, spacing, typography } from '../../src/theme';
 
 const SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
@@ -32,12 +38,18 @@ function addDays(d: Date, n: number): Date {
 }
 
 function dayLabel(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 export default function MealsScreen() {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [plan, setPlan] = useState<MealPlanDto | null>(null);
+  const [recipes, setRecipes] = useState<RecipeDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -46,13 +58,24 @@ export default function MealsScreen() {
   const [ingredients, setIngredients] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [rName, setRName] = useState('');
+  const [rServings, setRServings] = useState('4');
+  const [rIngredients, setRIngredients] = useState('');
+  const [rInstructions, setRInstructions] = useState('');
+
   const weekIso = weekStart.toISOString();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setPlan(await mealsApi.week(weekIso));
+      const [p, r] = await Promise.all([
+        mealsApi.week(weekIso),
+        recipesApi.list().catch(() => [] as RecipeDto[]),
+      ]);
+      setPlan(p);
+      setRecipes(r);
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not load meal plan');
       setPlan(null);
@@ -130,20 +153,114 @@ export default function MealsScreen() {
     }
   };
 
+  const saveRecipe = async () => {
+    if (!rName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const servings = parseInt(rServings, 10);
+      await recipesApi.create({
+        name: rName.trim(),
+        servings: Number.isFinite(servings) && servings > 0 ? servings : 4,
+        ingredientsCsv: rIngredients.trim() || undefined,
+        instructions: rInstructions.trim() || undefined,
+      });
+      setRecipeOpen(false);
+      setRName('');
+      setRServings('4');
+      setRIngredients('');
+      setRInstructions('');
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not save recipe');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applyRecipe = async (recipe: RecipeDto) => {
+    setBusy(true);
+    setMsg(null);
+    setError(null);
+    try {
+      const today = new Date();
+      const day = mondayOf(today);
+      // apply to tonight dinner of current week view
+      const dinnerDay = days.find((d) => d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ?? days[0];
+      await recipesApi.apply(recipe.id, {
+        dayUtc: dinnerDay.toISOString(),
+        slot: 'Dinner',
+        weekStartUtc: weekIso,
+      });
+      setMsg(`Applied “${recipe.name}” to Dinner`);
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not apply recipe');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recipeToShopping = async (recipe: RecipeDto) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await recipesApi.toShopping(recipe.id);
+      setMsg(r.added === 0 ? 'No new ingredients' : `Added ${r.added} from ${recipe.name}`);
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not add ingredients');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteRecipe = async (recipe: RecipeDto) => {
+    setBusy(true);
+    try {
+      await recipesApi.remove(recipe.id);
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not delete recipe');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
     >
+      <SectionTitle>Recipes</SectionTitle>
+      <View style={styles.row}>
+        <Button title="New recipe" onPress={() => setRecipeOpen(true)} />
+      </View>
+      {recipes.length === 0 ? (
+        <EmptyState title="No recipes yet" subtitle="Save a dish with ingredients to reuse on the plan." />
+      ) : (
+        recipes.map((r) => (
+          <Card key={r.id} style={styles.dayCard}>
+            <Text style={typography.heading}>{r.name}</Text>
+            <Text style={typography.caption}>
+              {r.servings} servings
+              {r.ingredientsCsv ? ` · ${r.ingredientsCsv}` : ''}
+            </Text>
+            <View style={styles.row}>
+              <Button title="→ Dinner" variant="secondary" onPress={() => void applyRecipe(r)} />
+              <Button title="→ Shopping" variant="secondary" onPress={() => void recipeToShopping(r)} />
+              <Button title="Delete" variant="secondary" onPress={() => void deleteRecipe(r)} />
+            </View>
+          </Card>
+        ))
+      )}
+
       <SectionTitle>This week</SectionTitle>
       <View style={styles.row}>
-        <Button
-          title="← Prev"
-          variant="secondary"
-          onPress={() => setWeekStart((w) => addDays(w, -7))}
-        />
-        <Text style={typography.caption}>{dayLabel(weekStart)} – {dayLabel(addDays(weekStart, 6))}</Text>
+        <Button title="← Prev" variant="secondary" onPress={() => setWeekStart((w) => addDays(w, -7))} />
+        <Text style={typography.caption}>
+          {dayLabel(weekStart)} – {dayLabel(addDays(weekStart, 6))}
+        </Text>
         <Button title="Next →" variant="secondary" onPress={() => setWeekStart((w) => addDays(w, 7))} />
       </View>
       <View style={styles.row}>
@@ -168,11 +285,6 @@ export default function MealsScreen() {
                 <Text style={[typography.body, { flex: 1 }]} numberOfLines={1}>
                   {e?.dishName ?? '—'}
                 </Text>
-                {e?.ingredientsCsv ? (
-                  <Text style={typography.caption} numberOfLines={1}>
-                    {e.ingredientsCsv}
-                  </Text>
-                ) : null}
               </Pressable>
             );
           })}
@@ -209,6 +321,47 @@ export default function MealsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={recipeOpen} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>New recipe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Name"
+              placeholderTextColor={colors.textMuted}
+              value={rName}
+              onChangeText={setRName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Servings"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              value={rServings}
+              onChangeText={setRServings}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Ingredients (comma-separated)"
+              placeholderTextColor={colors.textMuted}
+              value={rIngredients}
+              onChangeText={setRIngredients}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Instructions (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={rInstructions}
+              onChangeText={setRInstructions}
+            />
+            <View style={styles.row}>
+              <Button title="Cancel" variant="secondary" onPress={() => setRecipeOpen(false)} />
+              <Button title={busy ? '…' : 'Save'} onPress={() => void saveRecipe()} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -216,7 +369,13 @@ export default function MealsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.sm },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center', marginBottom: spacing.sm },
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   dayCard: { gap: spacing.xs, marginBottom: spacing.sm },
   slotRow: {
     flexDirection: 'row',
