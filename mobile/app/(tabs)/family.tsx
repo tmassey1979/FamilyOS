@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
@@ -14,6 +15,7 @@ type Member = { id: string; displayName: string; role: string; isActive: boolean
 const ROLES = ['Owner', 'Adult', 'Teen', 'Child'] as const;
 
 export default function FamilyScreen() {
+  const router = useRouter();
   const [familyName, setFamilyName] = useState('Family');
   const [members, setMembers] = useState<Member[]>([]);
   const [me, setMe] = useState<MeDto | null>(null);
@@ -35,7 +37,6 @@ export default function FamilyScreen() {
   const [purchaseStore, setPurchaseStore] = useState('');
   const [purchasing, setPurchasing] = useState(false);
 
-  // Add to shopping list (#34)
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [itemName, setItemName] = useState('');
   const [itemStore, setItemStore] = useState('');
@@ -49,7 +50,6 @@ export default function FamilyScreen() {
   const isOwner = me?.role === 'Owner';
   const isAdultOrOwner = me?.role === 'Owner' || me?.role === 'Adult';
 
-  /** #23 Group queue by preferred store for shopping trips */
   const actionable = queue.filter(
     (i) =>
       i.status === 'Queued' ||
@@ -74,7 +74,7 @@ export default function FamilyScreen() {
         try {
           await procurementApi.addToCart(it.id, cart.id);
         } catch {
-          /* continue other items */
+          /* continue */
         }
       }
       await load();
@@ -119,11 +119,7 @@ export default function FamilyScreen() {
     }
     setPurchasing(true);
     try {
-      await procurementApi.purchase(
-        purchaseItem.id,
-        price,
-        purchaseStore.trim() || undefined,
-      );
+      await procurementApi.purchase(purchaseItem.id, price, purchaseStore.trim() || undefined);
       setPurchaseItem(null);
       setPurchasePrice('');
       setPurchaseStore('');
@@ -163,7 +159,9 @@ export default function FamilyScreen() {
     }
   };
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const addMember = async () => {
     if (!displayName.trim() || !email.trim()) return;
@@ -218,14 +216,28 @@ export default function FamilyScreen() {
     >
       <Text style={typography.title}>{familyName}</Text>
       {me?.role ? (
-        <Text style={typography.caption}>Signed in as {me.externalIdentityId} · {me.role}</Text>
+        <Text style={typography.caption}>
+          Signed in as {me.externalIdentityId} · {me.role}
+        </Text>
       ) : null}
       {error ? <Text style={styles.hint}>{error}</Text> : null}
 
       <View style={styles.toolbar}>
         <SectionTitle>Members</SectionTitle>
-        {isAdultOrOwner ? <Button title="Add member" onPress={() => setAddOpen(true)} /> : null}
+        {isAdultOrOwner ? (
+          <View style={styles.row}>
+            <Button title="Invite" variant="secondary" onPress={() => router.push('/(tabs)/settings')} />
+            <Button title="Add member" onPress={() => setAddOpen(true)} />
+          </View>
+        ) : null}
       </View>
+      {isAdultOrOwner && members.filter((m) => m.isActive !== false).length <= 1 ? (
+        <Card style={styles.cardCol}>
+          <Text style={typography.caption}>
+            You&apos;re the only member so far. Invite family from Settings, or add someone by email below.
+          </Text>
+        </Card>
+      ) : null}
       {refreshing && members.length === 0 ? <ActivityIndicator color={colors.primary} /> : null}
       {members.map((m) => (
         <Card key={m.id} style={styles.cardCol}>
@@ -251,9 +263,7 @@ export default function FamilyScreen() {
 
       <View style={styles.toolbar}>
         <SectionTitle>Shopping by store</SectionTitle>
-        {isAdultOrOwner ? (
-          <Button title="Add to list" onPress={() => setAddItemOpen(true)} />
-        ) : null}
+        {isAdultOrOwner ? <Button title="Add to list" onPress={() => setAddItemOpen(true)} /> : null}
       </View>
       <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
         Queue grouped by preferred store — start a trip to build a cart.
@@ -272,10 +282,13 @@ export default function FamilyScreen() {
             variant="secondary"
             onPress={() => {
               if (!storeName.trim()) return;
-              procurementApi.createCart(storeName.trim()).then(() => {
-                setStoreName('');
-                return load();
-              }).catch(() => {});
+              procurementApi
+                .createCart(storeName.trim())
+                .then(() => {
+                  setStoreName('');
+                  return load();
+                })
+                .catch(() => {});
             }}
           />
         </View>
@@ -332,9 +345,7 @@ export default function FamilyScreen() {
                 <Text style={typography.heading}>{store}</Text>
                 <Badge label={`${items.length} item${items.length === 1 ? '' : 's'}`} />
               </View>
-              {est > 0 ? (
-                <Text style={typography.caption}>Est. total ~${est.toFixed(2)}</Text>
-              ) : null}
+              {est > 0 ? <Text style={typography.caption}>Est. total ~${est.toFixed(2)}</Text> : null}
               {items.map((item) => (
                 <View key={item.id} style={{ gap: 4, marginTop: spacing.xs }}>
                   <View style={styles.rowBetween}>
@@ -361,7 +372,11 @@ export default function FamilyScreen() {
                       ) : null}
                       <Button title="Hold" variant="secondary" onPress={() => procurementApi.hold(item.id).then(load).catch(() => {})} />
                       <Button title="Defer" variant="secondary" onPress={() => procurementApi.defer(item.id).then(load).catch(() => {})} />
-                      <Button title="Not needed" variant="secondary" onPress={() => procurementApi.noLongerNeeded(item.id).then(load).catch(() => {})} />
+                      <Button
+                        title="Not needed"
+                        variant="secondary"
+                        onPress={() => procurementApi.noLongerNeeded(item.id).then(load).catch(() => {})}
+                      />
                     </View>
                   ) : null}
                 </View>
@@ -397,25 +412,29 @@ export default function FamilyScreen() {
               {' · '}
               {pr.purchaseCount} purchase{pr.purchaseCount === 1 ? '' : 's'}
             </Text>
-            {pr.lastPurchasedAtUtc ? (
-              <Text style={typography.caption}>
-                Last {new Date(pr.lastPurchasedAtUtc).toLocaleDateString()}
-              </Text>
-            ) : null}
           </Card>
         ))
       )}
-
-      <Text style={[typography.caption, { marginTop: spacing.lg }]}>
-        Roles and permissions are enforced on the API — UI is never the security boundary.
-      </Text>
 
       <Modal visible={addOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={typography.heading}>Add member</Text>
-            <TextInput style={styles.input} placeholder="Display name" placeholderTextColor={colors.textMuted} value={displayName} onChangeText={setDisplayName} />
-            <TextInput style={styles.input} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" value={email} onChangeText={setEmail} />
+            <TextInput
+              style={styles.input}
+              placeholder="Display name"
+              placeholderTextColor={colors.textMuted}
+              value={displayName}
+              onChangeText={setDisplayName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
             <View style={styles.row}>
               {ROLES.filter((r) => r !== 'Owner').map((r) => (
                 <Pressable key={r} style={[styles.chip, role === r && styles.chipOn]} onPress={() => setRole(r)}>
@@ -435,28 +454,9 @@ export default function FamilyScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={typography.heading}>Add to shopping list</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Item name"
-              placeholderTextColor={colors.textMuted}
-              value={itemName}
-              onChangeText={setItemName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Preferred store (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={itemStore}
-              onChangeText={setItemStore}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Est. price (optional)"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={itemPrice}
-              onChangeText={setItemPrice}
-            />
+            <TextInput style={styles.input} placeholder="Item name" placeholderTextColor={colors.textMuted} value={itemName} onChangeText={setItemName} />
+            <TextInput style={styles.input} placeholder="Preferred store (optional)" placeholderTextColor={colors.textMuted} value={itemStore} onChangeText={setItemStore} />
+            <TextInput style={styles.input} placeholder="Est. price (optional)" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" value={itemPrice} onChangeText={setItemPrice} />
             <View style={styles.row}>
               {['Grocery', 'Snack', 'Purchase', 'Household'].map((c) => (
                 <Pressable key={c} style={[styles.chip, itemCategory === c && styles.chipOn]} onPress={() => setItemCategory(c)}>
@@ -477,24 +477,11 @@ export default function FamilyScreen() {
           <View style={styles.modalCard}>
             <Text style={typography.heading}>Mark purchased</Text>
             <Text style={typography.caption}>{purchaseItem?.name}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Actual price"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={purchasePrice}
-              onChangeText={setPurchasePrice}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Store (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={purchaseStore}
-              onChangeText={setPurchaseStore}
-            />
+            <TextInput style={styles.input} placeholder="Actual price" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" value={purchasePrice} onChangeText={setPurchasePrice} />
+            <TextInput style={styles.input} placeholder="Store" placeholderTextColor={colors.textMuted} value={purchaseStore} onChangeText={setPurchaseStore} />
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="secondary" onPress={() => setPurchaseItem(null)} />
-              <Button title={purchasing ? 'Saving…' : 'Save'} onPress={() => void submitPurchase()} />
+              <Button title={purchasing ? '…' : 'Save'} onPress={() => void submitPurchase()} />
             </View>
           </View>
         </View>
@@ -503,9 +490,9 @@ export default function FamilyScreen() {
       <Modal visible={!!roleMember} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={typography.heading}>Role · {roleMember?.displayName}</Text>
+            <Text style={typography.heading}>Change role · {roleMember?.displayName}</Text>
             <View style={styles.row}>
-              {ROLES.map((r) => (
+              {ROLES.filter((r) => r !== 'Owner').map((r) => (
                 <Pressable key={r} style={[styles.chip, nextRole === r && styles.chipOn]} onPress={() => setNextRole(r)}>
                   <Text style={styles.chipText}>{r}</Text>
                 </Pressable>
@@ -513,7 +500,7 @@ export default function FamilyScreen() {
             </View>
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="secondary" onPress={() => setRoleMember(null)} />
-              <Button title={saving ? 'Saving…' : 'Save role'} onPress={() => void changeRole()} />
+              <Button title={saving ? '…' : 'Save'} onPress={() => void changeRole()} />
             </View>
           </View>
         </View>
@@ -525,22 +512,36 @@ export default function FamilyScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
-  toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardCol: { marginBottom: spacing.sm, gap: spacing.sm },
-  row: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', flexWrap: 'wrap' },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  hint: { ...typography.caption, marginBottom: spacing.md, color: colors.danger },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: {
-    backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    padding: spacing.lg, gap: spacing.md,
-  },
+  toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  cardCol: { marginBottom: spacing.md, gap: spacing.sm },
+  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', alignItems: 'center' },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
+  hint: { ...typography.caption, color: colors.danger, marginBottom: spacing.sm },
   input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm,
-    color: colors.text, backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: spacing.sm,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.bg },
-  chipOn: { backgroundColor: colors.primary },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    gap: spacing.sm,
+  },
+  modalActions: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
+  chip: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipOn: { borderColor: colors.primary, backgroundColor: '#1E293B' },
   chipText: { ...typography.caption, color: colors.text },
 });
