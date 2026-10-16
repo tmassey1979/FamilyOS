@@ -199,7 +199,6 @@ try
 
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
-    // Authenticated only — familyId may be null (pre-onboarding)
     app.MapGet("/api/me", async (ICurrentUserService current) =>
     {
         await current.EnsureLoadedAsync();
@@ -298,7 +297,6 @@ try
         catch (Exception ex) { Log.Warning(ex, "Seed failed — ensure Postgres is up."); }
     }
 
-    // Additive tables for invites + meal plan (IF NOT EXISTS)
     try
     {
         using var schemaScope = app.Services.CreateScope();
@@ -306,6 +304,7 @@ try
         var schemaLog = schemaScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaEnsure");
         await EnsureFamilyInvitesSchema.RunAsync(db, schemaLog);
         await EnsureMealSchema.RunAsync(db, schemaLog);
+        await EnsureRecipeSchema.RunAsync(db, schemaLog);
     }
     catch (Exception ex)
     {
