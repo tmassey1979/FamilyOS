@@ -18,6 +18,11 @@ import { colors, spacing, typography } from '../src/theme';
 
 type Mode = 'choose' | 'create' | 'join';
 
+const SHOW_DEV_SKIP =
+  typeof __DEV__ !== 'undefined' &&
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_ALLOW_ONBOARDING_SKIP !== '0';
+
 function extractInviteCode(url: string): string | null {
   try {
     const lower = url.toLowerCase();
@@ -78,6 +83,7 @@ export default function OnboardingScreen() {
   }, []);
 
   const goHome = () => router.replace('/(tabs)');
+  const goSettings = () => router.replace('/(tabs)/settings');
 
   const createHousehold = async () => {
     if (!familyName.trim()) {
@@ -96,8 +102,11 @@ export default function OnboardingScreen() {
       await meApi.get().catch(() => null);
       Alert.alert(
         'Household ready',
-        'Invite family from Settings when you are ready. You can plan meals, tasks, and requests from Home.',
-        [{ text: 'Continue', onPress: goHome }],
+        'Invite family from Settings, or open Home to add tasks and meals.',
+        [
+          { text: 'Home', onPress: goHome },
+          { text: 'Invite now', onPress: goSettings },
+        ],
       );
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not create household');
@@ -239,9 +248,11 @@ export default function OnboardingScreen() {
         </Card>
       ) : null}
 
-      <Pressable onPress={goHome} style={{ marginTop: spacing.lg }}>
-        <Text style={styles.skip}>Skip for now (dev)</Text>
-      </Pressable>
+      {SHOW_DEV_SKIP ? (
+        <Pressable onPress={goHome} style={{ marginTop: spacing.lg }}>
+          <Text style={styles.skip}>Skip for now (dev)</Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
