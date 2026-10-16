@@ -1,4 +1,4 @@
-import { Clipboard, Platform, Share } from 'react-native';
+import { Platform, Share } from 'react-native';
 
 export function inviteDeepLink(code: string) {
   return `familyos://invite/${code}`;
@@ -9,14 +9,31 @@ export function inviteShareMessage(code: string, familyName?: string) {
   return `${title}\n\nInvite code: ${code}\n\nOpen in app: ${inviteDeepLink(code)}`;
 }
 
-/** Copy code (+ optional deep link) to the clipboard. */
-export async function copyInviteCode(code: string): Promise<void> {
-  const text = `${code}\n${inviteDeepLink(code)}`;
+function tryClipboardSet(text: string): boolean {
   try {
-    // RN Clipboard is available on both platforms in this Expo SDK
-    Clipboard.setString(text);
+    // RN 0.76+ may not export Clipboard; optional require keeps typecheck happy
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const rn = require('react-native') as { Clipboard?: { setString?: (s: string) => void } };
+    if (rn.Clipboard?.setString) {
+      rn.Clipboard.setString(text);
+      return true;
+    }
   } catch {
     /* ignore */
+  }
+  return false;
+}
+
+/** Copy code (+ deep link) to the clipboard when possible. */
+export async function copyInviteCode(code: string): Promise<boolean> {
+  const text = `${code}\n${inviteDeepLink(code)}`;
+  if (tryClipboardSet(text)) return true;
+  // Fallback: open share sheet so user can copy manually
+  try {
+    await Share.share({ message: text });
+    return true;
+  } catch {
+    return false;
   }
 }
 
