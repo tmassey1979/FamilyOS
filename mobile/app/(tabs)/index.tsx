@@ -27,12 +27,12 @@ function mondayOf(d: Date): Date {
 
 function routeForKind(kind: string): Href {
   const k = kind.toLowerCase();
-  if (k.includes('request')) return '/(tabs)/requests';
-  if (k.includes('task')) return '/(tabs)/tasks';
-  if (k.includes('shop') || k.includes('procure') || k.includes('cart')) return '/(tabs)/family';
-  if (k.includes('meal')) return '/(tabs)/meals';
-  if (k.includes('chat')) return '/(tabs)/chat';
-  return '/(tabs)';
+  if (k.includes('request')) return '/(tabs)/requests' as Href;
+  if (k.includes('task')) return '/(tabs)/tasks' as Href;
+  if (k.includes('shop') || k.includes('procure') || k.includes('cart')) return '/(tabs)/family' as Href;
+  if (k.includes('meal')) return '/(tabs)/meals' as Href;
+  if (k.includes('chat')) return '/(tabs)/chat' as Href;
+  return '/(tabs)' as Href;
 }
 
 export default function HomeScreen() {
@@ -117,9 +117,9 @@ export default function HomeScreen() {
             Invite family from Settings, add a task, or plan meals for the week.
           </Text>
           <View style={styles.row}>
-            <Button title="Settings" variant="secondary" onPress={() => router.push('/(tabs)/settings')} />
-            <Button title="Meals" variant="secondary" onPress={() => router.push('/(tabs)/meals')} />
-            <Button title="Tasks" onPress={() => router.push('/(tabs)/tasks')} />
+            <Button title="Settings" variant="secondary" onPress={() => router.push('/(tabs)/settings' as Href)} />
+            <Button title="Meals" variant="secondary" onPress={() => router.push('/(tabs)/meals' as Href)} />
+            <Button title="Tasks" onPress={() => router.push('/(tabs)/tasks' as Href)} />
           </View>
         </Card>
       ) : null}
@@ -133,7 +133,7 @@ export default function HomeScreen() {
                 {m.slot}: {m.dishName}
               </Text>
             ))}
-            <Button title="Meal plan" variant="secondary" onPress={() => router.push('/(tabs)/meals')} />
+            <Button title="Meal plan" variant="secondary" onPress={() => router.push('/(tabs)/meals' as Href)} />
           </Card>
         </>
       ) : null}
