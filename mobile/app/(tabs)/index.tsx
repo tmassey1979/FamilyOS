@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Badge, Button, Card, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
 import { outcomesApi, type OutcomesDto } from '../../src/api/outcomes';
@@ -25,7 +25,7 @@ function mondayOf(d: Date): Date {
   return x;
 }
 
-function routeForKind(kind: string): string {
+function routeForKind(kind: string): Href {
   const k = kind.toLowerCase();
   if (k.includes('request')) return '/(tabs)/requests';
   if (k.includes('task')) return '/(tabs)/tasks';
@@ -105,7 +105,7 @@ export default function HomeScreen() {
           ) : null}
           <Button
             title={pulse.nextBestAction.actionLabel || 'Open'}
-            onPress={() => router.push(routeForKind(pulse.nextBestAction!.kind) as never)}
+            onPress={() => router.push(routeForKind(pulse.nextBestAction!.kind))}
           />
         </Card>
       ) : null}
@@ -144,7 +144,7 @@ export default function HomeScreen() {
           {blockers.map((b, i) => (
             <Pressable
               key={`${b.kind}-${b.relatedEntityId ?? i}`}
-              onPress={() => router.push(routeForKind(b.kind) as never)}
+              onPress={() => router.push(routeForKind(b.kind))}
             >
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{b.title}</Text>
@@ -162,7 +162,7 @@ export default function HomeScreen() {
           {attention.map((a, i) => (
             <Pressable
               key={`${a.kind}-${a.relatedEntityId ?? i}`}
-              onPress={() => router.push(routeForKind(a.kind) as never)}
+              onPress={() => router.push(routeForKind(a.kind))}
             >
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{a.title}</Text>
