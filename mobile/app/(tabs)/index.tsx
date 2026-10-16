@@ -126,7 +126,7 @@ export default function HomeScreen() {
 
       {todayMeals.length > 0 ? (
         <>
-          <SectionTitle>Today&apos;s meals</SectionTitle>
+          <SectionTitle>Today's meals</SectionTitle>
           <Card style={styles.cardGap}>
             {todayMeals.map((m) => (
               <Text key={m.id} style={typography.body}>
@@ -149,7 +149,7 @@ export default function HomeScreen() {
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{b.title}</Text>
                 {b.subtitle ? <Text style={typography.caption}>{b.subtitle}</Text> : null}
-                <Badge label={b.kind} tone="warning" />
+                <Badge label={b.kind} tone="danger" />
               </Card>
             </Pressable>
           ))}
@@ -169,7 +169,7 @@ export default function HomeScreen() {
                 {a.subtitle ? <Text style={typography.caption}>{a.subtitle}</Text> : null}
                 <View style={styles.row}>
                   <Badge label={a.kind} />
-                  {a.dueLabel ? <Badge label={a.dueLabel} tone="warning" /> : null}
+                  {a.dueLabel ? <Badge label={a.dueLabel} tone="danger" /> : null}
                 </View>
               </Card>
             </Pressable>
