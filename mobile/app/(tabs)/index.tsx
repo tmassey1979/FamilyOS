@@ -126,7 +126,7 @@ export default function HomeScreen() {
 
       {todayMeals.length > 0 ? (
         <>
-          <SectionTitle>Today's meals</SectionTitle>
+          <SectionTitle>Today&apos;s meals</SectionTitle>
           <Card style={styles.cardGap}>
             {todayMeals.map((m) => (
               <Text key={m.id} style={typography.body}>
@@ -142,7 +142,10 @@ export default function HomeScreen() {
         <>
           <SectionTitle>Waiting / blockers</SectionTitle>
           {blockers.map((b, i) => (
-            <Pressable key={`${b.kind}-${b.relatedId ?? i}`} onPress={() => router.push(routeForKind(b.kind) as never)}>
+            <Pressable
+              key={`${b.kind}-${b.relatedEntityId ?? i}`}
+              onPress={() => router.push(routeForKind(b.kind) as never)}
+            >
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{b.title}</Text>
                 {b.subtitle ? <Text style={typography.caption}>{b.subtitle}</Text> : null}
@@ -157,7 +160,10 @@ export default function HomeScreen() {
         <>
           <SectionTitle>Needs attention</SectionTitle>
           {attention.map((a, i) => (
-            <Pressable key={`${a.kind}-${a.relatedId ?? i}`} onPress={() => router.push(routeForKind(a.kind) as never)}>
+            <Pressable
+              key={`${a.kind}-${a.relatedEntityId ?? i}`}
+              onPress={() => router.push(routeForKind(a.kind) as never)}
+            >
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{a.title}</Text>
                 {a.subtitle ? <Text style={typography.caption}>{a.subtitle}</Text> : null}
