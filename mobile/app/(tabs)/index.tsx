@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
+import { Badge, Button, Card, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
 import { outcomesApi, type OutcomesDto } from '../../src/api/outcomes';
 import { mealsApi, type MealEntryDto } from '../../src/api/meals';
@@ -23,6 +23,16 @@ function mondayOf(d: Date): Date {
   x.setUTCDate(x.getUTCDate() + diff);
   x.setUTCHours(0, 0, 0, 0);
   return x;
+}
+
+function routeForKind(kind: string): string {
+  const k = kind.toLowerCase();
+  if (k.includes('request')) return '/(tabs)/requests';
+  if (k.includes('task')) return '/(tabs)/tasks';
+  if (k.includes('shop') || k.includes('procure') || k.includes('cart')) return '/(tabs)/family';
+  if (k.includes('meal')) return '/(tabs)/meals';
+  if (k.includes('chat')) return '/(tabs)/chat';
+  return '/(tabs)';
 }
 
 export default function HomeScreen() {
@@ -63,12 +73,12 @@ export default function HomeScreen() {
     void load();
   }, [load]);
 
+  const attention = pulse?.attention ?? [];
+  const blockers = pulse?.waitingBlockers ?? [];
+  const comingUp = pulse?.comingUp ?? [];
   const quiet =
     !pulse ||
-    ((pulse.myTasks?.length ?? 0) === 0 &&
-      (pulse.pendingApprovals?.length ?? 0) === 0 &&
-      (pulse.waitingBlockers?.length ?? 0) === 0 &&
-      (pulse.comingUp?.length ?? 0) === 0);
+    (attention.length === 0 && blockers.length === 0 && comingUp.length === 0 && todayMeals.length === 0);
 
   return (
     <ScrollView
@@ -77,6 +87,7 @@ export default function HomeScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
     >
       <Text style={typography.title}>Family Pulse</Text>
+      {pulse?.greeting ? <Text style={typography.caption}>{pulse.greeting}</Text> : null}
       {pulse?.role ? (
         <Text style={typography.caption}>
           {pulse.role}
@@ -85,6 +96,19 @@ export default function HomeScreen() {
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {refreshing && !pulse ? <ActivityIndicator color={colors.primary} /> : null}
+
+      {pulse?.nextBestAction ? (
+        <Card style={styles.cardGap}>
+          <Text style={typography.heading}>{pulse.nextBestAction.title}</Text>
+          {pulse.nextBestAction.subtitle ? (
+            <Text style={typography.caption}>{pulse.nextBestAction.subtitle}</Text>
+          ) : null}
+          <Button
+            title={pulse.nextBestAction.actionLabel || 'Open'}
+            onPress={() => router.push(routeForKind(pulse.nextBestAction!.kind) as never)}
+          />
+        </Card>
+      ) : null}
 
       {quiet && !refreshing ? (
         <Card style={styles.cardGap}>
@@ -114,43 +138,32 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {(pulse?.waitingBlockers?.length ?? 0) > 0 ? (
+      {blockers.length > 0 ? (
         <>
           <SectionTitle>Waiting / blockers</SectionTitle>
-          {pulse!.waitingBlockers!.map((b, i) => (
-            <Card key={`${b.kind}-${b.id ?? i}`} style={styles.cardGap}>
-              <Text style={typography.heading}>{b.title}</Text>
-              {b.detail ? <Text style={typography.caption}>{b.detail}</Text> : null}
-              <Badge label={b.kind} tone="warning" />
-            </Card>
-          ))}
-        </>
-      ) : null}
-
-      {(pulse?.pendingApprovals?.length ?? 0) > 0 ? (
-        <>
-          <SectionTitle>Needs your decision</SectionTitle>
-          {pulse!.pendingApprovals!.map((a) => (
-            <Pressable key={a.id} onPress={() => router.push('/(tabs)/requests')}>
+          {blockers.map((b, i) => (
+            <Pressable key={`${b.kind}-${b.relatedId ?? i}`} onPress={() => router.push(routeForKind(b.kind) as never)}>
               <Card style={styles.cardGap}>
-                <Text style={typography.heading}>{a.title}</Text>
-                <Text style={typography.caption}>{a.status}</Text>
+                <Text style={typography.heading}>{b.title}</Text>
+                {b.subtitle ? <Text style={typography.caption}>{b.subtitle}</Text> : null}
+                <Badge label={b.kind} tone="warning" />
               </Card>
             </Pressable>
           ))}
         </>
       ) : null}
 
-      {(pulse?.myTasks?.length ?? 0) > 0 ? (
+      {attention.length > 0 ? (
         <>
-          <SectionTitle>My tasks</SectionTitle>
-          {pulse!.myTasks!.map((t) => (
-            <Pressable key={t.id} onPress={() => router.push('/(tabs)/tasks')}>
+          <SectionTitle>Needs attention</SectionTitle>
+          {attention.map((a, i) => (
+            <Pressable key={`${a.kind}-${a.relatedId ?? i}`} onPress={() => router.push(routeForKind(a.kind) as never)}>
               <Card style={styles.cardGap}>
-                <Text style={typography.heading}>{t.title}</Text>
+                <Text style={typography.heading}>{a.title}</Text>
+                {a.subtitle ? <Text style={typography.caption}>{a.subtitle}</Text> : null}
                 <View style={styles.row}>
-                  <Badge label={t.status} />
-                  {t.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
+                  <Badge label={a.kind} />
+                  {a.dueLabel ? <Badge label={a.dueLabel} tone="warning" /> : null}
                 </View>
               </Card>
             </Pressable>
@@ -158,16 +171,23 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {(pulse?.comingUp?.length ?? 0) > 0 ? (
+      {comingUp.length > 0 ? (
         <>
           <SectionTitle>Coming up</SectionTitle>
-          {pulse!.comingUp!.map((c, i) => (
+          {comingUp.map((c, i) => (
             <Card key={`${c.title}-${i}`} style={styles.cardGap}>
               <Text style={typography.body}>{c.title}</Text>
-              {c.when ? <Text style={typography.caption}>{c.when}</Text> : null}
+              {c.whenLabel ? <Text style={typography.caption}>{c.whenLabel}</Text> : null}
             </Card>
           ))}
         </>
+      ) : null}
+
+      {pulse?.counts ? (
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Household — tasks {pulse.counts.openTasks} · requests {pulse.counts.pendingRequests} · shopping{' '}
+          {pulse.counts.queuedShopping}
+        </Text>
       ) : null}
 
       {outcomes ? (
