@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -19,7 +20,6 @@ type Mode = 'choose' | 'create' | 'join';
 
 function extractInviteCode(url: string): string | null {
   try {
-    // familyos://invite/ABCD1234 or familyos://onboarding?code=ABCD1234
     const lower = url.toLowerCase();
     const inviteIdx = lower.indexOf('invite/');
     if (inviteIdx >= 0) {
@@ -51,7 +51,9 @@ export default function OnboardingScreen() {
 
   const [code, setCode] = useState('');
   const [joinName, setJoinName] = useState('');
-  const [preview, setPreview] = useState<{ familyName: string; role: string; isOpen: boolean } | null>(null);
+  const [preview, setPreview] = useState<{ familyName: string; role: string; isOpen: boolean } | null>(
+    null,
+  );
 
   useEffect(() => {
     const fromParam = typeof params.code === 'string' ? params.code : undefined;
@@ -92,7 +94,11 @@ export default function OnboardingScreen() {
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       await meApi.get().catch(() => null);
-      goHome();
+      Alert.alert(
+        'Household ready',
+        'Invite family from Settings when you are ready. You can plan meals, tasks, and requests from Home.',
+        [{ text: 'Continue', onPress: goHome }],
+      );
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not create household');
     } finally {
@@ -125,8 +131,12 @@ export default function OnboardingScreen() {
     setBusy(true);
     setError(null);
     try {
-      await invitesApi.accept(c, joinName.trim() || undefined);
-      goHome();
+      const member = await invitesApi.accept(c, joinName.trim() || undefined);
+      Alert.alert(
+        `Welcome${preview?.familyName ? ` to ${preview.familyName}` : ''}`,
+        `You joined as ${member.role}. Open Home to see what needs attention.`,
+        [{ text: 'Continue', onPress: goHome }],
+      );
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not join family');
     } finally {
