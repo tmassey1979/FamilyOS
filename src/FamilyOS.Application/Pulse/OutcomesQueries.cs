@@ -11,8 +11,11 @@ public record OutcomesDto(
     int TasksCompletedLast30Days,
     int RequestsApprovedLast7Days,
     int RequestsDeniedLast7Days,
+    int RequestsApprovedLast30Days,
+    int RequestsDeniedLast30Days,
     int ShoppingItemsPurchasedLast7Days,
     double? AvgTaskCompletionMinutes,
+    double? ApprovalRateLast7Days,
     int OpenTasks,
     int PendingRequests,
     int QueuedShoppingItems);
@@ -68,9 +71,20 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
         var denied7 = requests.Count(r =>
             r.Status == RequestStatus.Denied
             && r.UpdatedAtUtc is { } u && u >= d7);
+        var approved30 = requests.Count(r =>
+            r.Status == RequestStatus.Approved
+            && r.UpdatedAtUtc is { } u && u >= d30);
+        var denied30 = requests.Count(r =>
+            r.Status == RequestStatus.Denied
+            && r.UpdatedAtUtc is { } u && u >= d30);
         var pending = requests.Count(r =>
             r.Status is RequestStatus.Submitted or RequestStatus.UnderReview
                 or RequestStatus.WaitingForInformation or RequestStatus.ConditionallyApproved);
+
+        double? approvalRate7 = null;
+        var decided7 = approved7 + denied7;
+        if (decided7 > 0)
+            approvalRate7 = Math.Round(100.0 * approved7 / decided7, 1);
 
         var shop = await _db.ProcurementItems.AsNoTracking()
             .Where(i => i.FamilyId == familyId)
@@ -87,8 +101,11 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             completed30,
             approved7,
             denied7,
+            approved30,
+            denied30,
             purchased7,
             avg,
+            approvalRate7,
             open,
             pending,
             queued);
