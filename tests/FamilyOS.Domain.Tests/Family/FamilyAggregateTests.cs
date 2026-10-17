@@ -1,6 +1,7 @@
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Family;
 using FluentAssertions;
+using FamilyEntity = FamilyOS.Domain.Family.Family;
 
 namespace FamilyOS.Domain.Tests.Family;
 
@@ -9,7 +10,7 @@ public class FamilyAggregateTests
     [Fact]
     public void Create_trims_name_and_seeds_decline_reasons()
     {
-        var f = Domain.Family.Family.Create("  Henderson  ");
+        var f = FamilyEntity.Create("  Henderson  ");
         f.Name.Should().Be("Henderson");
         f.TimeZone.Should().Be("America/Chicago");
         f.Currency.Should().Be("USD");
@@ -20,14 +21,14 @@ public class FamilyAggregateTests
     [Fact]
     public void Create_rejects_empty_name()
     {
-        var act = () => Domain.Family.Family.Create("  ");
+        var act = () => FamilyEntity.Create("  ");
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
     public void AddMember_links_user()
     {
-        var f = Domain.Family.Family.Create("Smith");
+        var f = FamilyEntity.Create("Smith");
         var user = User.Create("kc-1", "a@b.com", "Ann", "Smith");
         var member = f.AddMember(user, FamilyRole.Owner, "Ann");
         f.Members.Should().ContainSingle();
@@ -39,7 +40,7 @@ public class FamilyAggregateTests
     [Fact]
     public void AddMember_rejects_duplicate_user()
     {
-        var f = Domain.Family.Family.Create("Smith");
+        var f = FamilyEntity.Create("Smith");
         var user = User.Create("kc-1", "a@b.com", "Ann", "Smith");
         f.AddMember(user, FamilyRole.Owner, "Ann");
         var act = () => f.AddMember(user, FamilyRole.Adult, "Ann again");
@@ -49,7 +50,7 @@ public class FamilyAggregateTests
     [Fact]
     public void UpdateName_trims()
     {
-        var f = Domain.Family.Family.Create("Old");
+        var f = FamilyEntity.Create("Old");
         f.UpdateName("  New Name  ");
         f.Name.Should().Be("New Name");
     }
@@ -57,7 +58,7 @@ public class FamilyAggregateTests
     [Fact]
     public void AddDeclineReason_appends()
     {
-        var f = Domain.Family.Family.Create("X");
+        var f = FamilyEntity.Create("X");
         var before = f.DeclineReasons.Count;
         f.AddDeclineReason("Busy", 99);
         f.DeclineReasons.Should().HaveCount(before + 1);
