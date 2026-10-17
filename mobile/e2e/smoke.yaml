@@ -1,0 +1,20 @@
+appId: com.familyos.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Family Pulse"
+    timeout: 30000
+- assertVisible: "Family Pulse"
+# Tabs — soft checks (skip if not present yet)
+- tapOn:
+    text: "Tasks"
+    optional: true
+- tapOn:
+    text: "Meals"
+    optional: true
+- tapOn:
+    text: "Settings"
+    optional: true
+- assertVisible:
+    text: ".*"
+    optional: true

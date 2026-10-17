@@ -26,6 +26,14 @@ public class ChatMessageTests
     }
 
     [Fact]
+    public void Create_rejects_over_4000_chars()
+    {
+        var longBody = new string('x', 4001);
+        var act = () => ChatMessage.Create(FamilyId, ChannelId, MemberId, longBody);
+        act.Should().Throw<ArgumentException>().WithMessage("*4000*");
+    }
+
+    [Fact]
     public void SoftDelete_marks_deleted()
     {
         var m = ChatMessage.Create(FamilyId, ChannelId, MemberId, "bye");

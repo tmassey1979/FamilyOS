@@ -127,4 +127,43 @@ public class CartTests
         cart.IsActive.Should().BeFalse();
         cart.ItemIds.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Close_deactivates_without_clearing_items()
+    {
+        var cart = Cart.Create(FamilyId, "Aldi");
+        var id = Guid.NewGuid();
+        cart.AddItem(id);
+        cart.Close();
+        cart.IsActive.Should().BeFalse();
+        cart.ItemIds.Should().ContainSingle().Which.Should().Be(id);
+    }
+}
+
+public class ProductTests
+{
+    private static readonly Guid FamilyId = Guid.NewGuid();
+
+    [Fact]
+    public void RecordPurchase_sets_typical_price_and_store()
+    {
+        var p = Product.Create(FamilyId, "Eggs", brand: "Farm", category: "Dairy");
+        p.RecordPurchase(3.00m, "Kroger");
+        p.PurchaseCount.Should().Be(1);
+        p.TypicalPrice.Should().Be(3.00m);
+        p.TypicalStores.Should().Be("Kroger");
+        p.LastPurchasedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RecordPurchase_averages_price_and_appends_store()
+    {
+        var p = Product.Create(FamilyId, "Milk");
+        p.RecordPurchase(4.00m, "Kroger");
+        p.RecordPurchase(6.00m, "Costco");
+        p.PurchaseCount.Should().Be(2);
+        p.TypicalPrice.Should().Be(5.00m);
+        p.TypicalStores.Should().Contain("Kroger");
+        p.TypicalStores.Should().Contain("Costco");
+    }
 }
