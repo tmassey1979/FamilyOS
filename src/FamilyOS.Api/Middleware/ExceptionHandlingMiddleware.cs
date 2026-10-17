@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using FamilyOS.Api.Observability;
 using FamilyOS.Application.Common;
 
 namespace FamilyOS.Api.Middleware;
@@ -43,6 +44,21 @@ public sealed class ExceptionHandlingMiddleware
 
         _logger.LogError(ex, "Unhandled exception {StatusCode} {Method} {Path}",
             status, context.Request.Method, context.Request.Path);
+
+        // 5xx → PostHog (when configured)
+        if ((int)status >= 500)
+        {
+            try
+            {
+                var reporter = context.RequestServices.GetService<IPostHogErrorReporter>();
+                if (reporter is not null)
+                    await reporter.CaptureExceptionAsync(ex, context);
+            }
+            catch
+            {
+                /* never fail the response path */
+            }
+        }
 
         context.Response.ContentType = "application/problem+json";
         context.Response.StatusCode = (int)status;
