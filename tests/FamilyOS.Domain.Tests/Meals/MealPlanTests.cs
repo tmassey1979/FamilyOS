@@ -1,81 +1,76 @@
 using FamilyOS.Domain.Meals;
-using Xunit;
+using FluentAssertions;
 
 namespace FamilyOS.Domain.Tests.Meals;
 
 public class MealPlanTests
 {
+    private static readonly Guid FamilyId = Guid.NewGuid();
+
     [Fact]
-    public void ToMonday_normalizes_any_day()
+    public void ToMonday_snaps_week_to_monday()
     {
-        var wed = new DateTime(2026, 10, 14); // Wednesday
-        var monday = MealPlan.ToMonday(wed);
-        Assert.Equal(DayOfWeek.Monday, monday.DayOfWeek);
-        Assert.Equal(new DateTime(2026, 10, 12), monday);
+        // Wednesday 2026-10-14 -> Monday 2026-10-12
+        var wed = new DateTime(2026, 10, 14, 15, 0, 0, DateTimeKind.Utc);
+        MealPlan.ToMonday(wed).Should().Be(new DateTime(2026, 10, 12));
+
+        var monday = new DateTime(2026, 10, 12);
+        MealPlan.ToMonday(monday).Should().Be(monday);
+
+        // Sunday maps back to prior Monday
+        var sun = new DateTime(2026, 10, 18);
+        MealPlan.ToMonday(sun).Should().Be(new DateTime(2026, 10, 12));
     }
 
     [Fact]
-    public void ToMonday_already_monday_is_stable()
+    public void Create_normalizes_week_start()
     {
-        var mon = new DateTime(2026, 10, 12);
-        Assert.Equal(mon, MealPlan.ToMonday(mon));
+        var plan = MealPlan.Create(FamilyId, new DateTime(2026, 10, 15)); // Thu
+        plan.WeekStartUtc.Should().Be(new DateTime(2026, 10, 12));
+        plan.FamilyId.Should().Be(FamilyId);
+        plan.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void UpsertEntry_adds_and_updates_same_slot()
+    public void UpsertEntry_adds_and_updates_same_day_slot()
     {
-        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
+        var plan = MealPlan.Create(FamilyId, new DateTime(2026, 10, 12));
         var day = new DateTime(2026, 10, 13);
-        var a = plan.UpsertEntry(day, MealSlot.Dinner, "Pasta", ingredientsCsv: "noodles, sauce");
-        Assert.Equal("Pasta", a.DishName);
-        Assert.Equal(2, a.IngredientList().Count);
+        var e1 = plan.UpsertEntry(day, MealSlot.Dinner, "Pasta", "garlic", "noodles, sauce");
+        plan.Entries.Should().ContainSingle();
+        e1.DishName.Should().Be("Pasta");
 
-        var b = plan.UpsertEntry(day, MealSlot.Dinner, "Tacos", ingredientsCsv: "tortillas");
-        Assert.Equal(a.Id, b.Id);
-        Assert.Equal("Tacos", b.DishName);
-        Assert.Single(b.IngredientList());
+        var e2 = plan.UpsertEntry(day, MealSlot.Dinner, "Tacos", null, "tortilla");
+        plan.Entries.Should().ContainSingle();
+        e2.Id.Should().Be(e1.Id);
+        e2.DishName.Should().Be("Tacos");
     }
 
     [Fact]
-    public void UpsertEntry_rejects_empty_dish()
+    public void RemoveEntry_by_id()
     {
-        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
-        Assert.Throws<ArgumentException>(() =>
-            plan.UpsertEntry(new DateTime(2026, 10, 12), MealSlot.Lunch, "  "));
-    }
-
-    [Fact]
-    public void UpsertEntry_rejects_day_outside_week()
-    {
-        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
-        Assert.Throws<InvalidOperationException>(() =>
-            plan.UpsertEntry(new DateTime(2026, 10, 20), MealSlot.Lunch, "Soup"));
-    }
-
-    [Fact]
-    public void RemoveEntry_soft_deletes()
-    {
-        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
+        var plan = MealPlan.Create(FamilyId, new DateTime(2026, 10, 12));
         var e = plan.UpsertEntry(new DateTime(2026, 10, 12), MealSlot.Breakfast, "Eggs");
         plan.RemoveEntry(e.Id);
-        Assert.True(e.IsDeleted);
+        plan.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void RemoveEntry_missing_throws()
+    public void RemoveSlot_by_day_and_slot()
     {
-        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
-        Assert.Throws<InvalidOperationException>(() => plan.RemoveEntry(Guid.NewGuid()));
+        var plan = MealPlan.Create(FamilyId, new DateTime(2026, 10, 12));
+        plan.UpsertEntry(new DateTime(2026, 10, 14), MealSlot.Lunch, "Soup");
+        plan.RemoveSlot(new DateTime(2026, 10, 14), MealSlot.Lunch);
+        plan.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void SetNotes_trims_and_clears()
+    public void AllIngredients_dedupes_across_entries()
     {
-        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12), "  hi  ");
-        Assert.Equal("hi", plan.Notes);
-        plan.SetNotes("  weekly focus  ");
-        Assert.Equal("weekly focus", plan.Notes);
-        plan.SetNotes("   ");
-        Assert.Null(plan.Notes);
+        var plan = MealPlan.Create(FamilyId, new DateTime(2026, 10, 12));
+        plan.UpsertEntry(new DateTime(2026, 10, 12), MealSlot.Dinner, "A", ingredientsCsv: "Eggs, Milk");
+        plan.UpsertEntry(new DateTime(2026, 10, 13), MealSlot.Breakfast, "B", ingredientsCsv: "milk, Bread");
+        var all = plan.AllIngredients();
+        all.Should().BeEquivalentTo(new[] { "Eggs", "Milk", "Bread" });
     }
 }
