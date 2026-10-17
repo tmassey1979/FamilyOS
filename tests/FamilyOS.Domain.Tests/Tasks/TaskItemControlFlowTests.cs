@@ -51,9 +51,10 @@ public class TaskItemControlFlowTests
 
         var start = DateTime.UtcNow.AddHours(1);
         var end = start.AddHours(2);
-        t.SetPlannedTimes(start, end);
+        t.SetPlannedTimes(start, end, estimatedMinutes: 120);
         t.PlannedStartUtc.Should().Be(start);
         t.PlannedEndUtc.Should().Be(end);
+        t.EstimatedMinutes.Should().Be(120);
     }
 
     [Fact]
