@@ -14,6 +14,7 @@ import { setAccessToken, getDevUser, meApi } from '../src/api/client';
 import { OfflineBanner } from '../src/components/OfflineBanner';
 import { ensureStarted } from '../src/offline';
 import { setupNotificationNavigation } from '../src/push/notificationRouting';
+import { initPostHog, identifyUser, captureException } from '../src/analytics/posthog';
 
 const AUTO_SKIP_LOGIN =
   process.env.EXPO_PUBLIC_SKIP_LOGIN === '1' ||
@@ -28,6 +29,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void ensureStarted();
+    void initPostHog();
   }, []);
 
   useEffect(() => {
@@ -61,8 +63,12 @@ export default function RootLayout() {
           if (!cancelled) setSignedIn(true);
           try {
             const me = await meApi.get();
-            if (!cancelled) setNeedsOnboarding(!me.familyId);
-          } catch {
+            if (!cancelled) {
+              setNeedsOnboarding(!me.familyId);
+              if (me.userId) identifyUser(String(me.userId), { role: me.role ?? undefined });
+            }
+          } catch (e) {
+            captureException(e, { where: 'me_on_boot' });
             if (!cancelled) setNeedsOnboarding(true);
           }
         } else if (!cancelled) {
@@ -70,7 +76,8 @@ export default function RootLayout() {
           setSignedIn(dev);
           setNeedsOnboarding(false);
         }
-      } catch {
+      } catch (e) {
+        captureException(e, { where: 'auth_boot' });
         if (!cancelled) setSignedIn(false);
       } finally {
         if (!cancelled) setReady(true);
@@ -81,7 +88,6 @@ export default function RootLayout() {
     };
   }, []);
 
-  // Re-check membership after create/join so we don't bounce back to onboarding
   useEffect(() => {
     if (!ready || !signedIn || !!getDevUser()) return;
     let cancelled = false;
@@ -121,7 +127,6 @@ export default function RootLayout() {
     }
   }, [ready, signedIn, needsOnboarding, segments, router]);
 
-  // #50 — tap push → open related tab
   useEffect(() => {
     if (!ready || (!signedIn && !getDevUser()) || needsOnboarding) return;
     return setupNotificationNavigation((href) => {
