@@ -97,10 +97,10 @@ export default function HomeScreen() {
     void load();
   }, [load]);
 
-  const attention = pulse?.attentionItems ?? [];
-  const blockers = pulse?.waitingOn ?? [];
-  const comingUp = pulse?.upcoming ?? [];
-  const next = pulse?.nextAction;
+  const attention = pulse?.attention ?? [];
+  const blockers = pulse?.waitingBlockers ?? [];
+  const comingUp = pulse?.comingUp ?? [];
+  const next = pulse?.nextBestAction;
   const quiet =
     !pulse ||
     (attention.length === 0 && blockers.length === 0 && comingUp.length === 0 && todayMeals.length === 0);
@@ -206,7 +206,7 @@ export default function HomeScreen() {
           {comingUp.map((c, i) => (
             <Card key={`${c.title}-${i}`} style={styles.cardGap}>
               <Text style={typography.body}>{c.title}</Text>
-              {c.subtitle ? <Text style={typography.caption}>{c.subtitle}</Text> : null}
+              {c.whenLabel ? <Text style={typography.caption}>{c.whenLabel}</Text> : null}
             </Card>
           ))}
         </>
@@ -214,8 +214,8 @@ export default function HomeScreen() {
 
       {pulse?.counts ? (
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Household — tasks {pulse.counts.openTaskCount} · requests {pulse.counts.pendingRequestCount} · shopping{' '}
-          {pulse.counts.shoppingQueueCount}
+          Household — tasks {pulse.counts.openTasks} · requests {pulse.counts.pendingRequests} · shopping{' '}
+          {pulse.counts.shoppingQueue}
         </Text>
       ) : null}
 

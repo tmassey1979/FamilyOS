@@ -20,18 +20,8 @@ public class TaskHistoryEntryTests
     }
 }
 
-public class TaskItemLinkCalendarTests
+public class TaskItemLifecycleExtraTests
 {
-    [Fact]
-    public void LinkCalendarEvent_sets_backed()
-    {
-        var task = TaskItem.Create(Guid.NewGuid(), "Event task", Guid.NewGuid());
-        var calId = Guid.NewGuid();
-        task.LinkCalendarEvent(calId);
-        task.CalendarEventId.Should().Be(calId);
-        task.CalendarBacked.Should().BeTrue();
-    }
-
     [Fact]
     public void Decline_from_Accepted_works()
     {
@@ -56,5 +46,13 @@ public class TaskItemLinkCalendarTests
         task.Accept(assignee);
         task.Complete(assignee);
         task.Status.Should().Be(FamilyTaskStatus.Completed);
+    }
+
+    [Fact]
+    public void CalendarBacked_defaults_false()
+    {
+        var task = TaskItem.Create(Guid.NewGuid(), "Event task", Guid.NewGuid());
+        task.CalendarBacked.Should().BeFalse();
+        task.CalendarEventId.Should().BeNull();
     }
 }
