@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using FamilyOS.Api.Hubs;
 using FamilyOS.Api.Middleware;
+using FamilyOS.Api.Observability;
 using FamilyOS.Application.Calendar;
 using FamilyOS.Application.Family;
 using FamilyOS.Application.Interfaces;
@@ -20,6 +21,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi.Models;
+using Prometheus;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -151,6 +153,9 @@ try
         .AddCheck("self", () => HealthCheckResult.Healthy("API process is running"))
         .AddCheck<PostgresHealthCheck>("postgres");
 
+    builder.Services.AddHttpClient("posthog");
+    builder.Services.AddSingleton<IPostHogErrorReporter, PostHogErrorReporter>();
+
     var app = builder.Build();
 
     var fwd = new ForwardedHeadersOptions
@@ -184,6 +189,7 @@ try
     app.UseAuthentication();
     app.UseMiddleware<FamilyContextMiddleware>();
     app.UseAuthorization();
+    app.UseHttpMetrics();
     app.MapControllers();
     app.MapHub<FamilyChatHub>("/hubs/chat");
 
@@ -196,6 +202,8 @@ try
     {
         ResponseWriter = WriteDetailedHealth
     });
+
+    app.MapMetrics();
 
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
