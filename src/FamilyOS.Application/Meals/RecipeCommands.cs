@@ -20,7 +20,10 @@ public record UpdateRecipeCommand(
 public record DeleteRecipeCommand(Guid Id) : IRequest;
 public record ApplyRecipeToMealCommand(
     Guid RecipeId, DateTime DayUtc, string Slot, DateTime? WeekStartUtc = null) : IRequest<MealEntryDto>;
-public record PushRecipeIngredientsToQueueCommand(Guid RecipeId) : IRequest<int>;
+/// <param name="TargetServings">When set, scale numeric ingredient qtys from recipe servings.</param>
+public record PushRecipeIngredientsToQueueCommand(Guid RecipeId, int? TargetServings = null) : IRequest<int>;
+public record ScaleRecipeQuery(Guid Id, int TargetServings) : IRequest<ScaledRecipeDto>;
+public record ScaledRecipeDto(Guid Id, string Name, int BaseServings, int TargetServings, IReadOnlyList<string> Ingredients);
 
 public class RecipeCommandHandlers :
     IRequestHandler<ListRecipesQuery, List<RecipeDto>>,
@@ -29,7 +32,8 @@ public class RecipeCommandHandlers :
     IRequestHandler<UpdateRecipeCommand, RecipeDto>,
     IRequestHandler<DeleteRecipeCommand>,
     IRequestHandler<ApplyRecipeToMealCommand, MealEntryDto>,
-    IRequestHandler<PushRecipeIngredientsToQueueCommand, int>
+    IRequestHandler<PushRecipeIngredientsToQueueCommand, int>,
+    IRequestHandler<ScaleRecipeQuery, ScaledRecipeDto>
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
@@ -125,7 +129,9 @@ public class RecipeCommandHandlers :
             .FirstOrDefaultAsync(x => x.Id == cmd.RecipeId && x.FamilyId == _current.FamilyId, ct)
             ?? throw new NotFoundException("Recipe", cmd.RecipeId);
 
-        var names = recipe.IngredientList();
+        var names = cmd.TargetServings is int target && target != recipe.Servings
+            ? recipe.ScaleIngredientsForServings(target)
+            : recipe.IngredientList();
         if (names.Count == 0) return 0;
 
         var existing = await _db.ProcurementItems
@@ -152,6 +158,16 @@ public class RecipeCommandHandlers :
         if (added > 0)
             await _db.SaveChangesAsync(ct);
         return added;
+    }
+
+    public async Task<ScaledRecipeDto> Handle(ScaleRecipeQuery query, CancellationToken ct)
+    {
+        await EnsureFamilyAsync(ct);
+        var recipe = await _db.Recipes.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == query.Id && x.FamilyId == _current.FamilyId, ct)
+            ?? throw new NotFoundException("Recipe", query.Id);
+        var ingredients = recipe.ScaleIngredientsForServings(query.TargetServings);
+        return new ScaledRecipeDto(recipe.Id, recipe.Name, recipe.Servings, query.TargetServings, ingredients);
     }
 
     private async Task EnsureFamilyAsync(CancellationToken ct)

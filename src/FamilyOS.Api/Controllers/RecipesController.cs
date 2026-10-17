@@ -23,6 +23,10 @@ public class RecipesController : ControllerBase
     public async Task<ActionResult<RecipeDto>> Get(Guid id, CancellationToken ct)
         => Ok(await _mediator.Send(new GetRecipeQuery(id), ct));
 
+    [HttpGet("{id:guid}/scale")]
+    public async Task<ActionResult<ScaledRecipeDto>> Scale(Guid id, [FromQuery] int servings, CancellationToken ct)
+        => Ok(await _mediator.Send(new ScaleRecipeQuery(id, servings), ct));
+
     [HttpPost]
     public async Task<ActionResult<RecipeDto>> Create([FromBody] RecipeBody body, CancellationToken ct)
         => Ok(await _mediator.Send(new CreateRecipeCommand(
@@ -46,10 +50,12 @@ public class RecipesController : ControllerBase
             id, body.DayUtc, body.Slot, body.WeekStartUtc), ct));
 
     [HttpPost("{id:guid}/to-shopping")]
-    public async Task<ActionResult<object>> ToShopping(Guid id, CancellationToken ct)
+    public async Task<ActionResult<object>> ToShopping(
+        Guid id, [FromBody] ToShoppingBody? body, CancellationToken ct)
     {
-        var added = await _mediator.Send(new PushRecipeIngredientsToQueueCommand(id), ct);
-        return Ok(new { added });
+        var added = await _mediator.Send(
+            new PushRecipeIngredientsToQueueCommand(id, body?.TargetServings), ct);
+        return Ok(new { added, targetServings = body?.TargetServings });
     }
 
     public record RecipeBody(
@@ -62,4 +68,6 @@ public class RecipesController : ControllerBase
         DateTime DayUtc,
         string Slot,
         DateTime? WeekStartUtc = null);
+
+    public record ToShoppingBody(int? TargetServings = null);
 }

@@ -24,6 +24,14 @@ export type RecipeDto = {
   instructions?: string | null;
 };
 
+export type ScaledRecipeDto = {
+  id: string;
+  name: string;
+  baseServings: number;
+  targetServings: number;
+  ingredients: string[];
+};
+
 export const mealsApi = {
   week: (weekStart?: string) =>
     api<MealPlanDto>(`/api/meals/week${weekStart ? `?weekStart=${encodeURIComponent(weekStart)}` : ''}`),
@@ -58,6 +66,11 @@ export const recipesApi = {
   remove: (id: string) => api<void>(`/api/recipes/${id}`, { method: 'DELETE' }),
   apply: (id: string, body: { dayUtc: string; slot: string; weekStartUtc?: string }) =>
     api<MealEntryDto>(`/api/recipes/${id}/apply`, { method: 'POST', body: JSON.stringify(body) }),
-  toShopping: (id: string) =>
-    api<{ added: number }>(`/api/recipes/${id}/to-shopping`, { method: 'POST' }),
+  toShopping: (id: string, targetServings?: number) =>
+    api<{ added: number; targetServings?: number | null }>(`/api/recipes/${id}/to-shopping`, {
+      method: 'POST',
+      body: JSON.stringify({ targetServings: targetServings ?? null }),
+    }),
+  scale: (id: string, servings: number) =>
+    api<ScaledRecipeDto>(`/api/recipes/${id}/scale?servings=${servings}`),
 };
