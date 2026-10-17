@@ -57,6 +57,49 @@ public class Recipe : Entity
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+    /// <summary>
+    /// Scale ingredient lines for a target serving count.
+    /// Lines starting with a number are multiplied; others are left as-is with a note prefix when scaled.
+    /// </summary>
+    public IReadOnlyList<string> ScaleIngredientsForServings(int targetServings)
+    {
+        if (targetServings < 1)
+            throw new ArgumentException("Target servings must be at least 1.", nameof(targetServings));
+
+        var list = IngredientList();
+        if (list.Count == 0 || targetServings == Servings)
+            return list;
+
+        var factor = (double)targetServings / Servings;
+        var result = new List<string>(list.Count);
+        foreach (var line in list)
+        {
+            result.Add(ScaleLine(line, factor));
+        }
+        return result;
+    }
+
+    private static string ScaleLine(string line, double factor)
+    {
+        var span = line.AsSpan().Trim();
+        var i = 0;
+        while (i < span.Length && (char.IsDigit(span[i]) || span[i] == '.'))
+            i++;
+        if (i == 0)
+            return line;
+
+        if (!double.TryParse(span[..i], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var qty))
+            return line;
+
+        var rest = span[i..].TrimStart().ToString();
+        var scaled = qty * factor;
+        var qtyStr = scaled is >= 10
+            ? Math.Round(scaled, 0).ToString("0", System.Globalization.CultureInfo.InvariantCulture)
+            : Math.Round(scaled, 2).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        return string.IsNullOrEmpty(rest) ? qtyStr : $"{qtyStr} {rest}";
+    }
+
     private static string? NormalizeCsv(string? csv)
     {
         if (string.IsNullOrWhiteSpace(csv)) return null;

@@ -18,7 +18,10 @@ public record OutcomesDto(
     double? ApprovalRateLast7Days,
     int OpenTasks,
     int PendingRequests,
-    int QueuedShoppingItems);
+    int QueuedShoppingItems,
+    IReadOnlyList<int> WeeklyTasksCompleted,
+    IReadOnlyList<int> WeeklyRequestsApproved,
+    IReadOnlyList<int> WeeklyShoppingPurchased);
 
 public record GetOutcomesQuery() : IRequest<OutcomesDto>;
 
@@ -96,6 +99,25 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             i.Status is ProcurementItemStatus.Queued or ProcurementItemStatus.InCart
                 or ProcurementItemStatus.Approved);
 
+        // 8 week buckets ending this week (oldest → newest)
+        var weeklyTasks = new int[8];
+        var weeklyApproved = new int[8];
+        var weeklyShop = new int[8];
+        for (var w = 0; w < 8; w++)
+        {
+            var weekEnd = now.Date.AddDays(-7 * (7 - w));
+            var weekStart = weekEnd.AddDays(-7);
+            weeklyTasks[w] = tasks.Count(t =>
+                t.Status == FamilyTaskStatus.Completed
+                && t.UpdatedAtUtc is { } c && c >= weekStart && c < weekEnd);
+            weeklyApproved[w] = requests.Count(r =>
+                r.Status == RequestStatus.Approved
+                && r.UpdatedAtUtc is { } u && u >= weekStart && u < weekEnd);
+            weeklyShop[w] = shop.Count(i =>
+                i.Status == ProcurementItemStatus.Purchased
+                && i.UpdatedAtUtc is { } u && u >= weekStart && u < weekEnd);
+        }
+
         return new OutcomesDto(
             completed7,
             completed30,
@@ -108,6 +130,9 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             approvalRate7,
             open,
             pending,
-            queued);
+            queued,
+            weeklyTasks,
+            weeklyApproved,
+            weeklyShop);
     }
 }
