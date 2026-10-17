@@ -15,6 +15,13 @@ public class MealPlanTests
     }
 
     [Fact]
+    public void ToMonday_already_monday_is_stable()
+    {
+        var mon = new DateTime(2026, 10, 12);
+        Assert.Equal(mon, MealPlan.ToMonday(mon));
+    }
+
+    [Fact]
     public void UpsertEntry_adds_and_updates_same_slot()
     {
         var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
@@ -27,6 +34,14 @@ public class MealPlanTests
         Assert.Equal(a.Id, b.Id);
         Assert.Equal("Tacos", b.DishName);
         Assert.Single(b.IngredientList());
+    }
+
+    [Fact]
+    public void UpsertEntry_rejects_empty_dish()
+    {
+        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
+        Assert.Throws<ArgumentException>(() =>
+            plan.UpsertEntry(new DateTime(2026, 10, 12), MealSlot.Lunch, "  "));
     }
 
     [Fact]
@@ -44,5 +59,23 @@ public class MealPlanTests
         var e = plan.UpsertEntry(new DateTime(2026, 10, 12), MealSlot.Breakfast, "Eggs");
         plan.RemoveEntry(e.Id);
         Assert.True(e.IsDeleted);
+    }
+
+    [Fact]
+    public void RemoveEntry_missing_throws()
+    {
+        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12));
+        Assert.Throws<InvalidOperationException>(() => plan.RemoveEntry(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void SetNotes_trims_and_clears()
+    {
+        var plan = MealPlan.Create(Guid.NewGuid(), new DateTime(2026, 10, 12), "  hi  ");
+        Assert.Equal("hi", plan.Notes);
+        plan.SetNotes("  weekly focus  ");
+        Assert.Equal("weekly focus", plan.Notes);
+        plan.SetNotes("   ");
+        Assert.Null(plan.Notes);
     }
 }
