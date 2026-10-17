@@ -183,10 +183,9 @@ export default function MealsScreen() {
     setMsg(null);
     setError(null);
     try {
-      const today = new Date();
-      const day = mondayOf(today);
-      // apply to tonight dinner of current week view
-      const dinnerDay = days.find((d) => d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ?? days[0];
+      const dinnerDay =
+        days.find((d) => d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ??
+        days[0];
       await recipesApi.apply(recipe.id, {
         dayUtc: dinnerDay.toISOString(),
         slot: 'Dinner',
@@ -201,12 +200,20 @@ export default function MealsScreen() {
     }
   };
 
-  const recipeToShopping = async (recipe: RecipeDto) => {
+  const recipeToShopping = async (recipe: RecipeDto, targetServings?: number) => {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await recipesApi.toShopping(recipe.id);
-      setMsg(r.added === 0 ? 'No new ingredients' : `Added ${r.added} from ${recipe.name}`);
+      const r = await recipesApi.toShopping(recipe.id, targetServings);
+      const scaleNote =
+        targetServings && targetServings !== recipe.servings
+          ? ` (scaled to ${targetServings} servings)`
+          : '';
+      setMsg(
+        r.added === 0
+          ? `No new ingredients${scaleNote}`
+          : `Added ${r.added} from ${recipe.name}${scaleNote}`,
+      );
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not add ingredients');
     } finally {
@@ -249,6 +256,11 @@ export default function MealsScreen() {
             <View style={styles.row}>
               <Button title="→ Dinner" variant="secondary" onPress={() => void applyRecipe(r)} />
               <Button title="→ Shopping" variant="secondary" onPress={() => void recipeToShopping(r)} />
+              <Button
+                title={`×2 (${r.servings * 2})`}
+                variant="secondary"
+                onPress={() => void recipeToShopping(r, r.servings * 2)}
+              />
               <Button title="Delete" variant="secondary" onPress={() => void deleteRecipe(r)} />
             </View>
           </Card>
