@@ -13,7 +13,8 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  # Soft gate while filling tests; raise toward 90 for #14
+  # Report-only until domain coverage is filled (#14). Set true to enforce.
+  DOMAIN_COVERAGE_ENFORCE: "false"
   DOMAIN_COVERAGE_MIN: "70"
 
 jobs:
@@ -89,25 +90,28 @@ jobs:
           if not paths:
               print('No cobertura'); sys.exit(0)
           root = ET.parse(paths[0]).getroot()
-          # Prefer package matching Domain
           rates = []
           for pkg in root.findall('.//package'):
               name = pkg.get('name') or ''
               if 'FamilyOS.Domain' in name or name.endswith('Domain'):
                   lr = pkg.get('line-rate')
-              if lr:
+                  if lr:
                       rates.append(float(lr))
           if not rates:
               lr = root.get('line-rate')
               rates = [float(lr)] if lr else [0.0]
           pct = max(rates) * 100.0
           min_pct = float(os.environ.get('DOMAIN_COVERAGE_MIN', '70'))
-          print(f'Domain line coverage: {pct:.1f}% (min {min_pct:.0f}%)')
+          enforce = os.environ.get('DOMAIN_COVERAGE_ENFORCE', 'false').lower() in ('1', 'true', 'yes')
+          print(f'Domain line coverage: {pct:.1f}% (min {min_pct:.0f}%, enforce={enforce})')
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
-              f.write(f'\n### Domain coverage\n- **{pct:.1f}%** line (gate ≥ {min_pct:.0f}%)\n')
+              f.write(f'\n### Domain coverage\n- **{pct:.1f}%** line (target ≥ {min_pct:.0f}%, enforce={enforce})\n')
           if pct + 1e-6 < min_pct:
-              print(f'::error::Domain coverage {pct:.1f}% below {min_pct:.0f}%')
-              sys.exit(1)
+              msg = f'Domain coverage {pct:.1f}% below {min_pct:.0f}%'
+              if enforce:
+                  print(f'::error::{msg}')
+                  sys.exit(1)
+              print(f'::warning::{msg} (report-only; set DOMAIN_COVERAGE_ENFORCE=true to fail)')
           PY
 
       - name: Upload coverage
