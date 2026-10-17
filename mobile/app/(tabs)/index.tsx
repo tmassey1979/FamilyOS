@@ -35,6 +35,30 @@ function routeForKind(kind: string): Href {
   return '/(tabs)' as Href;
 }
 
+/** Simple text bar chart for weekly counts (0–max scaled). */
+function SparkBars({ values, label }: { values: number[]; label: string }) {
+  const max = Math.max(1, ...values);
+  return (
+    <View style={{ gap: 4 }}>
+      <Text style={typography.caption}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 36 }}>
+        {values.map((v, i) => (
+          <View
+            key={i}
+            style={{
+              flex: 1,
+              height: Math.max(2, Math.round((v / max) * 32)),
+              backgroundColor: v > 0 ? colors.primary : colors.border,
+              borderRadius: 2,
+              opacity: v > 0 ? 1 : 0.4,
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const [pulse, setPulse] = useState<PulseDto | null>(null);
@@ -80,6 +104,9 @@ export default function HomeScreen() {
   const quiet =
     !pulse ||
     (attention.length === 0 && blockers.length === 0 && comingUp.length === 0 && todayMeals.length === 0);
+
+  const taskBars = outcomes?.weeklyTasksCompleted ?? [];
+  const approvalBars = outcomes?.weeklyRequestsApproved ?? [];
 
   return (
     <ScrollView
@@ -144,7 +171,7 @@ export default function HomeScreen() {
             >
               <Card style={styles.cardGap}>
                 <Text style={typography.heading}>{b.title}</Text>
-                {b.detail ? <Text style={typography.caption}>{b.detail}</Text> : null}
+                {b.subtitle ? <Text style={typography.caption}>{b.subtitle}</Text> : null}
                 <Badge label={b.kind} tone="danger" />
               </Card>
             </Pressable>
@@ -179,7 +206,7 @@ export default function HomeScreen() {
           {comingUp.map((c, i) => (
             <Card key={`${c.title}-${i}`} style={styles.cardGap}>
               <Text style={typography.body}>{c.title}</Text>
-              {c.whenLabel ? <Text style={typography.caption}>{c.whenLabel}</Text> : null}
+              {c.subtitle ? <Text style={typography.caption}>{c.subtitle}</Text> : null}
             </Card>
           ))}
         </>
@@ -224,6 +251,12 @@ export default function HomeScreen() {
               <Text style={typography.body}>
                 Avg task time: {Math.round(outcomes.avgTaskCompletionMinutes)} min
               </Text>
+            ) : null}
+            {taskBars.length > 0 ? (
+              <SparkBars values={taskBars} label="Tasks completed (8 weeks)" />
+            ) : null}
+            {approvalBars.length > 0 ? (
+              <SparkBars values={approvalBars} label="Approvals (8 weeks)" />
             ) : null}
             <Text style={typography.caption}>
               Open now — tasks {outcomes.openTasks} · requests {outcomes.pendingRequests} · queue{' '}
