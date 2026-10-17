@@ -7,7 +7,7 @@ namespace FamilyOS.Domain.Tests.Conditions;
 public class ConditionLifecycleTests
 {
     private static Condition Pending() =>
-        Condition.Create(Guid.NewGuid(), "Chores done", ConditionType.TaskComplete,
+        Condition.Create(Guid.NewGuid(), "Chores done", ConditionType.Task,
             requestId: Guid.NewGuid(), description: "Finish kitchen");
 
     [Fact]

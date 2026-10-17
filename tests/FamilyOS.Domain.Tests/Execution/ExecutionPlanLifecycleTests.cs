@@ -46,7 +46,7 @@ public class ExecutionPlanLifecycleTests
     public void RemoveItem_deselects()
     {
         var plan = ExecutionPlan.Create(FamilyId, RequestId, Creator);
-        var item = plan.AddItem(ExecutionItemType.ShoppingItem, "Eggs");
+        var item = plan.AddItem(ExecutionItemType.ProcurementItem, "Eggs");
         plan.RemoveItem(item.Id);
         item.IsSelected.Should().BeFalse();
         item.Select();
