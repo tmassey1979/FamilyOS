@@ -178,3 +178,4 @@ networks:
     external: true
   internal:
     driver: bridge
+    internal: true
