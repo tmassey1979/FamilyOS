@@ -48,7 +48,7 @@ function SparkBars({ values, label }: { values: number[]; label: string }) {
             style={{
               flex: 1,
               height: Math.max(2, Math.round((v / max) * 32)),
-              backgroundColor: v > 0 ? colors.primary : colors.border,
+              backgroundColor: v > 0 ? colors.primary : colors.surface,
               borderRadius: 2,
               opacity: v > 0 ? 1 : 0.4,
             }}

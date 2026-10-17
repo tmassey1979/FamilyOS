@@ -1,12 +1,23 @@
 /**
  * PostHog: feature flags, analytics, exception capture.
  * No-ops when EXPO_PUBLIC_POSTHOG_KEY is unset.
+ *
+ * Uses a minimal structural client type so `tsc` does not depend on
+ * posthog-react-native's package typings (which can fail module resolution in CI).
+ * The real SDK is loaded at runtime via require() when the key is set.
  */
-import PostHog from 'posthog-react-native';
 
 type Props = Record<string, string | number | boolean | null | undefined>;
 
-let client: PostHog | null = null;
+type PostHogClient = {
+  capture: (event: string, props?: Props) => void;
+  identify: (id: string, props?: Props) => void;
+  isFeatureEnabled: (key: string) => boolean | undefined;
+  getFeatureFlag: (key: string) => string | boolean | undefined;
+  captureException?: (err: unknown, props?: Props) => void;
+};
+
+let client: PostHogClient | null = null;
 
 const KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
@@ -18,6 +29,13 @@ export function isPostHogEnabled(): boolean {
 export async function initPostHog(): Promise<void> {
   if (!KEY || client) return;
   try {
+    // Runtime-only load — keeps typecheck independent of native package types
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('posthog-react-native') as {
+      default?: new (key: string, opts?: object) => PostHogClient;
+    };
+    const PostHog = mod.default;
+    if (!PostHog) return;
     client = new PostHog(KEY, {
       host: HOST,
       captureAppLifecycleEvents: true,
@@ -58,11 +76,8 @@ export function getFeatureFlag(flag: string): string | boolean | undefined {
 export function captureException(error: unknown, props?: Props): void {
   if (!client) return;
   try {
-    const anyClient = client as PostHog & {
-      captureException?: (err: unknown, p?: Props) => void;
-    };
-    if (typeof anyClient.captureException === 'function') {
-      anyClient.captureException(error, props);
+    if (typeof client.captureException === 'function') {
+      client.captureException(error, props);
       return;
     }
     const message =
