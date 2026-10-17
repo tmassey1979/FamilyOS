@@ -2,17 +2,11 @@
  * PostHog: feature flags, analytics, exception capture.
  * No-ops when EXPO_PUBLIC_POSTHOG_KEY is unset.
  */
+import PostHog from 'posthog-react-native';
 
 type Props = Record<string, string | number | boolean | null | undefined>;
 
-let client: {
-  capture: (event: string, props?: Props) => void;
-  identify: (id: string, props?: Props) => void;
-  isFeatureEnabled: (key: string) => boolean | undefined;
-  getFeatureFlag: (key: string) => string | boolean | undefined;
-  captureException?: (err: unknown, props?: Props) => void;
-  shutdown?: () => Promise<void>;
-} | null = null;
+let client: PostHog | null = null;
 
 const KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
@@ -24,15 +18,11 @@ export function isPostHogEnabled(): boolean {
 export async function initPostHog(): Promise<void> {
   if (!KEY || client) return;
   try {
-    // Dynamic import so typecheck/dev work without forcing native link failures offline
-    const mod = await import('posthog-react-native');
-    const PostHog = mod.default;
-    const ph = new PostHog(KEY, {
+    client = new PostHog(KEY, {
       host: HOST,
       captureAppLifecycleEvents: true,
       preloadFeatureFlags: true,
     });
-    client = ph as typeof client;
   } catch {
     client = null;
   }
@@ -68,8 +58,11 @@ export function getFeatureFlag(flag: string): string | boolean | undefined {
 export function captureException(error: unknown, props?: Props): void {
   if (!client) return;
   try {
-    if (typeof client.captureException === 'function') {
-      client.captureException(error, props);
+    const anyClient = client as PostHog & {
+      captureException?: (err: unknown, p?: Props) => void;
+    };
+    if (typeof anyClient.captureException === 'function') {
+      anyClient.captureException(error, props);
       return;
     }
     const message =

@@ -66,7 +66,7 @@ public class FamilyAggregateTests
     }
 }
 
-public class UserTests
+public class FamilyUserDomainTests
 {
     [Fact]
     public void Create_normalizes_email()
@@ -114,7 +114,7 @@ public class UserTests
     }
 }
 
-public class DeclineReasonTests
+public class FamilyDeclineReasonDomainTests
 {
     [Fact]
     public void Create_trims_text()
@@ -151,7 +151,7 @@ public class DeclineReasonTests
     }
 }
 
-public class FamilyMemberRoleTests
+public class FamilyMemberCapabilityTests
 {
     private static FamilyMember Member(FamilyRole role) =>
         FamilyMember.Create(Guid.NewGuid(), Guid.NewGuid(), role, "Person");
