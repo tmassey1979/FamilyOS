@@ -10,6 +10,8 @@ export const colors = {
   warning: '#FBBF24',
 } as const;
 
+export type ColorName = keyof typeof colors;
+
 export const spacing = {
   xs: 4,
   sm: 8,

@@ -18,15 +18,25 @@ public class TaskItemControlFlowTests
         return t;
     }
 
+    private static TaskItem AssignedTask()
+    {
+        var t = TaskItem.Create(FamilyId, "Chore", Creator, category: "home");
+        t.Assign(Assignee, Creator);
+        return t;
+    }
+
     [Fact]
     public void Pause_and_Resume()
     {
         var t = AcceptedTask();
         t.Start(Assignee);
+        // Domain keeps InProgress while paused; ends the open segment
         t.Pause(Assignee);
-        t.Status.Should().Be(FamilyTaskStatus.Paused);
+        t.Status.Should().Be(FamilyTaskStatus.InProgress);
+        t.TimeSegments.Should().OnlyContain(s => s.EndedAtUtc.HasValue);
         t.Resume(Assignee);
         t.Status.Should().Be(FamilyTaskStatus.InProgress);
+        t.TimeSegments.Should().Contain(s => !s.EndedAtUtc.HasValue);
     }
 
     [Fact]
@@ -58,9 +68,10 @@ public class TaskItemControlFlowTests
     }
 
     [Fact]
-    public void Defer_from_Accepted()
+    public void Defer_from_Assigned()
     {
-        var t = AcceptedTask();
+        // Defer only allowed from Assigned (not Accepted)
+        var t = AssignedTask();
         var until = DateTime.UtcNow.AddDays(3);
         t.Defer(Assignee, until, "Busy");
         t.Status.Should().Be(FamilyTaskStatus.Deferred);
@@ -80,8 +91,7 @@ public class TaskItemControlFlowTests
     [Fact]
     public void Skip_from_Assigned()
     {
-        var t = TaskItem.Create(FamilyId, "Skip me", Creator);
-        t.Assign(Assignee, Creator);
+        var t = AssignedTask();
         t.Skip(Creator, "Not needed");
         t.Status.Should().Be(FamilyTaskStatus.Skipped);
     }
