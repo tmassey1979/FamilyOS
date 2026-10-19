@@ -6,7 +6,7 @@ namespace FamilyOS.Domain.Tests.Tasks;
 public class TaskTimeSegmentTests
 {
     [Fact]
-    public void Start_and_End_compute_duration()
+    public void Start_and_End_compute_duration_minutes()
     {
         var taskId = Guid.NewGuid();
         var memberId = Guid.NewGuid();
@@ -17,19 +17,19 @@ public class TaskTimeSegmentTests
         seg.EndedAtUtc.Should().BeNull();
         seg.Duration.Should().BeNull();
 
-        seg.End(memberId);
+        seg.End();
         seg.EndedAtUtc.Should().NotBeNull();
         seg.Duration.Should().NotBeNull();
-        seg.Duration!.Value.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
+        seg.Duration!.Value.Should().BeGreaterThanOrEqualTo(0);
     }
 
     [Fact]
     public void End_is_idempotent()
     {
         var seg = TaskTimeSegment.Start(Guid.NewGuid(), Guid.NewGuid());
-        seg.End(Guid.NewGuid());
+        seg.End();
         var ended = seg.EndedAtUtc;
-        seg.End(Guid.NewGuid());
+        seg.End();
         seg.EndedAtUtc.Should().Be(ended);
     }
 }
