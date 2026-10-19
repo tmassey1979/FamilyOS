@@ -1,3 +1,4 @@
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Requests;
 using FluentAssertions;
 
@@ -6,29 +7,22 @@ namespace FamilyOS.Domain.Tests.Requests;
 public class RequestTypeDefinitionTests
 {
     [Fact]
-    public void Definition_holds_catalog_fields()
+    public void Create_holds_catalog_fields()
     {
-        var id = Guid.NewGuid();
-        var t = new RequestTypeDefinition
+        var questions = new List<QuestionDefinition>
         {
-            Id = id,
-            Code = "ride",
-            DisplayName = "Ride",
-            Description = "Need a ride",
-            RequiresApproval = true,
-            AllowsAmount = false,
-            AllowsSchedule = true,
-            IsActive = true,
-            SortOrder = 10
+            new() { Key = "where", Label = "Where?", Type = QuestionType.Text, Required = true }
         };
+        var t = RequestTypeDefinition.Create(
+            RequestTypeCode.Ride,
+            "Ride",
+            questions,
+            sortOrder: 10);
 
-        t.Id.Should().Be(id);
-        t.Code.Should().Be("ride");
-        t.DisplayName.Should().Be("Ride");
-        t.RequiresApproval.Should().BeTrue();
-        t.AllowsAmount.Should().BeFalse();
-        t.AllowsSchedule.Should().BeTrue();
-        t.IsActive.Should().BeTrue();
+        t.Code.Should().Be(RequestTypeCode.Ride);
+        t.Name.Should().Be("Ride");
         t.SortOrder.Should().Be(10);
+        t.IsEnabled.Should().BeTrue();
+        t.GetQuestions().Should().ContainSingle(q => q.Key == "where");
     }
 }

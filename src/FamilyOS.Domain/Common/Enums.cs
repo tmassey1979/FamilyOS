@@ -62,6 +62,16 @@ public enum RequestTypeCode
     Personal = 9
 }
 
+public enum QuestionType
+{
+    Text = 0,
+    Number = 1,
+    Boolean = 2,
+    Choice = 3,
+    DateTime = 4,
+    Multiline = 5
+}
+
 public enum ProcurementItemStatus
 {
     Queued = 0,
@@ -136,7 +146,8 @@ public enum ConditionType
     TaskComplete = 1,
     TimeWindow = 2,
     Approval = 3,
-    Custom = 4
+    Custom = 4,
+    Information = 5
 }
 
 public enum ConditionLogic
@@ -151,4 +162,11 @@ public enum PolicyDecisionKind
     Deny = 1,
     DeferToAssign = 2,
     AskHouseholdAdult = 3
+}
+
+public enum ApprovalMode
+{
+    NeverRequire = 0,
+    AlwaysRequire = 1,
+    PolicyDetermined = 2
 }
