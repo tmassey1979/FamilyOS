@@ -3,47 +3,32 @@ using FluentAssertions;
 
 namespace FamilyOS.Domain.Tests.Requests;
 
-public class RequestTypeTests
+public class RequestTypeDefinitionTests
 {
     [Fact]
-    public void Create_sets_code_name_and_flags()
+    public void Definition_holds_catalog_fields()
     {
-        var familyId = Guid.NewGuid();
-        var t = RequestType.Create(familyId, "  ride  ", "  Ride Request  ", requiresApproval: true, requiresAmount: false);
-        t.FamilyId.Should().Be(familyId);
+        var id = Guid.NewGuid();
+        var t = new RequestTypeDefinition
+        {
+            Id = id,
+            Code = "ride",
+            DisplayName = "Ride",
+            Description = "Need a ride",
+            RequiresApproval = true,
+            AllowsAmount = false,
+            AllowsSchedule = true,
+            IsActive = true,
+            SortOrder = 10
+        };
+
+        t.Id.Should().Be(id);
         t.Code.Should().Be("ride");
-        t.Name.Should().Be("Ride Request");
+        t.DisplayName.Should().Be("Ride");
         t.RequiresApproval.Should().BeTrue();
-        t.RequiresAmount.Should().BeFalse();
+        t.AllowsAmount.Should().BeFalse();
+        t.AllowsSchedule.Should().BeTrue();
         t.IsActive.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Create_rejects_empty_code_or_name()
-    {
-        var fid = Guid.NewGuid();
-        var a = () => RequestType.Create(fid, "", "Name");
-        a.Should().Throw<ArgumentException>();
-        var b = () => RequestType.Create(fid, "code", " ");
-        b.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Deactivate_and_Activate()
-    {
-        var t = RequestType.Create(Guid.NewGuid(), "snack", "Snack");
-        t.Deactivate();
-        t.IsActive.Should().BeFalse();
-        t.Activate();
-        t.IsActive.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Rename_updates_display_name()
-    {
-        var t = RequestType.Create(Guid.NewGuid(), "school", "School");
-        t.Rename("School Trip");
-        t.Name.Should().Be("School Trip");
-        t.Code.Should().Be("school"); // code unchanged
+        t.SortOrder.Should().Be(10);
     }
 }

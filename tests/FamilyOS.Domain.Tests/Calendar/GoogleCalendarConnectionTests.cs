@@ -6,70 +6,78 @@ namespace FamilyOS.Domain.Tests.Calendar;
 public class GoogleCalendarConnectionTests
 {
     [Fact]
-    public void Create_sets_tokens_and_expiry()
+    public void Connect_sets_tokens_and_email()
     {
         var familyId = Guid.NewGuid();
         var memberId = Guid.NewGuid();
         var expires = DateTime.UtcNow.AddHours(1);
-        var c = GoogleCalendarConnection.Create(
+        var c = GoogleCalendarConnection.Connect(
             familyId,
             memberId,
+            googleAccountEmail: " Parent@Example.com ",
             accessToken: "access",
             refreshToken: "refresh",
-            accessTokenExpiresAtUtc: expires,
-            calendarId: "primary",
-            accountEmail: " parent@example.com ");
+            accessTokenExpiresAtUtc: expires);
 
         c.FamilyId.Should().Be(familyId);
         c.MemberId.Should().Be(memberId);
+        c.GoogleAccountEmail.Should().Be("parent@example.com");
         c.AccessToken.Should().Be("access");
         c.RefreshToken.Should().Be("refresh");
         c.AccessTokenExpiresAtUtc.Should().Be(expires);
-        c.CalendarId.Should().Be("primary");
-        c.AccountEmail.Should().Be("parent@example.com");
-        c.IsAccessTokenExpired().Should().BeFalse();
+        c.NeedsRefresh().Should().BeFalse();
     }
 
     [Fact]
-    public void IsAccessTokenExpired_true_when_past_margin()
+    public void Connect_rejects_missing_fields()
     {
-        var c = GoogleCalendarConnection.Create(
+        var exp = DateTime.UtcNow.AddHours(1);
+        var act = () => GoogleCalendarConnection.Connect(
+            Guid.NewGuid(), Guid.NewGuid(), "", "a", "r", exp);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void NeedsRefresh_true_when_near_expiry()
+    {
+        var c = GoogleCalendarConnection.Connect(
             Guid.NewGuid(),
             Guid.NewGuid(),
+            "user@x.com",
             "a",
             "r",
-            DateTime.UtcNow.AddMinutes(-10));
-        c.IsAccessTokenExpired().Should().BeTrue();
+            DateTime.UtcNow.AddMinutes(1)); // within 2-minute margin
+        c.NeedsRefresh().Should().BeTrue();
     }
 
     [Fact]
-    public void UpdateTokens_and_MarkSynced()
+    public void RefreshAccessToken_and_MarkSynced()
     {
-        var c = GoogleCalendarConnection.Create(
+        var c = GoogleCalendarConnection.Connect(
             Guid.NewGuid(),
             Guid.NewGuid(),
+            "user@x.com",
             "old",
             "r",
             DateTime.UtcNow.AddMinutes(-5));
 
         var newExp = DateTime.UtcNow.AddHours(2);
-        c.UpdateTokens("new-access", "new-refresh", newExp);
+        c.RefreshAccessToken("new-access", newExp);
         c.AccessToken.Should().Be("new-access");
-        c.RefreshToken.Should().Be("new-refresh");
         c.AccessTokenExpiresAtUtc.Should().Be(newExp);
-        c.IsAccessTokenExpired().Should().BeFalse();
+        c.NeedsRefresh().Should().BeFalse();
 
         c.MarkSynced();
-        c.LastSyncedAtUtc.Should().NotBeNull();
-        c.LastSyncedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        c.LastSyncAtUtc.Should().NotBeNull();
+        c.LastSyncAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public void SetCalendarId()
+    public void UpdateSelectedCalendar()
     {
-        var c = GoogleCalendarConnection.Create(
-            Guid.NewGuid(), Guid.NewGuid(), "a", "r", DateTime.UtcNow.AddHours(1));
-        c.SetCalendarId("  cal-123  ");
-        c.CalendarId.Should().Be("cal-123");
+        var c = GoogleCalendarConnection.Connect(
+            Guid.NewGuid(), Guid.NewGuid(), "u@x.com", "a", "r", DateTime.UtcNow.AddHours(1));
+        c.UpdateSelectedCalendar("cal-123");
+        c.SelectedCalendarId.Should().Be("cal-123");
     }
 }
