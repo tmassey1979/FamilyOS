@@ -102,31 +102,6 @@ public enum ConditionState
     Waived = 2
 }
 
-public enum ConditionStatus
-{
-    Pending = 0,
-    Satisfied = 1,
-    Failed = 2,
-    Expired = 3,
-    Cancelled = 4
-}
-
-public enum ConditionType
-{
-    Manual = 0,
-    TaskCompletion = 1,
-    TimeWindow = 2,
-    Approval = 3,
-    Custom = 4,
-    Information = 5
-}
-
-public enum ConditionLogic
-{
-    All = 0,
-    Any = 1
-}
-
 public enum PolicyDecisionKind
 {
     Approve = 0,
