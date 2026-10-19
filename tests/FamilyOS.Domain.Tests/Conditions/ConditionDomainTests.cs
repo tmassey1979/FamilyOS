@@ -56,7 +56,7 @@ public class ConditionDomainTests
         var c = Condition.Create(Guid.NewGuid(), "Window", ConditionType.TimeWindow);
         c.Expire();
         c.Status.Should().Be(ConditionStatus.Expired);
-        c.Expire(); // no-op when not pending
+        c.Expire();
         c.Status.Should().Be(ConditionStatus.Expired);
     }
 }

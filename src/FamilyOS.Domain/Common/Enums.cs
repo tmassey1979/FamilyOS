@@ -112,12 +112,11 @@ public enum ConditionStatus
 public enum ConditionType
 {
     Manual = 0,
-    TaskComplete = 1,
+    TaskCompletion = 1,
     TimeWindow = 2,
     Approval = 3,
     Custom = 4,
-    Information = 5,
-    TaskCompletion = 6
+    Information = 5
 }
 
 public enum ConditionLogic
