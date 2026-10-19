@@ -16,26 +16,23 @@ public class MealPlan : Entity
         return new MealPlan { FamilyId = familyId };
     }
 
-    public MealEntry UpsertMeal(DateOnly day, string slot, string dishName, string? notes = null)
+    public MealEntry UpsertMeal(DateTime dayUtc, MealSlot slot, string dishName, string? notes = null, string? ingredientsCsv = null)
     {
-        if (string.IsNullOrWhiteSpace(slot))
-            throw new ArgumentException("Meal slot is required.");
         if (string.IsNullOrWhiteSpace(dishName))
-            throw new ArgumentException("Dish name is required.");
+            throw new ArgumentException("Dish name is required.", nameof(dishName));
 
-        var normalizedSlot = slot.Trim();
-        var existing = _entries.FirstOrDefault(e =>
-            e.Date == day && e.Slot.Equals(normalizedSlot, StringComparison.OrdinalIgnoreCase));
+        var day = dayUtc.Date;
+        var existing = _entries.FirstOrDefault(e => e.DayUtc.Date == day && e.Slot == slot);
 
         if (existing is null)
         {
-            var entry = MealEntry.Create(FamilyId, day, normalizedSlot, dishName.Trim(), notes: notes);
+            var entry = MealEntry.Create(Id, FamilyId, day, slot, dishName.Trim(), notes, ingredientsCsv);
             _entries.Add(entry);
             MarkUpdated();
             return entry;
         }
 
-        existing.Update(title: dishName.Trim(), notes: notes);
+        existing.Update(dishName.Trim(), notes, ingredientsCsv);
         MarkUpdated();
         return existing;
     }
@@ -46,5 +43,14 @@ public class MealPlan : Entity
         if (entry is null) return;
         _entries.Remove(entry);
         MarkUpdated();
+    }
+
+    public IReadOnlyList<string> AllIngredients()
+    {
+        return _entries
+            .SelectMany(e => e.IngredientList())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
     }
 }
