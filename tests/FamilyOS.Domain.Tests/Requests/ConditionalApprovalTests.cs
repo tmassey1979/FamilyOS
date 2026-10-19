@@ -50,7 +50,7 @@ public class ConditionalApprovalTests
     [Fact]
     public void Condition_Satisfy_records_member_and_time()
     {
-        var c = Condition.Create(FamilyId, "Chores done", ConditionType.Information, requestId: Guid.NewGuid());
+        var c = Condition.Create(FamilyId, "Chores done", ConditionType.TaskComplete, requestId: Guid.NewGuid());
         c.Satisfy(Other);
         c.Status.Should().Be(ConditionStatus.Satisfied);
         c.SatisfiedByMemberId.Should().Be(Other);
