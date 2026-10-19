@@ -18,10 +18,9 @@ public enum FamilyTaskStatus
     Declined = 5,
     Deferred = 6,
     Reassigned = 7,
-    Skipped = 8,
-    Cancelled = 9,
-    Overdue = 10,
-    Paused = 11
+    Cancelled = 8,
+    Skipped = 9,
+    Paused = 10
 }
 
 public enum TaskPriority
@@ -36,156 +35,84 @@ public enum RequestStatus
 {
     Draft = 0,
     Submitted = 1,
-    WaitingForInformation = 2,
-    UnderReview = 3,
-    ConditionallyApproved = 4,
-    Approved = 5,
-    Denied = 6,
-    Cancelled = 7,
-    Executable = 8,
-    InExecution = 9,
-    Completed = 10
+    PendingApproval = 2,
+    Approved = 3,
+    Denied = 4,
+    Cancelled = 5,
+    Completed = 6,
+    Conditional = 7
 }
 
-public enum RequestTypeCode
+public enum ProcurementStatus
 {
-    Ride = 0,
-    Money = 1,
-    Purchase = 2,
-    Grocery = 3,
-    SnackFood = 4,
-    School = 5,
-    Medical = 6,
-    Household = 7,
-    Personal = 8,
-    General = 9
+    Queued = 0,
+    InCart = 1,
+    Purchased = 2,
+    Cancelled = 3,
+    Held = 4,
+    Deferred = 5,
+    NoLongerNeeded = 6
 }
 
-public enum QuestionType
+public enum CartStatus
 {
-    Text = 0,
-    Number = 1,
-    Date = 2,
-    Time = 3,
-    DateTime = 4,
-    YesNo = 5,
-    SingleChoice = 6,
-    MultipleChoice = 7,
-    PersonSelection = 8,
-    Location = 9,
-    MoneyAmount = 10
+    Active = 0,
+    CheckedOut = 1,
+    Abandoned = 2
 }
 
-public enum ConditionType
+public enum MealSlot
 {
-    Information = 0,
-    Deadline = 1,
-    Event = 2,
-    Task = 3,
-    Financial = 4,
-    Research = 5,
-    Approval = 6,
-    Availability = 7,
-    Custom = 8
-}
-
-public enum ConditionStatus
-{
-    Pending = 0,
-    Satisfied = 1,
-    Failed = 2,
-    Expired = 3,
-    Cancelled = 4
-}
-
-public enum ConditionLogic
-{
-    All = 0,
-    Any = 1
-}
-
-public enum ApprovalMode
-{
-    AlwaysRequire = 0,
-    NeverRequire = 1,
-    PolicyDetermined = 2
-}
-
-public enum ApprovalDecision
-{
-    Pending = 0,
-    Granted = 1,
-    Denied = 2,
-    Modified = 3,
-    Overridden = 4
-}
-
-public enum ExecutionItemType
-{
-    CalendarEvent = 0,
-    Task = 1,
-    Notification = 2,
-    ProcurementItem = 3,
-    MoneyTransaction = 4,
-    FollowUp = 5,
-    Question = 6
-}
-
-public enum ExecutionPlanStatus
-{
-    Draft = 0,
-    Proposed = 1,
-    Committed = 2,
-    InProgress = 3,
-    Completed = 4,
-    Cancelled = 5
-}
-
-public enum ProcurementItemStatus
-{
-    Approved = 0,
-    Queued = 1,
-    InCart = 2,
-    Held = 3,
-    Deferred = 4,
-    Purchased = 5,
-    Cancelled = 6,
-    NoLongerNeeded = 7
-}
-
-public enum NotificationType
-{
-    TaskAssigned = 0,
-    TaskAccepted = 1,
-    TaskDeclined = 2,
-    TaskReassigned = 3,
-    RequestSubmitted = 4,
-    RequestQuestionAsked = 5,
-    RequestApproved = 6,
-    RequestDenied = 7,
-    ConditionSatisfied = 8,
-    ConditionFailed = 9,
-    ExecutionReady = 10,
-    ProcurementChanged = 11,
-    CalendarReminder = 12,
-    General = 13
+    Breakfast = 0,
+    Lunch = 1,
+    Dinner = 2,
+    Snack = 3
 }
 
 public enum RecurrenceFrequency
 {
-    None = 0,
-    Daily = 1,
-    Weekly = 2,
-    BiWeekly = 3,
-    Monthly = 4,
-    Yearly = 5,
-    Custom = 6
+    Daily = 0,
+    Weekly = 1,
+    BiWeekly = 2,
+    Monthly = 3
 }
 
-public enum DeclinePolicy
+public enum NotificationType
 {
-    NoChange = 0,
-    OfferReassignment = 1,
-    AutomaticallyReassign = 2,
+    Info = 0,
+    TaskAssigned = 1,
+    RequestSubmitted = 2,
+    RequestApproved = 3,
+    RequestDenied = 4,
+    ConditionPending = 5
+}
+
+public enum CalendarEventStatus
+{
+    Scheduled = 0,
+    Cancelled = 1,
+    Completed = 2
+}
+
+public enum ConditionState
+{
+    Pending = 0,
+    Met = 1,
+    Waived = 2
+}
+
+public enum FamilyInviteStatus
+{
+    Pending = 0,
+    Accepted = 1,
+    Revoked = 2,
+    Expired = 3
+}
+
+public enum PolicyDecisionKind
+{
+    Approve = 0,
+    Deny = 1,
+    DeferToAssign = 2,
     AskHouseholdAdult = 3
 }

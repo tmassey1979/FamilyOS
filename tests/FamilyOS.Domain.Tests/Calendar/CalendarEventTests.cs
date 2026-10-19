@@ -1,4 +1,5 @@
 using FamilyOS.Domain.Calendar;
+using FamilyOS.Domain.Common;
 using FluentAssertions;
 
 namespace FamilyOS.Domain.Tests.Calendar;
@@ -6,46 +7,55 @@ namespace FamilyOS.Domain.Tests.Calendar;
 public class CalendarEventTests
 {
     private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid MemberId = Guid.NewGuid();
-    private static readonly Guid RequestId = Guid.NewGuid();
 
     [Fact]
-    public void Create_links_request_and_sets_start()
+    public void Create_sets_core_fields()
     {
-        var start = DateTime.UtcNow.AddHours(2);
-        var ev = CalendarEvent.Create(
-            FamilyId,
-            "Ride: Soccer",
-            start,
-            MemberId,
-            endUtc: start.AddHours(1),
-            location: "School",
-            linkedRequestId: RequestId);
+        var start = DateTime.UtcNow.AddHours(1);
+        var end = start.AddHours(2);
+        var e = CalendarEvent.Create(FamilyId, "Dentist", start, end, location: "Clinic");
 
-        ev.Title.Should().Be("Ride: Soccer");
-        ev.StartUtc.Should().Be(start);
-        ev.Location.Should().Be("School");
-        ev.LinkedRequestId.Should().Be(RequestId);
-        ev.IsCancelled.Should().BeFalse();
+        e.FamilyId.Should().Be(FamilyId);
+        e.Title.Should().Be("Dentist");
+        e.StartUtc.Should().Be(start);
+        e.EndUtc.Should().Be(end);
+        e.Location.Should().Be("Clinic");
+        e.Status.Should().Be(CalendarEventStatus.Scheduled);
     }
 
     [Fact]
-    public void Cancel_marks_cancelled()
+    public void Create_rejects_empty_title()
     {
-        var ev = CalendarEvent.Create(FamilyId, "Dinner", DateTime.UtcNow, MemberId);
-        ev.Cancel();
-        ev.IsCancelled.Should().BeTrue();
+        var start = DateTime.UtcNow;
+        var act = () => CalendarEvent.Create(FamilyId, "  ", start, start.AddHours(1));
+        act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Update_changes_details()
+    public void Create_rejects_end_before_start()
+    {
+        var start = DateTime.UtcNow;
+        var act = () => CalendarEvent.Create(FamilyId, "X", start, start.AddMinutes(-1));
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Cancel_sets_cancelled_status()
     {
         var start = DateTime.UtcNow.AddDays(1);
-        var ev = CalendarEvent.Create(FamilyId, "Old", start, MemberId);
-        var newStart = start.AddHours(3);
-        ev.Update("New title", newStart, newStart.AddHours(2), false, "Clinic");
-        ev.Title.Should().Be("New title");
-        ev.Location.Should().Be("Clinic");
-        ev.StartUtc.Should().Be(newStart);
+        var e = CalendarEvent.Create(FamilyId, "Game", start, start.AddHours(1));
+        e.Cancel();
+        e.Status.Should().Be(CalendarEventStatus.Cancelled);
+    }
+
+    [Fact]
+    public void Reschedule_updates_window()
+    {
+        var start = DateTime.UtcNow.AddDays(1);
+        var e = CalendarEvent.Create(FamilyId, "Practice", start, start.AddHours(1));
+        var newStart = start.AddDays(1);
+        e.Reschedule(newStart, newStart.AddHours(2));
+        e.StartUtc.Should().Be(newStart);
+        e.EndUtc.Should().Be(newStart.AddHours(2));
     }
 }

@@ -13,10 +13,10 @@ public class DeviceRegistrationTests
         var d = DeviceRegistration.Register(familyId, memberId, "ExponentPushToken[xxx]", "ios");
         d.FamilyId.Should().Be(familyId);
         d.MemberId.Should().Be(memberId);
-        d.ExpoPushToken.Should().Be("ExponentPushToken[xxx]");
+        d.PushToken.Should().Be("ExponentPushToken[xxx]");
         d.Platform.Should().Be("ios");
         d.IsActive.Should().BeTrue();
-        d.LastSeenAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        d.LastSeenUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -30,10 +30,10 @@ public class DeviceRegistrationTests
     public void Touch_updates_last_seen()
     {
         var d = DeviceRegistration.Register(Guid.NewGuid(), Guid.NewGuid(), "token-1", "android");
-        var before = d.LastSeenAtUtc;
+        var before = d.LastSeenUtc;
         Thread.Sleep(5);
         d.Touch();
-        d.LastSeenAtUtc.Should().BeOnOrAfter(before);
+        d.LastSeenUtc.Should().BeOnOrAfter(before);
     }
 
     [Fact]
