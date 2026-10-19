@@ -6,90 +6,55 @@ namespace FamilyOS.Domain.Tests.Calendar;
 public class CalendarEventExtraTests
 {
     private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid MemberId = Guid.NewGuid();
+    private static readonly Guid Creator = Guid.NewGuid();
 
     [Fact]
-    public void CreateFromExternal_sets_provider_ids()
+    public void Create_sets_window_and_title()
+    {
+        var start = DateTime.UtcNow.AddHours(2);
+        var end = start.AddHours(1);
+        var e = CalendarEvent.Create(FamilyId, "  Soccer  ", start, end, Creator, location: "Field");
+        e.FamilyId.Should().Be(FamilyId);
+        e.Title.Should().Be("Soccer");
+        e.StartsAtUtc.Should().Be(start);
+        e.EndsAtUtc.Should().Be(end);
+        e.Location.Should().Be("Field");
+        e.CreatedByMemberId.Should().Be(Creator);
+        e.IsCancelled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Create_rejects_empty_title_or_inverted_range()
     {
         var start = DateTime.UtcNow;
-        var ev = CalendarEvent.CreateFromExternal(
-            FamilyId, MemberId, "Google", "evt-123", "primary",
-            "Dentist", start, start.AddHours(1), false, "Clinic", "checkup");
-        ev.ExternalProvider.Should().Be("google");
-        ev.ExternalEventId.Should().Be("evt-123");
-        ev.ExternalCalendarId.Should().Be("primary");
-        ev.Title.Should().Be("Dentist");
+        var act1 = () => CalendarEvent.Create(FamilyId, " ", start, start.AddHours(1), Creator);
+        act1.Should().Throw<ArgumentException>();
+
+        var act2 = () => CalendarEvent.Create(FamilyId, "X", start.AddHours(2), start, Creator);
+        act2.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void CreateFromExternal_rejects_blank_provider()
+    public void UpdateDetails_and_Cancel()
     {
-        var act = () => CalendarEvent.CreateFromExternal(
-            FamilyId, MemberId, " ", "id", null, "T", DateTime.UtcNow, null, false, null, null);
-        act.Should().Throw<ArgumentException>();
+        var start = DateTime.UtcNow.AddDays(1);
+        var e = CalendarEvent.Create(FamilyId, "Practice", start, start.AddHours(1), Creator);
+        e.UpdateDetails("Game", start.AddHours(1), start.AddHours(3), "Stadium", "Bring ball");
+        e.Title.Should().Be("Game");
+        e.Location.Should().Be("Stadium");
+        e.Description.Should().Be("Bring ball");
+
+        e.Cancel();
+        e.IsCancelled.Should().BeTrue();
     }
 
     [Fact]
-    public void LinkExternal_and_ApplyExternalUpdate_uncancels()
+    public void LinkTask()
     {
-        var start = DateTime.UtcNow;
-        var ev = CalendarEvent.Create(FamilyId, "Old", start, MemberId);
-        ev.LinkExternal("google", "g-1", "primary");
-        ev.ExternalEventId.Should().Be("g-1");
-        ev.Cancel();
-        ev.IsCancelled.Should().BeTrue();
-        ev.ApplyExternalUpdate("New", start.AddHours(1), null, false, null, "desc");
-        ev.IsCancelled.Should().BeFalse();
-        ev.Title.Should().Be("New");
-    }
-
-    [Fact]
-    public void LinkTask_sets_id()
-    {
-        var ev = CalendarEvent.Create(FamilyId, "Task", DateTime.UtcNow, MemberId);
+        var start = DateTime.UtcNow.AddDays(1);
+        var e = CalendarEvent.Create(FamilyId, "Appt", start, start.AddMinutes(30), Creator);
         var taskId = Guid.NewGuid();
-        ev.LinkTask(taskId);
-        ev.LinkedTaskId.Should().Be(taskId);
-    }
-}
-
-public class GoogleCalendarConnectionTestsExtra
-{
-    private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid MemberId = Guid.NewGuid();
-
-    [Fact]
-    public void Create_and_token_lifecycle()
-    {
-        var exp = DateTime.UtcNow.AddHours(1);
-        var c = GoogleCalendarConnection.Create(
-            FamilyId, MemberId, "  Me@Gmail.com ", "access", "refresh", exp);
-        c.GoogleAccountEmail.Should().Be("me@gmail.com");
-        c.CalendarId.Should().Be("primary");
-        c.AccessTokenExpired().Should().BeFalse();
-
-        c.UpdateTokens("access2", DateTime.UtcNow.AddMinutes(-5));
-        c.AccessTokenExpired().Should().BeTrue();
-        c.AccessToken.Should().Be("access2");
-
-        c.MarkSynced("sync-token");
-        c.SyncToken.Should().Be("sync-token");
-        c.LastSyncAtUtc.Should().NotBeNull();
-
-        c.SetCalendarId("work");
-        c.CalendarId.Should().Be("work");
-        c.SyncToken.Should().BeNull();
-
-        c.Disconnect();
-        c.IsActive.Should().BeFalse();
-        c.AccessToken.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Create_requires_tokens()
-    {
-        var act = () => GoogleCalendarConnection.Create(
-            FamilyId, MemberId, "a@b.com", " ", "refresh", DateTime.UtcNow);
-        act.Should().Throw<ArgumentException>();
+        e.LinkTask(taskId);
+        e.LinkedTaskId.Should().Be(taskId);
     }
 }

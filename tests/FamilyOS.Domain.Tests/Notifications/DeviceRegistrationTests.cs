@@ -5,33 +5,42 @@ namespace FamilyOS.Domain.Tests.Notifications;
 
 public class DeviceRegistrationTests
 {
-    private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid MemberId = Guid.NewGuid();
+    [Fact]
+    public void Register_sets_token_and_platform()
+    {
+        var familyId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var d = DeviceRegistration.Register(familyId, memberId, "ExponentPushToken[xxx]", "ios");
+        d.FamilyId.Should().Be(familyId);
+        d.MemberId.Should().Be(memberId);
+        d.ExpoPushToken.Should().Be("ExponentPushToken[xxx]");
+        d.Platform.Should().Be("ios");
+        d.IsActive.Should().BeTrue();
+        d.LastSeenAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
 
     [Fact]
-    public void Create_requires_token()
+    public void Register_rejects_empty_token()
     {
-        var act = () => DeviceRegistration.Create(FamilyId, MemberId, "  ", "ios");
+        var act = () => DeviceRegistration.Register(Guid.NewGuid(), Guid.NewGuid(), "  ", null);
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Create_normalizes_platform()
+    public void Touch_updates_last_seen()
     {
-        var d = DeviceRegistration.Create(FamilyId, MemberId, "ExponentPushToken[abc]", "iOS", "Terry phone");
-        d.Platform.Should().Be("ios");
-        d.IsActive.Should().BeTrue();
-        d.DeviceName.Should().Be("Terry phone");
+        var d = DeviceRegistration.Register(Guid.NewGuid(), Guid.NewGuid(), "token-1", "android");
+        var before = d.LastSeenAtUtc;
+        Thread.Sleep(10);
+        d.Touch();
+        d.LastSeenAtUtc.Should().BeAfter(before);
     }
 
     [Fact]
-    public void Deactivate_and_Touch()
+    public void Deactivate_sets_inactive()
     {
-        var d = DeviceRegistration.Create(FamilyId, MemberId, "tok", "android");
+        var d = DeviceRegistration.Register(Guid.NewGuid(), Guid.NewGuid(), "token-1", "ios");
         d.Deactivate();
         d.IsActive.Should().BeFalse();
-        d.Touch("android", "Pixel");
-        d.IsActive.Should().BeTrue();
-        d.DeviceName.Should().Be("Pixel");
     }
 }
