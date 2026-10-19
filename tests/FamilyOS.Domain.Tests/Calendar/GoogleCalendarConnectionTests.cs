@@ -5,47 +5,71 @@ namespace FamilyOS.Domain.Tests.Calendar;
 
 public class GoogleCalendarConnectionTests
 {
-    private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid MemberId = Guid.NewGuid();
-
     [Fact]
-    public void Create_requires_tokens()
+    public void Create_sets_tokens_and_expiry()
     {
-        var act = () => GoogleCalendarConnection.Create(FamilyId, MemberId, "a@b.com", "", "refresh", DateTime.UtcNow.AddHours(1));
-        act.Should().Throw<ArgumentException>();
+        var familyId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var expires = DateTime.UtcNow.AddHours(1);
+        var c = GoogleCalendarConnection.Create(
+            familyId,
+            memberId,
+            accessToken: "access",
+            refreshToken: "refresh",
+            accessTokenExpiresAtUtc: expires,
+            calendarId: "primary",
+            accountEmail: " parent@example.com ");
+
+        c.FamilyId.Should().Be(familyId);
+        c.MemberId.Should().Be(memberId);
+        c.AccessToken.Should().Be("access");
+        c.RefreshToken.Should().Be("refresh");
+        c.AccessTokenExpiresAtUtc.Should().Be(expires);
+        c.CalendarId.Should().Be("primary");
+        c.AccountEmail.Should().Be("parent@example.com");
+        c.IsAccessTokenExpired().Should().BeFalse();
     }
 
     [Fact]
-    public void AccessTokenExpired_respects_skew()
+    public void IsAccessTokenExpired_true_when_past_margin()
     {
-        var conn = GoogleCalendarConnection.Create(
-            FamilyId, MemberId, "terry@gmail.com", "at", "rt",
-            DateTime.UtcNow.AddMinutes(1));
-        conn.AccessTokenExpired(TimeSpan.FromMinutes(2)).Should().BeTrue();
-        conn.AccessTokenExpired(TimeSpan.FromSeconds(1)).Should().BeFalse();
+        var c = GoogleCalendarConnection.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "a",
+            "r",
+            DateTime.UtcNow.AddMinutes(-10));
+        c.IsAccessTokenExpired().Should().BeTrue();
     }
 
     [Fact]
-    public void Disconnect_clears_tokens()
+    public void UpdateTokens_and_MarkSynced()
     {
-        var conn = GoogleCalendarConnection.Create(
-            FamilyId, MemberId, "terry@gmail.com", "at", "rt",
-            DateTime.UtcNow.AddHours(1));
-        conn.Disconnect();
-        conn.IsActive.Should().BeFalse();
-        conn.AccessToken.Should().BeEmpty();
-        conn.RefreshToken.Should().BeEmpty();
+        var c = GoogleCalendarConnection.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "old",
+            "r",
+            DateTime.UtcNow.AddMinutes(-5));
+
+        var newExp = DateTime.UtcNow.AddHours(2);
+        c.UpdateTokens("new-access", "new-refresh", newExp);
+        c.AccessToken.Should().Be("new-access");
+        c.RefreshToken.Should().Be("new-refresh");
+        c.AccessTokenExpiresAtUtc.Should().Be(newExp);
+        c.IsAccessTokenExpired().Should().BeFalse();
+
+        c.MarkSynced();
+        c.LastSyncedAtUtc.Should().NotBeNull();
+        c.LastSyncedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public void CalendarEvent_CreateFromExternal_links_provider()
+    public void SetCalendarId()
     {
-        var start = DateTime.UtcNow.AddHours(3);
-        var ev = CalendarEvent.CreateFromExternal(
-            FamilyId, MemberId, "google", "gcal-123", "primary",
-            "Dentist", start, start.AddHours(1), false, "Clinic", "checkup");
-        ev.ExternalProvider.Should().Be("google");
-        ev.ExternalEventId.Should().Be("gcal-123");
-        ev.Title.Should().Be("Dentist");
+        var c = GoogleCalendarConnection.Create(
+            Guid.NewGuid(), Guid.NewGuid(), "a", "r", DateTime.UtcNow.AddHours(1));
+        c.SetCalendarId("  cal-123  ");
+        c.CalendarId.Should().Be("cal-123");
     }
 }

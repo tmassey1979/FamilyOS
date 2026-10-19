@@ -6,36 +6,39 @@ namespace FamilyOS.Domain.Tests.Chat;
 public class ChatChannelTests
 {
     [Fact]
-    public void CreateFamilyChannel_defaults()
+    public void Create_sets_family_and_name()
     {
-        var c = ChatChannel.CreateFamilyChannel(Guid.NewGuid());
-        c.Name.Should().Be("Family");
-        c.Kind.Should().Be(ChatChannelKind.Family);
-        c.IsActive.Should().BeTrue();
+        var familyId = Guid.NewGuid();
+        var ch = ChatChannel.Create(familyId, "  General  ");
+        ch.FamilyId.Should().Be(familyId);
+        ch.Name.Should().Be("General");
+        ch.IsArchived.Should().BeFalse();
     }
 
     [Fact]
-    public void CreateFamilyChannel_custom_name()
+    public void Create_rejects_empty_name()
     {
-        var c = ChatChannel.CreateFamilyChannel(Guid.NewGuid(), "  General  ");
-        c.Name.Should().Be("General");
-    }
-
-    [Fact]
-    public void Rename_rejects_blank()
-    {
-        var c = ChatChannel.CreateFamilyChannel(Guid.NewGuid());
-        var act = () => c.Rename(" ");
+        var act = () => ChatChannel.Create(Guid.NewGuid(), "  ");
         act.Should().Throw<ArgumentException>();
-        c.Rename("Kids");
-        c.Name.Should().Be("Kids");
     }
 
     [Fact]
-    public void Deactivate()
+    public void Rename_and_Archive()
     {
-        var c = ChatChannel.CreateFamilyChannel(Guid.NewGuid());
-        c.Deactivate();
-        c.IsActive.Should().BeFalse();
+        var ch = ChatChannel.Create(Guid.NewGuid(), "Kids");
+        ch.Rename("  Teens  ");
+        ch.Name.Should().Be("Teens");
+        ch.Archive();
+        ch.IsArchived.Should().BeTrue();
+        ch.Archive(); // idempotent
+        ch.IsArchived.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Rename_rejects_empty()
+    {
+        var ch = ChatChannel.Create(Guid.NewGuid(), "X");
+        var act = () => ch.Rename(" ");
+        act.Should().Throw<ArgumentException>();
     }
 }
