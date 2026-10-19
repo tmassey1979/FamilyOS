@@ -26,7 +26,7 @@ public class NotificationTests
         n.RelatedEntityType.Should().Be("Task");
         n.RelatedEntityId.Should().Be(related);
         n.IsRead.Should().BeFalse();
-        n.CreatedUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        n.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
