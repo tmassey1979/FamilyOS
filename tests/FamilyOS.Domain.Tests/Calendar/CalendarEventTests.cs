@@ -1,5 +1,4 @@
 using FamilyOS.Domain.Calendar;
-using FamilyOS.Domain.Common;
 using FluentAssertions;
 
 namespace FamilyOS.Domain.Tests.Calendar;
@@ -20,7 +19,7 @@ public class CalendarEventTests
         e.StartUtc.Should().Be(start);
         e.EndUtc.Should().Be(end);
         e.Location.Should().Be("Clinic");
-        e.Status.Should().Be(CalendarEventStatus.Scheduled);
+        e.IsCancelled.Should().BeFalse();
     }
 
     [Fact]
@@ -40,12 +39,13 @@ public class CalendarEventTests
     }
 
     [Fact]
-    public void Cancel_sets_cancelled_status()
+    public void Cancel_sets_flag_and_timestamp()
     {
         var start = DateTime.UtcNow.AddDays(1);
         var e = CalendarEvent.Create(FamilyId, "Game", start, start.AddHours(1));
         e.Cancel();
-        e.Status.Should().Be(CalendarEventStatus.Cancelled);
+        e.IsCancelled.Should().BeTrue();
+        e.CancelledAtUtc.Should().NotBeNull();
     }
 
     [Fact]
