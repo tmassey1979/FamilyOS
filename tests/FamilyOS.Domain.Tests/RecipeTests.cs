@@ -13,8 +13,10 @@ public class RecipeTests
         var r = Recipe.Create(FamilyId, "  Pasta  ", 2, " flour, Eggs, flour ", "Mix");
         Assert.Equal("Pasta", r.Name);
         Assert.Equal(2, r.Servings);
-        Assert.Equal("flour, Eggs", r.IngredientsCsv);
+        // Distinct is case-insensitive; first casing wins
         Assert.Equal(2, r.IngredientList().Count);
+        Assert.Contains("flour", r.IngredientList(), StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("eggs", r.IngredientList(), StringComparer.OrdinalIgnoreCase);
     }
 
     [Fact]

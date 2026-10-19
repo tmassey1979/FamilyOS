@@ -37,3 +37,6 @@ export const typography = {
   body: { fontSize: 16, fontWeight: '400' as const, color: colors.text },
   caption: { fontSize: 13, fontWeight: '400' as const, color: colors.textMuted },
 } as const;
+
+// Named export alias so `import { colors }` always resolves full AppColors shape.
+export default colors;

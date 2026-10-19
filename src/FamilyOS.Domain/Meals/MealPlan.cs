@@ -13,12 +13,13 @@ public class MealPlan : Entity
 
     private MealPlan() { }
 
-    /// <summary>Normalize any date to the Monday 00:00 UTC of that week.</summary>
+    /// <summary>Normalize any date to the Monday 00:00 UTC of that ISO-style week (Mon–Sun).</summary>
     public static DateTime ToMonday(DateTime anyUtc)
     {
         var d = DateTime.SpecifyKind(anyUtc.Date, DateTimeKind.Utc);
-        var offset = ((int)d.DayOfWeek + 6) % 7; // Monday=0
-        return d.AddDays(-offset);
+        // DayOfWeek: Sunday=0 … Saturday=6. Convert so Monday=0 … Sunday=6.
+        var daysFromMonday = d.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)d.DayOfWeek - 1;
+        return d.AddDays(-daysFromMonday);
     }
 
     public static MealPlan Create(Guid familyId, DateTime weekStartUtc, string? notes = null)
