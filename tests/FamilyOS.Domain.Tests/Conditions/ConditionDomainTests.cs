@@ -9,14 +9,18 @@ public class ConditionDomainTests
     [Fact]
     public void Create_pending_then_Satisfy()
     {
-        var requestId = Guid.NewGuid();
         var familyId = Guid.NewGuid();
-        var assignee = Guid.NewGuid();
-        var c = Condition.Create(requestId, familyId, "Finish homework first", assignee);
+        var requestId = Guid.NewGuid();
+        var c = Condition.Create(
+            familyId,
+            "Finish homework first",
+            ConditionType.Manual,
+            requestId: requestId,
+            description: "Before screen time");
 
         c.Status.Should().Be(ConditionStatus.Pending);
-        c.Description.Should().Be("Finish homework first");
-        c.AssignedToMemberId.Should().Be(assignee);
+        c.Name.Should().Be("Finish homework first");
+        c.RequestId.Should().Be(requestId);
 
         var actor = Guid.NewGuid();
         c.Satisfy(actor);
@@ -28,17 +32,31 @@ public class ConditionDomainTests
     [Fact]
     public void Satisfy_twice_throws()
     {
-        var c = Condition.Create(Guid.NewGuid(), Guid.NewGuid(), "Clean room", Guid.NewGuid());
+        var c = Condition.Create(Guid.NewGuid(), "Clean room", ConditionType.Manual);
         c.Satisfy(Guid.NewGuid());
         var act = () => c.Satisfy(Guid.NewGuid());
         act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Cancel_pending()
+    public void Fail_and_Cancel()
     {
-        var c = Condition.Create(Guid.NewGuid(), Guid.NewGuid(), "Optional chore", Guid.NewGuid());
-        c.Cancel();
-        c.Status.Should().Be(ConditionStatus.Cancelled);
+        var c1 = Condition.Create(Guid.NewGuid(), "Timed", ConditionType.TimeWindow);
+        c1.Fail("Missed deadline");
+        c1.Status.Should().Be(ConditionStatus.Failed);
+
+        var c2 = Condition.Create(Guid.NewGuid(), "Optional", ConditionType.Custom);
+        c2.Cancel();
+        c2.Status.Should().Be(ConditionStatus.Cancelled);
+    }
+
+    [Fact]
+    public void Expire_only_when_pending()
+    {
+        var c = Condition.Create(Guid.NewGuid(), "Window", ConditionType.TimeWindow);
+        c.Expire();
+        c.Status.Should().Be(ConditionStatus.Expired);
+        c.Expire(); // no-op when not pending
+        c.Status.Should().Be(ConditionStatus.Expired);
     }
 }

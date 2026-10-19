@@ -36,11 +36,30 @@ public enum RequestStatus
     Draft = 0,
     Submitted = 1,
     PendingApproval = 2,
-    Approved = 3,
-    Denied = 4,
-    Cancelled = 5,
-    Completed = 6,
-    Conditional = 7
+    UnderReview = 3,
+    WaitingForInformation = 4,
+    Approved = 5,
+    ConditionallyApproved = 6,
+    Denied = 7,
+    Cancelled = 8,
+    Executable = 9,
+    InExecution = 10,
+    Completed = 11,
+    Conditional = 12
+}
+
+public enum RequestTypeCode
+{
+    General = 0,
+    Money = 1,
+    Purchase = 2,
+    Grocery = 3,
+    Snack = 4,
+    Ride = 5,
+    School = 6,
+    Medical = 7,
+    Household = 8,
+    Personal = 9
 }
 
 public enum ProcurementItemStatus
@@ -100,6 +119,30 @@ public enum ConditionState
     Pending = 0,
     Met = 1,
     Waived = 2
+}
+
+public enum ConditionStatus
+{
+    Pending = 0,
+    Satisfied = 1,
+    Failed = 2,
+    Expired = 3,
+    Cancelled = 4
+}
+
+public enum ConditionType
+{
+    Manual = 0,
+    TaskComplete = 1,
+    TimeWindow = 2,
+    Approval = 3,
+    Custom = 4
+}
+
+public enum ConditionLogic
+{
+    All = 0,
+    Any = 1
 }
 
 public enum PolicyDecisionKind

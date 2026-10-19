@@ -9,48 +9,30 @@ public class ChatDomainTests
     private static readonly Guid MemberId = Guid.NewGuid();
 
     [Fact]
-    public void Channel_CreateGeneral_and_Archive_Rename()
+    public void Channel_CreateFamilyChannel_Rename_Deactivate()
     {
-        var ch = ChatChannel.CreateGeneral(FamilyId);
+        var ch = ChatChannel.CreateFamilyChannel(FamilyId);
         ch.FamilyId.Should().Be(FamilyId);
-        ch.Name.Should().Be("General");
-        ch.Kind.Should().Be(ChatChannelKind.General);
-        ch.IsArchived.Should().BeFalse();
+        ch.Name.Should().Be("Family");
+        ch.Kind.Should().Be(ChatChannelKind.Family);
+        ch.IsActive.Should().BeTrue();
 
-        ch.Rename("Family Chat");
-        ch.Name.Should().Be("Family Chat");
-        ch.Archive();
-        ch.IsArchived.Should().BeTrue();
+        ch.Rename("Household");
+        ch.Name.Should().Be("Household");
+        ch.Deactivate();
+        ch.IsActive.Should().BeFalse();
     }
 
     [Fact]
-    public void Channel_CreateDm()
-    {
-        var a = Guid.NewGuid();
-        var b = Guid.NewGuid();
-        var ch = ChatChannel.CreateDm(FamilyId, a, b);
-        ch.Kind.Should().Be(ChatChannelKind.Direct);
-        ch.MemberAId.Should().Be(a);
-        ch.MemberBId.Should().Be(b);
-    }
-
-    [Fact]
-    public void Message_Create_and_SoftDelete()
+    public void Message_Create_requires_body()
     {
         var channelId = Guid.NewGuid();
         var msg = ChatMessage.Create(FamilyId, channelId, MemberId, "Hello family");
         msg.Body.Should().Be("Hello family");
-        msg.IsDeleted.Should().BeFalse();
         msg.SenderMemberId.Should().Be(MemberId);
+        msg.ChannelId.Should().Be(channelId);
 
-        msg.SoftDelete();
-        msg.IsDeleted.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Message_rejects_empty_body()
-    {
-        var act = () => ChatMessage.Create(FamilyId, Guid.NewGuid(), MemberId, "  ");
-        act.Should().Throw<ArgumentException>();
+        var empty = () => ChatMessage.Create(FamilyId, channelId, MemberId, "  ");
+        empty.Should().Throw<ArgumentException>();
     }
 }

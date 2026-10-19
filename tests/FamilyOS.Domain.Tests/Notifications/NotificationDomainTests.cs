@@ -1,3 +1,4 @@
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Notifications;
 using FluentAssertions;
 
@@ -9,15 +10,16 @@ public class NotificationDomainTests
     private static readonly Guid MemberId = Guid.NewGuid();
 
     [Fact]
-    public void Create_unread_then_MarkRead()
+    public void Create_unread_then_MarkRead_and_Actioned()
     {
         var n = Notification.Create(
             FamilyId,
             MemberId,
+            NotificationType.TaskAssigned,
             "Task assigned",
             "You have a new chore",
-            relatedEntityType: "Task",
-            relatedEntityId: Guid.NewGuid());
+            relatedEntityId: Guid.NewGuid(),
+            relatedEntityType: "Task");
 
         n.IsRead.Should().BeFalse();
         n.Title.Should().Be("Task assigned");
@@ -26,6 +28,9 @@ public class NotificationDomainTests
         n.MarkRead();
         n.IsRead.Should().BeTrue();
         n.ReadAtUtc.Should().NotBeNull();
+
+        n.MarkActioned();
+        n.IsActioned.Should().BeTrue();
     }
 
     [Fact]
@@ -38,15 +43,13 @@ public class NotificationDomainTests
             platform: "android",
             deviceName: "Pixel");
 
-        d.ExpoPushToken.Should().StartWith("ExponentPushToken");
+        d.Token.Should().StartWith("ExponentPushToken");
         d.Platform.Should().Be("android");
         d.IsActive.Should().BeTrue();
 
-        d.Touch();
-        d.LastSeenAtUtc.Should().NotBeNull();
-
-        d.UpdateToken("ExponentPushToken[yyy]");
-        d.ExpoPushToken.Should().Contain("yyy");
+        d.Touch(platform: "android", deviceName: "Pixel 8");
+        d.DeviceName.Should().Be("Pixel 8");
+        d.LastSeenAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
 
         d.Deactivate();
         d.IsActive.Should().BeFalse();
