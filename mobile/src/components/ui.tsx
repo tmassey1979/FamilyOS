@@ -9,6 +9,20 @@ import {
 } from 'react-native';
 import { colors, spacing, typography } from '../theme';
 
+/** Local fallbacks so typecheck never depends on optional theme keys. */
+const C = {
+  bg: colors.bg,
+  surface: colors.surface,
+  surfaceAlt: (colors as { surfaceAlt?: string }).surfaceAlt ?? '#334155',
+  border: colors.border,
+  primary: colors.primary,
+  text: colors.text,
+  textMuted: colors.textMuted,
+  danger: colors.danger,
+  success: colors.success,
+  warning: (colors as { warning?: string }).warning ?? '#FBBF24',
+};
+
 type ButtonProps = {
   title: string;
   onPress?: () => void;
@@ -19,7 +33,7 @@ type ButtonProps = {
 
 export function Button({ title, onPress, variant = 'primary', disabled, loading }: ButtonProps) {
   const bg =
-    variant === 'primary' ? colors.primary : variant === 'danger' ? colors.danger : colors.surfaceAlt;
+    variant === 'primary' ? C.primary : variant === 'danger' ? C.danger : C.surfaceAlt;
   return (
     <Pressable
       accessibilityRole="button"
@@ -32,7 +46,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading 
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={colors.bg} />
+        <ActivityIndicator color={C.bg} />
       ) : (
         <Text style={styles.buttonText}>{title}</Text>
       )}
@@ -44,15 +58,21 @@ export function Card({ children, style }: { children: React.ReactNode; style?: V
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function Badge({ label, tone = 'default' }: { label: string; tone?: 'default' | 'success' | 'warning' | 'danger' }) {
+export function Badge({
+  label,
+  tone = 'default',
+}: {
+  label: string;
+  tone?: 'default' | 'success' | 'warning' | 'danger';
+}) {
   const bg =
     tone === 'success'
-      ? colors.success
+      ? C.success
       : tone === 'warning'
-        ? colors.warning
+        ? C.warning
         : tone === 'danger'
-          ? colors.danger
-          : colors.surfaceAlt;
+          ? C.danger
+          : C.surfaceAlt;
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
       <Text style={styles.badgeText}>{label}</Text>
@@ -84,14 +104,14 @@ const styles = StyleSheet.create({
   buttonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.bg,
+    color: C.bg,
   },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 16,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: C.border,
   },
   badge: {
     alignSelf: 'flex-start',
@@ -102,7 +122,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: C.text,
   },
   empty: {
     padding: spacing.xl,

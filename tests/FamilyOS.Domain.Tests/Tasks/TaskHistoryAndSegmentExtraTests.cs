@@ -31,7 +31,8 @@ public class TaskItemLifecycleExtraTests
         var task = TaskItem.Create(family, "Chore", creator);
         task.Assign(assignee, creator);
         task.Accept(assignee);
-        task.Decline(assignee, note: "Sick");
+        // positional: (memberId, declineReasonId, note)
+        task.Decline(assignee, null, "Sick");
         task.Status.Should().Be(FamilyTaskStatus.Declined);
     }
 
@@ -49,10 +50,19 @@ public class TaskItemLifecycleExtraTests
     }
 
     [Fact]
-    public void CalendarBacked_defaults_false()
+    public void EnableCalendarBacking_sets_flags()
     {
         var task = TaskItem.Create(Guid.NewGuid(), "Event task", Guid.NewGuid());
-        task.CalendarBacked.Should().BeFalse();
-        task.CalendarEventId.Should().BeNull();
+        var eventId = Guid.NewGuid();
+        task.EnableCalendarBacking(eventId);
+        task.CalendarBacked.Should().BeTrue();
+        task.CalendarEventId.Should().Be(eventId);
+    }
+
+    [Fact]
+    public void IsOverdue_true_when_due_in_past()
+    {
+        var task = TaskItem.Create(Guid.NewGuid(), "Late", Guid.NewGuid(), dueDate: DateTime.UtcNow.AddDays(-1));
+        task.IsOverdue().Should().BeTrue();
     }
 }
