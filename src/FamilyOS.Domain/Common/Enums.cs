@@ -43,7 +43,7 @@ public enum RequestStatus
     Conditional = 7
 }
 
-public enum ProcurementStatus
+public enum ProcurementItemStatus
 {
     Queued = 0,
     InCart = 1,
@@ -51,7 +51,8 @@ public enum ProcurementStatus
     Cancelled = 3,
     Held = 4,
     Deferred = 5,
-    NoLongerNeeded = 6
+    NoLongerNeeded = 6,
+    Approved = 7
 }
 
 public enum CartStatus
