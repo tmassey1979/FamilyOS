@@ -2,70 +2,49 @@ using FamilyOS.Domain.Common;
 
 namespace FamilyOS.Domain.Meals;
 
-/// <summary>One household week of meals (week starts Monday UTC date).</summary>
 public class MealPlan : Entity
 {
     public Guid FamilyId { get; private set; }
-    public DateTime WeekStartUtc { get; private set; }
-    public string? Notes { get; private set; }
 
     private readonly List<MealEntry> _entries = new();
     public IReadOnlyCollection<MealEntry> Entries => _entries.AsReadOnly();
 
     private MealPlan() { }
 
-    public static MealPlan Create(Guid familyId, DateTime weekStartUtc, string? notes = null)
+    public static MealPlan Create(Guid familyId)
     {
-        var monday = ToMonday(weekStartUtc);
-        return new MealPlan
-        {
-            FamilyId = familyId,
-            WeekStartUtc = monday,
-            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
-        };
+        return new MealPlan { FamilyId = familyId };
     }
 
-    public static DateTime ToMonday(DateTime any)
+    public MealEntry UpsertMeal(DateOnly day, string slot, string dishName, string? notes = null)
     {
-        var d = any.Date;
-        var diff = ((int)d.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-        return d.AddDays(-diff);
-    }
-
-    public MealEntry UpsertEntry(DateTime dayUtc, MealSlot slot, string dishName, string? notes = null, string? ingredientsCsv = null)
-    {
+        if (string.IsNullOrWhiteSpace(slot))
+            throw new ArgumentException("Meal slot is required.");
         if (string.IsNullOrWhiteSpace(dishName))
-            throw new ArgumentException("Dish name required.", nameof(dishName));
+            throw new ArgumentException("Dish name is required.");
 
-        var day = dayUtc.Date;
-        if (day < WeekStartUtc || day > WeekStartUtc.AddDays(6))
-            throw new InvalidOperationException("Entry day must fall within the plan week.");
+        var normalizedSlot = slot.Trim();
+        var existing = _entries.FirstOrDefault(e =>
+            e.Date == day && e.Slot.Equals(normalizedSlot, StringComparison.OrdinalIgnoreCase));
 
-        var existing = _entries.FirstOrDefault(e => e.DayUtc.Date == day && e.Slot == slot && !e.IsDeleted);
-        if (existing is not null)
+        if (existing is null)
         {
-            existing.Update(dishName, notes, ingredientsCsv);
+            var entry = MealEntry.Create(FamilyId, day, normalizedSlot, dishName.Trim(), notes: notes);
+            _entries.Add(entry);
             MarkUpdated();
-            return existing;
+            return entry;
         }
 
-        var entry = MealEntry.Create(Id, FamilyId, day, slot, dishName, notes, ingredientsCsv);
-        _entries.Add(entry);
+        existing.Update(title: dishName.Trim(), notes: notes);
         MarkUpdated();
-        return entry;
+        return existing;
     }
 
-    public void RemoveEntry(Guid entryId)
+    public void RemoveMeal(Guid entryId)
     {
-        var entry = _entries.FirstOrDefault(e => e.Id == entryId)
-            ?? throw new InvalidOperationException("Meal entry not found.");
-        entry.SoftDelete();
-        MarkUpdated();
-    }
-
-    public void SetNotes(string? notes)
-    {
-        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        var entry = _entries.FirstOrDefault(e => e.Id == entryId);
+        if (entry is null) return;
+        _entries.Remove(entry);
         MarkUpdated();
     }
 }

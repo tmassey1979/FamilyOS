@@ -22,9 +22,9 @@ public class MealPlanTests
         var day = new DateOnly(2026, 10, 13);
         var e = plan.UpsertMeal(day, "Dinner", "Pasta", notes: "garlic");
         plan.Entries.Should().ContainSingle();
-        e.DishName.Should().Be("Pasta");
-        e.MealSlot.Should().Be("Dinner");
-        e.Day.Should().Be(day);
+        e.Title.Should().Be("Pasta");
+        e.Slot.Should().Be("Dinner");
+        e.Date.Should().Be(day);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public class MealPlanTests
         var e2 = plan.UpsertMeal(day, "Dinner", "Tacos");
         plan.Entries.Should().ContainSingle();
         e2.Id.Should().Be(e1.Id);
-        e2.DishName.Should().Be("Tacos");
+        e2.Title.Should().Be("Tacos");
     }
 
     [Fact]
