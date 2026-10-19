@@ -1,33 +1,27 @@
-using FamilyOS.Contracts.Events;
 using FamilyOS.Domain.Common;
+using FamilyOS.Domain.Contracts;
 
 namespace FamilyOS.Domain.Tasks;
 
-/// <summary>
-/// First-class execution object. Assignment ≠ Acceptance.
-/// </summary>
 public class TaskItem : Entity
 {
     public Guid FamilyId { get; private set; }
     public string Title { get; private set; } = string.Empty;
     public string? Description { get; private set; }
-    public Guid CreatedByMemberId { get; private set; }
-    public Guid? AssignedToMemberId { get; private set; }
     public FamilyTaskStatus Status { get; private set; } = FamilyTaskStatus.Created;
     public TaskPriority Priority { get; private set; } = TaskPriority.Normal;
-    public DateTime? DueDate { get; private set; }
-    public DateTime? StartDate { get; private set; }
-    public TimeOnly? PlannedStartTime { get; private set; }
-    public TimeOnly? PlannedEndTime { get; private set; }
-    public int? EstimatedDurationMinutes { get; private set; }
-    public int? ActualDurationMinutes { get; private set; }
+    public Guid CreatedByMemberId { get; private set; }
+    public Guid? AssigneeMemberId { get; private set; }
+    public Guid? AcceptedByMemberId { get; private set; }
+    public DateTime? DueDateUtc { get; private set; }
+    public DateTime? PlannedStartUtc { get; private set; }
+    public DateTime? PlannedEndUtc { get; private set; }
+    public int? EstimatedMinutes { get; private set; }
+    public DateTime? CompletedAtUtc { get; private set; }
     public string? Category { get; private set; }
-    public string? Location { get; private set; }
-    public bool CalendarBacked { get; private set; }
-    public Guid? CalendarEventId { get; private set; }
     public Guid? RecurrenceDefinitionId { get; private set; }
-    public Guid? ParentRequestId { get; private set; }
-    public Guid? ParentExecutionItemId { get; private set; }
+    public Guid? CalendarEventId { get; private set; }
+    public bool CalendarBacked { get; private set; }
 
     private readonly List<TaskHistoryEntry> _history = new();
     public IReadOnlyCollection<TaskHistoryEntry> History => _history.AsReadOnly();
@@ -42,266 +36,222 @@ public class TaskItem : Entity
         string title,
         Guid createdByMemberId,
         string? description = null,
-        TaskPriority priority = TaskPriority.Normal,
-        DateTime? dueDate = null,
         string? category = null,
-        bool calendarBacked = false,
+        DateTime? dueDate = null,
         Guid? recurrenceDefinitionId = null,
-        Guid? parentRequestId = null)
+        TaskPriority priority = TaskPriority.Normal)
     {
         if (string.IsNullOrWhiteSpace(title))
-            throw new ArgumentException("Title is required.", nameof(title));
+            throw new ArgumentException("Title required.");
 
         var task = new TaskItem
         {
             FamilyId = familyId,
             Title = title.Trim(),
-            Description = description?.Trim(),
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
             CreatedByMemberId = createdByMemberId,
-            Priority = priority,
-            DueDate = dueDate,
-            Category = category,
-            CalendarBacked = calendarBacked,
+            DueDateUtc = dueDate,
             RecurrenceDefinitionId = recurrenceDefinitionId,
-            ParentRequestId = parentRequestId,
+            Priority = priority,
             Status = FamilyTaskStatus.Created
         };
-
         task.AddHistory(FamilyTaskStatus.Created, createdByMemberId, "Task created");
-        task.AddDomainEvent(new TaskCreated(task.Id, familyId, task.Title, createdByMemberId, DateTime.UtcNow));
         return task;
     }
 
     public void Assign(Guid assigneeMemberId, Guid actorMemberId)
     {
-        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
-            throw new InvalidOperationException($"Cannot assign a task in status {Status}.");
+        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled or FamilyTaskStatus.Skipped)
+            throw new InvalidOperationException($"Cannot assign from {Status}.");
 
-        AssignedToMemberId = assigneeMemberId;
+        AssigneeMemberId = assigneeMemberId;
+        AcceptedByMemberId = null;
         Status = FamilyTaskStatus.Assigned;
-        AddHistory(FamilyTaskStatus.Assigned, actorMemberId, $"Assigned to member {assigneeMemberId}");
-        AddDomainEvent(new TaskAssigned(Id, FamilyId, assigneeMemberId, actorMemberId, DateTime.UtcNow));
+        AddHistory(FamilyTaskStatus.Assigned, actorMemberId, "Assigned");
+        AddDomainEvent(new TaskAssigned(Id, FamilyId, assigneeMemberId, actorMemberId));
         MarkUpdated();
     }
 
     public void Accept(Guid memberId)
     {
-        EnsureAssignedTo(memberId);
-        if (Status != FamilyTaskStatus.Assigned && Status != FamilyTaskStatus.Reassigned)
-            throw new InvalidOperationException($"Task must be Assigned to accept. Current: {Status}");
+        if (AssigneeMemberId != memberId)
+            throw new UnauthorizedAccessException("Only the assignee can accept.");
+        if (Status != FamilyTaskStatus.Assigned)
+            throw new InvalidOperationException($"Cannot accept from {Status}.");
 
+        AcceptedByMemberId = memberId;
         Status = FamilyTaskStatus.Accepted;
-        AddHistory(FamilyTaskStatus.Accepted, memberId, "Task accepted");
-        AddDomainEvent(new TaskAccepted(Id, FamilyId, memberId, DateTime.UtcNow));
-        MarkUpdated();
-    }
-
-    public void Decline(Guid memberId, Guid? reasonId = null, string? note = null)
-    {
-        EnsureAssignedTo(memberId);
-        if (Status is not (FamilyTaskStatus.Assigned or FamilyTaskStatus.Accepted or FamilyTaskStatus.Reassigned))
-            throw new InvalidOperationException($"Cannot decline task in status {Status}.");
-
-        Status = FamilyTaskStatus.Declined;
-        var detail = reasonId.HasValue ? $"ReasonId={reasonId}" : "No reason";
-        if (!string.IsNullOrWhiteSpace(note)) detail += $"; Note={note}";
-        AddHistory(FamilyTaskStatus.Declined, memberId, detail);
-        AddDomainEvent(new TaskDeclined(Id, FamilyId, memberId, reasonId, note, DateTime.UtcNow));
+        AddHistory(FamilyTaskStatus.Accepted, memberId, "Accepted");
         MarkUpdated();
     }
 
     public void Start(Guid memberId)
     {
-        EnsureAssignedTo(memberId);
-        if (Status is not (FamilyTaskStatus.Accepted or FamilyTaskStatus.Paused or FamilyTaskStatus.Deferred))
-            throw new InvalidOperationException($"Cannot start task in status {Status}.");
+        EnsureAssignee(memberId);
+        if (Status is not (FamilyTaskStatus.Accepted or FamilyTaskStatus.Assigned or FamilyTaskStatus.InProgress))
+            throw new InvalidOperationException($"Cannot start from {Status}.");
 
         Status = FamilyTaskStatus.InProgress;
-        _timeSegments.Add(TaskTimeSegment.Start(Id, memberId));
-        AddHistory(FamilyTaskStatus.InProgress, memberId, "Work started");
-        AddDomainEvent(new TaskStarted(Id, FamilyId, memberId, DateTime.UtcNow));
+        OpenSegment(memberId);
+        AddHistory(FamilyTaskStatus.InProgress, memberId, "Started");
         MarkUpdated();
     }
 
     public void Pause(Guid memberId)
     {
-        EnsureAssignedTo(memberId);
+        EnsureAssignee(memberId);
         if (Status != FamilyTaskStatus.InProgress)
-            throw new InvalidOperationException("Task is not in progress.");
+            throw new InvalidOperationException($"Cannot pause from {Status}.");
 
-        Status = FamilyTaskStatus.Paused;
         CloseOpenSegment(memberId);
-        AddHistory(FamilyTaskStatus.Paused, memberId, "Work paused");
-        AddDomainEvent(new TaskPaused(Id, FamilyId, memberId, DateTime.UtcNow));
+        Status = FamilyTaskStatus.Paused;
+        AddHistory(FamilyTaskStatus.Paused, memberId, "Paused");
         MarkUpdated();
     }
 
     public void Resume(Guid memberId)
     {
-        EnsureAssignedTo(memberId);
+        EnsureAssignee(memberId);
         if (Status != FamilyTaskStatus.Paused)
-            throw new InvalidOperationException("Task is not paused.");
+            throw new InvalidOperationException($"Cannot resume from {Status}.");
 
         Status = FamilyTaskStatus.InProgress;
-        _timeSegments.Add(TaskTimeSegment.Start(Id, memberId));
-        AddHistory(FamilyTaskStatus.InProgress, memberId, "Work resumed");
-        AddDomainEvent(new TaskResumed(Id, FamilyId, memberId, DateTime.UtcNow));
+        OpenSegment(memberId);
+        AddHistory(FamilyTaskStatus.InProgress, memberId, "Resumed");
         MarkUpdated();
     }
 
     public void Complete(Guid memberId)
     {
-        EnsureAssignedTo(memberId);
-        if (Status is not (FamilyTaskStatus.InProgress or FamilyTaskStatus.Accepted or FamilyTaskStatus.Paused))
-            throw new InvalidOperationException($"Cannot complete task in status {Status}.");
+        EnsureAssignee(memberId);
+        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
+            throw new InvalidOperationException($"Cannot complete from {Status}.");
 
-        if (Status == FamilyTaskStatus.InProgress)
-            CloseOpenSegment(memberId);
-
+        CloseOpenSegment(memberId);
         Status = FamilyTaskStatus.Completed;
-        ActualDurationMinutes = _timeSegments
-            .Where(s => s.EndedAtUtc.HasValue)
-            .Sum(s => (int)(s.EndedAtUtc!.Value - s.StartedAtUtc).TotalMinutes);
-
-        AddHistory(FamilyTaskStatus.Completed, memberId, $"Completed. Actual duration: {ActualDurationMinutes} min");
-        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, ActualDurationMinutes, DateTime.UtcNow));
+        CompletedAtUtc = DateTime.UtcNow;
+        AddHistory(FamilyTaskStatus.Completed, memberId, "Completed");
+        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, CompletedAtUtc.Value));
         MarkUpdated();
     }
 
-    public void Defer(Guid memberId, string? note = null)
+    public void Decline(Guid memberId, string? note = null, Guid? declineReasonId = null)
     {
-        EnsureAssignedTo(memberId);
+        EnsureAssignee(memberId);
+        if (Status is not (FamilyTaskStatus.Assigned or FamilyTaskStatus.Accepted))
+            throw new InvalidOperationException($"Cannot decline from {Status}.");
+
+        Status = FamilyTaskStatus.Declined;
+        var detail = string.IsNullOrWhiteSpace(note) ? "Declined" : $"Declined: {note}";
+        AddHistory(FamilyTaskStatus.Declined, memberId, detail);
+        MarkUpdated();
+    }
+
+    public void Defer(Guid memberId, DateTime untilUtc, string? note = null)
+    {
+        EnsureAssignee(memberId);
+        if (Status != FamilyTaskStatus.Assigned)
+            throw new InvalidOperationException($"Cannot defer from {Status}.");
+
         Status = FamilyTaskStatus.Deferred;
-        AddHistory(FamilyTaskStatus.Deferred, memberId, note ?? "Deferred");
+        DueDateUtc = untilUtc;
+        var detail = string.IsNullOrWhiteSpace(note) ? $"Deferred until {untilUtc:u}" : $"Deferred until {untilUtc:u}: {note}";
+        AddHistory(FamilyTaskStatus.Deferred, memberId, detail);
+        MarkUpdated();
+    }
+
+    public void Reassign(Guid newAssigneeMemberId, Guid actorMemberId)
+    {
+        if (Status is not (FamilyTaskStatus.Assigned or FamilyTaskStatus.Declined or FamilyTaskStatus.Deferred))
+            throw new InvalidOperationException($"Cannot reassign from {Status}.");
+
+        AssigneeMemberId = newAssigneeMemberId;
+        AcceptedByMemberId = null;
+        Status = FamilyTaskStatus.Assigned;
+        AddHistory(FamilyTaskStatus.Assigned, actorMemberId, "Reassigned");
+        AddDomainEvent(new TaskAssigned(Id, FamilyId, newAssigneeMemberId, actorMemberId));
+        MarkUpdated();
+    }
+
+    public void Skip(Guid actorMemberId, string? reason = null)
+    {
+        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled or FamilyTaskStatus.Skipped)
+            throw new InvalidOperationException($"Cannot skip from {Status}.");
+
+        CloseOpenSegment(actorMemberId);
+        Status = FamilyTaskStatus.Skipped;
+        var detail = string.IsNullOrWhiteSpace(reason) ? "Skipped" : $"Skipped: {reason}";
+        AddHistory(FamilyTaskStatus.Skipped, actorMemberId, detail);
         MarkUpdated();
     }
 
     public void Cancel(Guid actorMemberId, string? reason = null)
     {
         if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
-            throw new InvalidOperationException($"Cannot cancel task in status {Status}.");
+            throw new InvalidOperationException($"Cannot cancel from {Status}.");
 
+        CloseOpenSegment(actorMemberId);
         Status = FamilyTaskStatus.Cancelled;
-        AddHistory(FamilyTaskStatus.Cancelled, actorMemberId, reason ?? "Cancelled");
-        AddDomainEvent(new TaskCancelled(Id, FamilyId, actorMemberId, reason, DateTime.UtcNow));
+        var detail = string.IsNullOrWhiteSpace(reason) ? "Cancelled" : $"Cancelled: {reason}";
+        AddHistory(FamilyTaskStatus.Cancelled, actorMemberId, detail);
         MarkUpdated();
     }
 
-    /// <summary>
-    /// Skip this occurrence (typically a recurrence instance). Terminal like complete/cancel but without work done.
-    /// </summary>
-    public void Skip(Guid actorMemberId, string? note = null)
+    public void SetPriority(TaskPriority priority)
     {
-        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled or FamilyTaskStatus.Skipped)
-            throw new InvalidOperationException($"Cannot skip a task in status {Status}.");
-
-        if (Status == FamilyTaskStatus.InProgress)
-            CloseOpenSegment(actorMemberId);
-
-        Status = FamilyTaskStatus.Skipped;
-        AddHistory(FamilyTaskStatus.Skipped, actorMemberId, note ?? "Skipped this occurrence");
-        AddDomainEvent(new TaskSkipped(Id, FamilyId, actorMemberId, note, DateTime.UtcNow));
+        Priority = priority;
         MarkUpdated();
     }
 
-    public void Reassign(Guid newAssigneeMemberId, Guid actorMemberId)
+    public void UpdateDetails(string title, string? description, string? category)
     {
-        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
-            throw new InvalidOperationException($"Cannot reassign task in status {Status}.");
-
-        var previous = AssignedToMemberId;
-        AssignedToMemberId = newAssigneeMemberId;
-        Status = FamilyTaskStatus.Reassigned;
-        AddHistory(FamilyTaskStatus.Reassigned, actorMemberId, $"Reassigned from {previous} to {newAssigneeMemberId}");
-        Status = FamilyTaskStatus.Assigned;
-        AddDomainEvent(new TaskReassigned(Id, FamilyId, previous ?? Guid.Empty, newAssigneeMemberId, actorMemberId, DateTime.UtcNow));
+        if (string.IsNullOrWhiteSpace(title))
+            throw new ArgumentException("Title required.");
+        Title = title.Trim();
+        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
         MarkUpdated();
     }
 
-    public bool IsOverdue(DateTime? utcNow = null)
+    public void SetDueDate(DateTime? dueDateUtc)
     {
-        if (!DueDate.HasValue) return false;
+        DueDateUtc = dueDateUtc;
+        MarkUpdated();
+    }
+
+    public void SetPlannedTimes(DateTime? plannedStartUtc, DateTime? plannedEndUtc, int? estimatedMinutes)
+    {
+        PlannedStartUtc = plannedStartUtc;
+        PlannedEndUtc = plannedEndUtc;
+        EstimatedMinutes = estimatedMinutes;
+        MarkUpdated();
+    }
+
+    public bool IsOverdue(DateTime? nowUtc = null)
+    {
+        var now = nowUtc ?? DateTime.UtcNow;
         if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled or FamilyTaskStatus.Skipped)
             return false;
-        var now = utcNow ?? DateTime.UtcNow;
-        return DueDate.Value < now;
+        return DueDateUtc.HasValue && DueDateUtc.Value < now;
     }
 
-    public void UpdateDetails(
-        Guid actorMemberId,
-        string? title = null,
-        string? description = null,
-        TaskPriority? priority = null,
-        string? category = null,
-        DateTime? dueDate = null,
-        bool clearDueDate = false)
+    private void EnsureAssignee(Guid memberId)
     {
-        if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
-            throw new InvalidOperationException($"Cannot update a task in status {Status}.");
-
-        var changes = new List<string>();
-        if (title is not null)
-        {
-            if (string.IsNullOrWhiteSpace(title))
-                throw new ArgumentException("Title is required.", nameof(title));
-            Title = title.Trim();
-            changes.Add("title");
-        }
-        if (description is not null)
-        {
-            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
-            changes.Add("description");
-        }
-        if (priority.HasValue && priority.Value != Priority)
-        {
-            Priority = priority.Value;
-            changes.Add($"priority={priority.Value}");
-        }
-        if (category is not null)
-        {
-            Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim();
-            changes.Add("category=" + (Category ?? "(none)"));
-        }
-        if (clearDueDate)
-        {
-            DueDate = null;
-            changes.Add("dueDate cleared");
-        }
-        else if (dueDate.HasValue)
-        {
-            DueDate = dueDate;
-            changes.Add($"dueDate={dueDate:O}");
-        }
-
-        if (changes.Count == 0) return;
-        AddHistory(Status, actorMemberId, "Updated: " + string.Join(", ", changes));
-        MarkUpdated();
+        if (AssigneeMemberId != memberId)
+            throw new UnauthorizedAccessException("Only the assignee can perform this action.");
     }
 
-    public void SetPlannedTimes(TimeOnly? start, TimeOnly? end, int? estimatedMinutes)
+    private void OpenSegment(Guid memberId)
     {
-        PlannedStartTime = start;
-        PlannedEndTime = end;
-        EstimatedDurationMinutes = estimatedMinutes;
-        MarkUpdated();
-    }
-
-    public void LinkCalendarEvent(Guid calendarEventId)
-    {
-        CalendarEventId = calendarEventId;
-        CalendarBacked = true;
-        MarkUpdated();
-    }
-
-    private void EnsureAssignedTo(Guid memberId)
-    {
-        if (AssignedToMemberId != memberId)
-            throw new UnauthorizedAccessException("Only the assigned member can perform this action.");
+        if (_timeSegments.Any(s => s.EndedAtUtc is null))
+            return;
+        _timeSegments.Add(TaskTimeSegment.Start(Id, memberId));
     }
 
     private void CloseOpenSegment(Guid memberId)
     {
-        var open = _timeSegments.LastOrDefault(s => !s.EndedAtUtc.HasValue);
+        var open = _timeSegments.LastOrDefault(s => s.EndedAtUtc is null);
         open?.End(memberId);
     }
 
