@@ -29,11 +29,12 @@ public class CalendarEventExtraTests
     }
 
     [Fact]
-    public void Complete_sets_completed_flag()
+    public void Cancel_is_idempotent()
     {
         var start = DateTime.UtcNow.AddDays(1);
-        var e = CalendarEvent.Create(FamilyId, "Appt", start, start.AddMinutes(30));
-        e.Complete();
-        e.IsCompleted.Should().BeTrue();
+        var e = CalendarEvent.Create(FamilyId, "Meet", start, start.AddHours(1));
+        e.Cancel();
+        e.Cancel();
+        e.IsCancelled.Should().BeTrue();
     }
 }
