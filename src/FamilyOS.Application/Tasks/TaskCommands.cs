@@ -1,117 +1,90 @@
 using FamilyOS.Application.Common;
 using FamilyOS.Application.Interfaces;
-using FamilyOS.Domain.Calendar;
 using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Conditions;
 using FamilyOS.Domain.Notifications;
 using FamilyOS.Domain.Tasks;
+using FamilyOS.Domain.TimeIntelligence;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyOS.Application.Tasks;
 
-// NOTE: Full TaskCommands restored after accidental empty push.
-// Handlers for create/assign/complete/skip/etc. live below.
+// Full handlers restored as partial class across TaskCommands.cs + TaskCommands.Handlers.cs
+// to recover from accidental empty overwrite.
 
 public record TaskDto(
-    Guid Id,
-    Guid FamilyId,
-    string Title,
-    string? Description,
-    FamilyTaskStatus Status,
-    TaskPriority Priority,
-    Guid? AssigneeMemberId,
-    DateTime? DueAtUtc,
-    DateTime? PlannedStartUtc,
-    DateTime? PlannedEndUtc,
+    Guid Id, string Title, string? Description, FamilyTaskStatus Status, TaskPriority Priority,
+    Guid? AssignedToMemberId, string? AssignedToName, DateTime? DueDate,
+    int? EstimatedDurationMinutes, int? ActualDurationMinutes, string? Category,
+    bool CalendarBacked, DateTime CreatedAtUtc, bool IsOverdue,
+    string? PlannedStartTime, string? PlannedEndTime,
     int? VarianceMinutes,
-    bool IsOverdue,
-    Guid? RecurrenceId,
-    DateTime CreatedAtUtc);
+    Guid? RecurrenceDefinitionId = null,
+    bool IsRecurring = false,
+    string? RecurrenceFrequency = null);
+
+public record TaskHistoryDto(Guid Id, FamilyTaskStatus Status, Guid ActorMemberId, string Detail, DateTime TimestampUtc);
+
+public record RecurrenceDto(
+    Guid Id, string Title, string? Description, RecurrenceFrequency Frequency, int Interval,
+    DayOfWeek? DayOfWeek, Guid? DefaultAssigneeMemberId, DeclinePolicy DeclinePolicy,
+    bool IsActive, DateTime? NextOccurrenceUtc, string? Category);
 
 public record CreateTaskCommand(
+    string Title, string? Description, Guid? AssignToMemberId, TaskPriority Priority,
+    DateTime? DueDate, string? Category, bool CalendarBacked, int? EstimatedDurationMinutes,
+    RecurrenceFrequency? Frequency = null,
+    int Interval = 1,
+    DayOfWeek? DayOfWeek = null
+) : IRequest<TaskDto>;
+
+public record CreateRecurrenceCommand(
     string Title,
-    string? Description,
-    TaskPriority Priority,
-    Guid? AssigneeMemberId,
-    DateTime? DueAtUtc,
-    int? EstimatedMinutes) : IRequest<TaskDto>;
+    RecurrenceFrequency Frequency,
+    int Interval = 1,
+    DayOfWeek? DayOfWeek = null,
+    Guid? DefaultAssigneeMemberId = null,
+    string? Category = null,
+    string? Description = null,
+    DeclinePolicy DeclinePolicy = DeclinePolicy.NoChange,
+    bool GenerateFirstInstance = true
+) : IRequest<RecurrenceDto>;
 
+public record GetRecurrencesQuery() : IRequest<List<RecurrenceDto>>;
+public record DeactivateRecurrenceCommand(Guid RecurrenceId) : IRequest<RecurrenceDto>;
+public record AssignTaskCommand(Guid TaskId, Guid AssignToMemberId) : IRequest<TaskDto>;
+public record AcceptTaskCommand(Guid TaskId) : IRequest<TaskDto>;
+public record DeclineTaskCommand(Guid TaskId, Guid? ReasonId, string? Note) : IRequest<TaskDto>;
+public record StartTaskCommand(Guid TaskId) : IRequest<TaskDto>;
+public record PauseTaskCommand(Guid TaskId) : IRequest<TaskDto>;
+public record ResumeTaskCommand(Guid TaskId) : IRequest<TaskDto>;
 public record CompleteTaskCommand(Guid TaskId) : IRequest<TaskDto>;
-public record AssignTaskCommand(Guid TaskId, Guid AssigneeMemberId) : IRequest<TaskDto>;
-public record SkipTaskCommand(Guid TaskId) : IRequest<TaskDto>;
+public record DeferTaskCommand(Guid TaskId, string? Note) : IRequest<TaskDto>;
+public record CancelTaskCommand(Guid TaskId, string? Reason) : IRequest<TaskDto>;
+public record SkipTaskCommand(Guid TaskId, string? Note) : IRequest<TaskDto>;
+public record ReassignTaskCommand(Guid TaskId, Guid NewAssigneeMemberId) : IRequest<TaskDto>;
+public record GetTaskQuery(Guid TaskId) : IRequest<TaskDto>;
+public record GetMyTasksQuery(FamilyTaskStatus? Status = null) : IRequest<List<TaskDto>>;
+public record GetFamilyTasksQuery(FamilyTaskStatus? Status = null) : IRequest<List<TaskDto>>;
+public record GetTaskHistoryQuery(Guid TaskId) : IRequest<List<TaskHistoryDto>>;
+public record UpdateTaskDetailsCommand(
+    Guid TaskId, string? Title = null, string? Description = null, TaskPriority? Priority = null,
+    string? Category = null, DateTime? DueDate = null, bool ClearDueDate = false) : IRequest<TaskDto>;
+public record SetPlannedTimesCommand(
+    Guid TaskId, string? PlannedStartTime = null, string? PlannedEndTime = null,
+    int? EstimatedDurationMinutes = null) : IRequest<TaskDto>;
 
-public class TaskCommandHandlers :
-    IRequestHandler<CreateTaskCommand, TaskDto>,
-    IRequestHandler<CompleteTaskCommand, TaskDto>,
-    IRequestHandler<AssignTaskCommand, TaskDto>,
-    IRequestHandler<SkipTaskCommand, TaskDto>
+public partial class TaskCommandHandlers
 {
     private readonly IFamilyOsDbContext _db;
     private readonly ICurrentUserService _current;
+    private readonly IPushNotificationSender _push;
 
-    public TaskCommandHandlers(IFamilyOsDbContext db, ICurrentUserService current)
+    public TaskCommandHandlers(IFamilyOsDbContext db, ICurrentUserService current, IPushNotificationSender push)
     {
         _db = db;
         _current = current;
+        _push = push;
     }
-
-    public async Task<TaskDto> Handle(CreateTaskCommand cmd, CancellationToken ct)
-    {
-        var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
-        var task = TaskItem.Create(familyId, cmd.Title, memberId, cmd.Description, cmd.Priority);
-        if (cmd.DueAtUtc.HasValue) task.SetDueDate(cmd.DueAtUtc);
-        if (cmd.AssigneeMemberId.HasValue)
-            task.Assign(cmd.AssigneeMemberId.Value, memberId);
-        _db.Tasks.Add(task);
-        await _db.SaveChangesAsync(ct);
-        return ToDto(task);
-    }
-
-    public async Task<TaskDto> Handle(CompleteTaskCommand cmd, CancellationToken ct)
-    {
-        var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
-        var task = await GetOwned(cmd.TaskId, familyId, ct);
-        task.Complete(memberId);
-
-        // Auto-satisfy linked conditions when a task completes
-        var linked = await _db.Conditions
-            .Where(c => c.FamilyId == familyId && c.TaskId == task.Id && c.Status == ConditionStatus.Pending)
-            .ToListAsync(ct);
-        foreach (var c in linked)
-        {
-            if (c.Type == ConditionType.TaskCompletion)
-                c.Satisfy(memberId);
-        }
-
-        await _db.SaveChangesAsync(ct);
-        return ToDto(task);
-    }
-
-    public async Task<TaskDto> Handle(AssignTaskCommand cmd, CancellationToken ct)
-    {
-        var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
-        var task = await GetOwned(cmd.TaskId, familyId, ct);
-        task.Assign(cmd.AssigneeMemberId, memberId);
-        await _db.SaveChangesAsync(ct);
-        return ToDto(task);
-    }
-
-    public async Task<TaskDto> Handle(SkipTaskCommand cmd, CancellationToken ct)
-    {
-        var (familyId, memberId, _) = await _current.RequireFamilyAsync(ct);
-        var task = await GetOwned(cmd.TaskId, familyId, ct);
-        task.Skip(memberId);
-        await _db.SaveChangesAsync(ct);
-        return ToDto(task);
-    }
-
-    private async Task<TaskItem> GetOwned(Guid id, Guid familyId, CancellationToken ct) =>
-        await _db.Tasks.FirstOrDefaultAsync(t => t.Id == id && t.FamilyId == familyId, ct)
-        ?? throw new NotFoundException("Task", id);
-
-    private static TaskDto ToDto(TaskItem t) => new(
-        t.Id, t.FamilyId, t.Title, t.Description, t.Status, t.Priority,
-        t.AssigneeMemberId, t.DueAtUtc, t.PlannedStartUtc, t.PlannedEndUtc,
-        t.VarianceMinutes, t.IsOverdue, t.RecurrenceId, t.CreatedAtUtc);
 }
