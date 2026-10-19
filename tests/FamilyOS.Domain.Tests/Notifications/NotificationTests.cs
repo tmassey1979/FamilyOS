@@ -1,3 +1,4 @@
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Notifications;
 using FluentAssertions;
 
@@ -14,13 +15,15 @@ public class NotificationTests
         var n = Notification.Create(
             familyId,
             memberId,
+            NotificationType.TaskAssigned,
             "Task assigned",
             "You have a new chore",
-            relatedType: "Task",
-            relatedId: related);
+            relatedEntityId: related,
+            relatedEntityType: "Task");
 
         n.FamilyId.Should().Be(familyId);
-        n.MemberId.Should().Be(memberId);
+        n.RecipientMemberId.Should().Be(memberId);
+        n.Type.Should().Be(NotificationType.TaskAssigned);
         n.Title.Should().Be("Task assigned");
         n.Body.Should().Be("You have a new chore");
         n.RelatedEntityType.Should().Be("Task");
@@ -30,13 +33,19 @@ public class NotificationTests
     }
 
     [Fact]
-    public void MarkRead_sets_flag_and_timestamp()
+    public void MarkRead_and_MarkActioned()
     {
-        var n = Notification.Create(Guid.NewGuid(), Guid.NewGuid(), "Hi", null);
+        var n = Notification.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            NotificationType.Info,
+            "Hi",
+            "Body");
         n.MarkRead();
         n.IsRead.Should().BeTrue();
         n.ReadAtUtc.Should().NotBeNull();
-        n.MarkRead();
-        n.IsRead.Should().BeTrue();
+
+        n.MarkActioned();
+        n.IsActioned.Should().BeTrue();
     }
 }
