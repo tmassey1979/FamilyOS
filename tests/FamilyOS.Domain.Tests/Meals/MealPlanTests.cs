@@ -9,63 +9,65 @@ public class MealPlanTests
     private static readonly Guid FamilyId = Guid.NewGuid();
 
     [Fact]
-    public void Create_empty_plan()
+    public void ToMonday_normalizes_to_week_start()
     {
-        var plan = MealPlan.Create(FamilyId);
+        // 2026-10-14 is Wednesday
+        var wed = new DateTime(2026, 10, 14, 15, 30, 0, DateTimeKind.Utc);
+        var monday = MealPlan.ToMonday(wed);
+        monday.Should().Be(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc));
+        monday.DayOfWeek.Should().Be(DayOfWeek.Monday);
+    }
+
+    [Fact]
+    public void Create_sets_week_start_to_monday()
+    {
+        var plan = MealPlan.Create(FamilyId, new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc));
         plan.FamilyId.Should().Be(FamilyId);
+        plan.WeekStartUtc.DayOfWeek.Should().Be(DayOfWeek.Monday);
         plan.Entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void UpsertMeal_adds_entry()
+    public void UpsertEntry_adds_and_updates()
     {
-        var plan = MealPlan.Create(FamilyId);
+        var plan = MealPlan.Create(FamilyId, DateTime.UtcNow);
         var day = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc);
-        var e = plan.UpsertMeal(day, MealSlot.Dinner, "Pasta", notes: "garlic");
+        var e1 = plan.UpsertEntry(day, MealSlot.Dinner, "Pasta", notes: "garlic");
         plan.Entries.Should().ContainSingle();
-        e.DishName.Should().Be("Pasta");
-        e.Slot.Should().Be(MealSlot.Dinner);
-        e.DayUtc.Date.Should().Be(day.Date);
-        e.Notes.Should().Be("garlic");
-    }
+        e1.DishName.Should().Be("Pasta");
+        e1.Slot.Should().Be(MealSlot.Dinner);
 
-    [Fact]
-    public void UpsertMeal_updates_same_day_slot()
-    {
-        var plan = MealPlan.Create(FamilyId);
-        var day = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc);
-        var e1 = plan.UpsertMeal(day, MealSlot.Dinner, "Pasta");
-        var e2 = plan.UpsertMeal(day, MealSlot.Dinner, "Tacos");
+        var e2 = plan.UpsertEntry(day, MealSlot.Dinner, "Tacos");
         plan.Entries.Should().ContainSingle();
         e2.Id.Should().Be(e1.Id);
         e2.DishName.Should().Be("Tacos");
     }
 
     [Fact]
-    public void RemoveMeal_by_id()
+    public void RemoveEntry_soft_deletes()
     {
-        var plan = MealPlan.Create(FamilyId);
-        var e = plan.UpsertMeal(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), MealSlot.Breakfast, "Eggs");
-        plan.RemoveMeal(e.Id);
-        plan.Entries.Should().BeEmpty();
+        var plan = MealPlan.Create(FamilyId, DateTime.UtcNow);
+        var e = plan.UpsertEntry(DateTime.UtcNow.Date, MealSlot.Breakfast, "Eggs");
+        plan.RemoveEntry(e.Id);
+        e.IsDeleted.Should().BeTrue();
     }
 
     [Fact]
-    public void UpsertMeal_rejects_empty_dish()
+    public void UpsertEntry_rejects_empty_dish()
     {
-        var plan = MealPlan.Create(FamilyId);
-        var day = new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc);
-        var act = () => plan.UpsertMeal(day, MealSlot.Lunch, "  ");
+        var plan = MealPlan.Create(FamilyId, DateTime.UtcNow);
+        var act = () => plan.UpsertEntry(DateTime.UtcNow.Date, MealSlot.Lunch, "  ");
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void AllIngredients_aggregates_unique()
+    public void AllIngredients_skips_deleted()
     {
-        var plan = MealPlan.Create(FamilyId);
-        var day = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc);
-        plan.UpsertMeal(day, MealSlot.Dinner, "Pasta", ingredientsCsv: "pasta, garlic");
-        plan.UpsertMeal(day, MealSlot.Lunch, "Salad", ingredientsCsv: "garlic, lettuce");
-        plan.AllIngredients().Should().BeEquivalentTo(new[] { "garlic", "lettuce", "pasta" });
+        var plan = MealPlan.Create(FamilyId, DateTime.UtcNow);
+        var day = DateTime.UtcNow.Date;
+        var e = plan.UpsertEntry(day, MealSlot.Dinner, "Pasta", ingredientsCsv: "pasta, garlic");
+        plan.UpsertEntry(day, MealSlot.Lunch, "Salad", ingredientsCsv: "lettuce");
+        plan.RemoveEntry(e.Id);
+        plan.AllIngredients().Should().Equal("lettuce");
     }
 }
