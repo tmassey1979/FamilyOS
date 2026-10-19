@@ -68,7 +68,7 @@ public class TaskItem : Entity
         AssigneeMemberId = assigneeMemberId;
         Status = FamilyTaskStatus.Assigned;
         AddHistory(FamilyTaskStatus.Assigned, actorMemberId, $"Assigned to member {assigneeMemberId}");
-        AddDomainEvent(new TaskAssigned(Id, FamilyId, assigneeMemberId, Title));
+        AddDomainEvent(new TaskAssigned(Id, FamilyId, assigneeMemberId, actorMemberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -129,7 +129,7 @@ public class TaskItem : Entity
         Status = FamilyTaskStatus.Completed;
         CompletedAtUtc = DateTime.UtcNow;
         AddHistory(FamilyTaskStatus.Completed, memberId, "Task completed");
-        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, CompletedAtUtc.Value));
+        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, CompletedAtUtc.Value, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -165,7 +165,7 @@ public class TaskItem : Entity
         AssigneeMemberId = newAssigneeMemberId;
         Status = FamilyTaskStatus.Reassigned;
         AddHistory(FamilyTaskStatus.Reassigned, actorMemberId, $"Reassigned to {newAssigneeMemberId}");
-        AddDomainEvent(new TaskAssigned(Id, FamilyId, newAssigneeMemberId, Title));
+        AddDomainEvent(new TaskAssigned(Id, FamilyId, newAssigneeMemberId, actorMemberId, DateTime.UtcNow));
         MarkUpdated();
     }
 
