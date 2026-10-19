@@ -8,88 +8,28 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
-import { Badge, Button, Card, SectionTitle } from '../../src/components/ui';
+import { useRouter } from 'expo-router';
+import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
-import { outcomesApi, type OutcomesDto } from '../../src/api/outcomes';
-import { mealsApi, type MealEntryDto } from '../../src/api/meals';
-import { cacheGet } from '../../src/offline';
 import { colors, spacing, typography } from '../../src/theme';
-
-function mondayOf(d: Date): Date {
-  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const day = x.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  x.setUTCDate(x.getUTCDate() + diff);
-  x.setUTCHours(0, 0, 0, 0);
-  return x;
-}
-
-function routeForKind(kind: string): Href {
-  const k = kind.toLowerCase();
-  if (k.includes('request')) return '/(tabs)/requests' as Href;
-  if (k.includes('task')) return '/(tabs)/tasks' as Href;
-  if (k.includes('shop') || k.includes('procure') || k.includes('cart')) return '/(tabs)/family' as Href;
-  if (k.includes('meal')) return '/(tabs)/meals' as Href;
-  if (k.includes('chat')) return '/(tabs)/chat' as Href;
-  return '/(tabs)' as Href;
-}
-
-/** Simple text bar chart for weekly counts (0–max scaled). */
-function SparkBars({ values, label }: { values: number[]; label: string }) {
-  const max = Math.max(1, ...values);
-  return (
-    <View style={{ gap: 4 }}>
-      <Text style={typography.caption}>{label}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 36 }}>
-        {values.map((v, i) => (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              height: Math.max(2, Math.round((v / max) * 32)),
-              backgroundColor: v > 0 ? colors.primary : colors.surface,
-              borderRadius: 2,
-              opacity: v > 0 ? 1 : 0.4,
-            }}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
   const [pulse, setPulse] = useState<PulseDto | null>(null);
-  const [outcomes, setOutcomes] = useState<OutcomesDto | null>(null);
-  const [todayMeals, setTodayMeals] = useState<MealEntryDto[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    setRefreshing(true);
+    setLoading(true);
     setError(null);
     try {
-      const cached = await cacheGet<PulseDto>('pulse');
-      if (cached) setPulse(cached);
-      const [p, o] = await Promise.all([
-        pulseApi.get(),
-        outcomesApi.get().catch(() => null),
-      ]);
+      const p = await pulseApi.get();
       setPulse(p);
-      setOutcomes(o);
-      try {
-        const week = await mealsApi.week(mondayOf(new Date()).toISOString());
-        const today = new Date().toISOString().slice(0, 10);
-        setTodayMeals(week.entries.filter((e) => e.dayUtc.slice(0, 10) === today));
-      } catch {
-        setTodayMeals([]);
-      }
     } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Unable to load pulse');
+      setError((e as { error?: string })?.error ?? 'Could not load pulse');
+      setPulse(null);
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   }, []);
 
@@ -97,172 +37,106 @@ export default function HomeScreen() {
     void load();
   }, [load]);
 
-  const attention = pulse?.attention ?? [];
+  const attentionItems = pulse?.needsAttention ?? [];
+  const next = pulse?.nextAction;
   const blockers = pulse?.waitingBlockers ?? [];
   const comingUp = pulse?.comingUp ?? [];
-  const next = pulse?.nextBestAction;
-  const quiet =
-    !pulse ||
-    (attention.length === 0 && blockers.length === 0 && comingUp.length === 0 && todayMeals.length === 0);
-
-  const taskBars = outcomes?.weeklyTasksCompleted ?? [];
-  const approvalBars = outcomes?.weeklyRequestsApproved ?? [];
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
     >
-      <Text style={typography.title}>Family Pulse</Text>
-      {pulse?.greeting ? <Text style={typography.caption}>{pulse.greeting}</Text> : null}
-      {pulse?.role ? (
-        <Text style={typography.caption}>
-          {pulse.role}
-          {pulse.roleHint ? ` · ${pulse.roleHint}` : ''}
-        </Text>
-      ) : null}
+      <SectionTitle>Home</SectionTitle>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {refreshing && !pulse ? <ActivityIndicator color={colors.primary} /> : null}
+      {loading && !pulse ? <ActivityIndicator color={colors.primary} /> : null}
 
-      {next ? (
-        <Card style={styles.cardGap}>
-          <Text style={typography.heading}>{next.title}</Text>
-          {next.subtitle ? <Text style={typography.caption}>{next.subtitle}</Text> : null}
-          <Button title={next.ctaLabel || 'Open'} onPress={() => router.push(routeForKind(next.kind))} />
-        </Card>
-      ) : null}
-
-      {quiet && !refreshing ? (
-        <Card style={styles.cardGap}>
-          <Text style={typography.heading}>Getting started</Text>
-          <Text style={typography.caption}>
-            Invite family from Settings, add a task, or plan meals for the week.
-          </Text>
-          <View style={styles.row}>
-            <Button title="Settings" variant="secondary" onPress={() => router.push('/(tabs)/settings' as Href)} />
-            <Button title="Meals" variant="secondary" onPress={() => router.push('/(tabs)/meals' as Href)} />
-            <Button title="Tasks" onPress={() => router.push('/(tabs)/tasks' as Href)} />
-          </View>
-        </Card>
-      ) : null}
-
-      {todayMeals.length > 0 ? (
+      {pulse ? (
         <>
-          <SectionTitle>Today's meals</SectionTitle>
-          <Card style={styles.cardGap}>
-            {todayMeals.map((m) => (
-              <Text key={m.id} style={typography.body}>
-                {m.slot}: {m.dishName}
-              </Text>
-            ))}
-            <Button title="Meal plan" variant="secondary" onPress={() => router.push('/(tabs)/meals' as Href)} />
+          <Card style={styles.card}>
+            <Text style={typography.heading}>{pulse.greeting}</Text>
+            {pulse.role ? (
+              <View style={styles.row}>
+                <Badge label={pulse.role} />
+                {pulse.roleHint ? <Text style={typography.caption}>{pulse.roleHint}</Text> : null}
+              </View>
+            ) : null}
           </Card>
-        </>
-      ) : null}
 
-      {blockers.length > 0 ? (
-        <>
-          <SectionTitle>Waiting / blockers</SectionTitle>
-          {blockers.map((b, i) => (
-            <Pressable
-              key={`${b.kind}-${b.relatedEntityId ?? i}`}
-              onPress={() => router.push(routeForKind(b.kind))}
-            >
-              <Card style={styles.cardGap}>
-                <Text style={typography.heading}>{b.title}</Text>
-                {b.subtitle ? <Text style={typography.caption}>{b.subtitle}</Text> : null}
-                <Badge label={b.kind} tone="danger" />
-              </Card>
-            </Pressable>
-          ))}
-        </>
-      ) : null}
+          {next ? (
+            <Card style={styles.card}>
+              <SectionTitle>Next best action</SectionTitle>
+              <Text style={typography.heading}>{next.title}</Text>
+              {next.subtitle ? <Text style={typography.caption}>{next.subtitle}</Text> : null}
+              <View style={styles.row}>
+                <Badge label={next.kind} />
+                {next.dueLabel ? <Text style={typography.caption}>{next.dueLabel}</Text> : null}
+              </View>
+              <Button
+                title={next.primaryAction}
+                onPress={() => {
+                  if (next.kind.toLowerCase().includes('task')) router.push('/(tabs)/tasks');
+                  else if (next.kind.toLowerCase().includes('request')) router.push('/(tabs)/requests');
+                  else router.push('/(tabs)/family');
+                }}
+              />
+            </Card>
+          ) : null}
 
-      {attention.length > 0 ? (
-        <>
           <SectionTitle>Needs attention</SectionTitle>
-          {attention.map((a, i) => (
-            <Pressable
-              key={`${a.kind}-${a.relatedEntityId ?? i}`}
-              onPress={() => router.push(routeForKind(a.kind))}
-            >
-              <Card style={styles.cardGap}>
+          {attentionItems.length === 0 ? (
+            <EmptyState title="All clear" subtitle="Nothing needs you right now." />
+          ) : (
+            attentionItems.map((a) => (
+              <Card key={a.entityId} style={styles.card}>
                 <Text style={typography.heading}>{a.title}</Text>
-                {a.subtitle ? <Text style={typography.caption}>{a.subtitle}</Text> : null}
+                <Text style={typography.caption}>{a.reason}</Text>
                 <View style={styles.row}>
-                  <Badge label={a.kind} />
-                  {a.dueLabel ? <Badge label={a.dueLabel} tone="danger" /> : null}
+                  <Badge label={a.kind} tone="danger" />
+                  <Text style={typography.caption}>{a.actionLabel}</Text>
                 </View>
               </Card>
-            </Pressable>
-          ))}
-        </>
-      ) : null}
+            ))
+          )}
 
-      {comingUp.length > 0 ? (
-        <>
-          <SectionTitle>Coming up</SectionTitle>
-          {comingUp.map((c, i) => (
-            <Card key={`${c.title}-${i}`} style={styles.cardGap}>
-              <Text style={typography.body}>{c.title}</Text>
-              {c.whenLabel ? <Text style={typography.caption}>{c.whenLabel}</Text> : null}
-            </Card>
-          ))}
-        </>
-      ) : null}
+          {blockers.length > 0 ? (
+            <>
+              <SectionTitle>Waiting / blockers</SectionTitle>
+              {blockers.map((b) => (
+                <Card key={b.entityId} style={styles.card}>
+                  <Text style={typography.heading}>{b.title}</Text>
+                  <Text style={typography.caption}>{b.reason}</Text>
+                  <Badge label={b.kind} />
+                </Card>
+              ))}
+            </>
+          ) : null}
 
-      {pulse?.counts ? (
-        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Household — tasks {pulse.counts.openTasks} · requests {pulse.counts.pendingRequests} · shopping{' '}
-          {pulse.counts.shoppingQueue}
-        </Text>
-      ) : null}
+          {comingUp.length > 0 ? (
+            <>
+              <SectionTitle>Coming up</SectionTitle>
+              {comingUp.map((c) => (
+                <Card key={c.entityId} style={styles.card}>
+                  <Text style={typography.heading}>{c.title}</Text>
+                  <Text style={typography.caption}>
+                    {new Date(c.whenUtc).toLocaleString()}
+                    {c.location ? ` · ${c.location}` : ''}
+                  </Text>
+                </Card>
+              ))}
+            </>
+          ) : null}
 
-      {outcomes ? (
-        <>
-          <SectionTitle>Outcomes</SectionTitle>
-          <Card style={styles.cardGap}>
-            <Text style={typography.caption}>Last 7 / 30 days</Text>
-            {outcomes.tasksCompletedLast7Days === 0 &&
-            outcomes.requestsApprovedLast7Days === 0 &&
-            outcomes.shoppingItemsPurchasedLast7Days === 0 ? (
+          {pulse.household ? (
+            <Card style={styles.card}>
+              <SectionTitle>Household</SectionTitle>
               <Text style={typography.caption}>
-                Quiet week so far — complete a task or approve a request to build history.
+                Approvals: {pulse.household.requestsAwaitingApproval} · Tasks due today:{' '}
+                {pulse.household.tasksDueToday} · Need accept: {pulse.household.tasksNeedingAcceptance}
               </Text>
-            ) : null}
-            <Text style={typography.body}>
-              Tasks done: {outcomes.tasksCompletedLast7Days} · {outcomes.tasksCompletedLast30Days}
-            </Text>
-            <Text style={typography.body}>
-              Requests ✓ {outcomes.requestsApprovedLast7Days} · ✗ {outcomes.requestsDeniedLast7Days}
-              {outcomes.approvalRateLast7Days != null
-                ? ` · ${outcomes.approvalRateLast7Days}% approved`
-                : ''}
-            </Text>
-            <Text style={typography.body}>
-              Requests 30d ✓ {outcomes.requestsApprovedLast30Days ?? 0} · ✗{' '}
-              {outcomes.requestsDeniedLast30Days ?? 0}
-            </Text>
-            <Text style={typography.body}>
-              Shopping purchased (7d): {outcomes.shoppingItemsPurchasedLast7Days}
-            </Text>
-            {outcomes.avgTaskCompletionMinutes != null ? (
-              <Text style={typography.body}>
-                Avg task time: {Math.round(outcomes.avgTaskCompletionMinutes)} min
-              </Text>
-            ) : null}
-            {taskBars.length > 0 ? (
-              <SparkBars values={taskBars} label="Tasks completed (8 weeks)" />
-            ) : null}
-            {approvalBars.length > 0 ? (
-              <SparkBars values={approvalBars} label="Approvals (8 weeks)" />
-            ) : null}
-            <Text style={typography.caption}>
-              Open now — tasks {outcomes.openTasks} · requests {outcomes.pendingRequests} · queue{' '}
-              {outcomes.queuedShoppingItems}
-            </Text>
-          </Card>
+            </Card>
+          ) : null}
         </>
       ) : null}
     </ScrollView>
@@ -271,8 +145,8 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
-  cardGap: { marginBottom: spacing.md, gap: spacing.xs },
+  content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.sm },
+  card: { gap: spacing.xs, marginBottom: spacing.sm },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' },
-  error: { ...typography.caption, color: colors.danger, marginBottom: spacing.md },
+  error: { ...typography.caption, color: colors.danger },
 });

@@ -64,7 +64,7 @@ export default function TasksScreen() {
           <View style={styles.row}>
             <Text style={[typography.heading, { flex: 1 }]}>{t.title}</Text>
             {t.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
-            {t.priority ? <Badge label={t.priority} tone="warning" /> : null}
+            {t.priority ? <Badge label={String(t.priority)} tone="warning" /> : null}
           </View>
           {t.description ? <Text style={typography.caption}>{t.description}</Text> : null}
           <Text style={typography.caption}>
