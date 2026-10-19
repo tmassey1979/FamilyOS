@@ -26,15 +26,16 @@ public class NotificationTests
         n.RelatedEntityType.Should().Be("Task");
         n.RelatedEntityId.Should().Be(related);
         n.IsRead.Should().BeFalse();
-        n.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        n.CreatedUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public void MarkRead_sets_flag()
+    public void MarkRead_sets_flag_and_timestamp()
     {
         var n = Notification.Create(Guid.NewGuid(), Guid.NewGuid(), "Hi", null);
         n.MarkRead();
         n.IsRead.Should().BeTrue();
+        n.ReadAtUtc.Should().NotBeNull();
         n.MarkRead(); // idempotent
         n.IsRead.Should().BeTrue();
     }

@@ -16,7 +16,7 @@ public class TaskHistoryEntryTests
         h.Status.Should().Be(FamilyTaskStatus.Assigned);
         h.ActorMemberId.Should().Be(actor);
         h.Detail.Should().Be("Assigned to kid");
-        h.TimestampUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        h.OccurredUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 }
 
