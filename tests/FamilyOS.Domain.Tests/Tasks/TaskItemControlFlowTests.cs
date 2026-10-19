@@ -30,10 +30,12 @@ public class TaskItemControlFlowTests
     {
         var t = AcceptedTask();
         t.Start(Assignee);
-        // Domain keeps InProgress while paused; ends the open segment
-        t.Pause(Assignee);
         t.Status.Should().Be(FamilyTaskStatus.InProgress);
+
+        t.Pause(Assignee);
+        t.Status.Should().Be(FamilyTaskStatus.Paused);
         t.TimeSegments.Should().OnlyContain(s => s.EndedAtUtc.HasValue);
+
         t.Resume(Assignee);
         t.Status.Should().Be(FamilyTaskStatus.InProgress);
         t.TimeSegments.Should().Contain(s => !s.EndedAtUtc.HasValue);
@@ -57,7 +59,7 @@ public class TaskItemControlFlowTests
         var t = TaskItem.Create(FamilyId, "Timed", Creator);
         var due = DateTime.UtcNow.AddDays(2);
         t.SetDueDate(due);
-        t.DueDateUtc.Should().Be(due);
+        t.DueDate.Should().Be(due);
 
         var start = DateTime.UtcNow.AddHours(1);
         var end = start.AddHours(2);
@@ -70,22 +72,21 @@ public class TaskItemControlFlowTests
     [Fact]
     public void Defer_from_Assigned()
     {
-        // Defer only allowed from Assigned (not Accepted)
         var t = AssignedTask();
         var until = DateTime.UtcNow.AddDays(3);
         t.Defer(Assignee, until, "Busy");
         t.Status.Should().Be(FamilyTaskStatus.Deferred);
-        t.DueDateUtc.Should().Be(until);
+        t.DueDate.Should().Be(until);
     }
 
     [Fact]
-    public void Reassign_from_Accepted()
+    public void Reassign_from_Assigned()
     {
-        var t = AcceptedTask();
+        var t = AssignedTask();
         var other = Guid.NewGuid();
         t.Reassign(other, Creator);
         t.AssigneeMemberId.Should().Be(other);
-        t.Status.Should().Be(FamilyTaskStatus.Assigned);
+        t.Status.Should().Be(FamilyTaskStatus.Reassigned);
     }
 
     [Fact]

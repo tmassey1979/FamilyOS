@@ -1,4 +1,17 @@
-export const colors = {
+/** FamilyOS color tokens — explicit interface so tsc always sees all keys. */
+export interface AppColors {
+  bg: string;
+  surface: string;
+  border: string;
+  primary: string;
+  text: string;
+  textMuted: string;
+  danger: string;
+  success: string;
+  warning: string;
+}
+
+export const colors: AppColors = {
   bg: '#0F172A',
   surface: '#1E293B',
   border: '#334155',
@@ -8,9 +21,7 @@ export const colors = {
   danger: '#F87171',
   success: '#4ADE80',
   warning: '#FBBF24',
-} as const;
-
-export type ColorName = keyof typeof colors;
+};
 
 export const spacing = {
   xs: 4,
