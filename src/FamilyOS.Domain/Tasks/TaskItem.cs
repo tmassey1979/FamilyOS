@@ -252,7 +252,7 @@ public class TaskItem : Entity
     private void CloseOpenSegment(Guid memberId)
     {
         var open = _timeSegments.LastOrDefault(s => s.EndedAtUtc is null);
-        open?.End(memberId);
+        open?.End();
     }
 
     private void AddHistory(FamilyTaskStatus status, Guid actorMemberId, string detail)
