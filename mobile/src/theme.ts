@@ -2,6 +2,7 @@
 export interface AppColors {
   bg: string;
   surface: string;
+  surfaceAlt: string;
   border: string;
   primary: string;
   text: string;
@@ -14,7 +15,8 @@ export interface AppColors {
 export const colors: AppColors = {
   bg: '#0F172A',
   surface: '#1E293B',
-  border: '#334155',
+  surfaceAlt: '#334155',
+  border: '#475569',
   primary: '#38BDF8',
   text: '#F8FAFC',
   textMuted: '#94A3B8',
@@ -38,5 +40,4 @@ export const typography = {
   caption: { fontSize: 13, fontWeight: '400' as const, color: colors.textMuted },
 } as const;
 
-// Named export alias so `import { colors }` always resolves full AppColors shape.
 export default colors;

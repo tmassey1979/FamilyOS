@@ -8,14 +8,22 @@ public class MealPlanTests
 {
     private static readonly Guid FamilyId = Guid.NewGuid();
 
-    [Fact]
-    public void ToMonday_normalizes_to_week_start()
+    [Theory]
+    [InlineData(2026, 10, 14)] // Wed
+    [InlineData(2026, 10, 12)] // Mon
+    [InlineData(2026, 10, 11)] // Sun
+    [InlineData(2026, 10, 17)] // Sat
+    public void ToMonday_always_returns_monday(int y, int m, int d)
     {
-        // 2026-10-14 is Wednesday
-        var wed = new DateTime(2026, 10, 14, 15, 30, 0, DateTimeKind.Utc);
-        var monday = MealPlan.ToMonday(wed);
-        monday.Should().Be(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc));
+        var any = new DateTime(y, m, d, 15, 30, 0, DateTimeKind.Utc);
+        var monday = MealPlan.ToMonday(any);
         monday.DayOfWeek.Should().Be(DayOfWeek.Monday);
+        monday.Kind.Should().Be(DateTimeKind.Utc);
+        monday.TimeOfDay.Should().Be(TimeSpan.Zero);
+        // Monday is never after the input date
+        monday.Date.Should().BeOnOrBefore(any.Date);
+        // At most 6 days earlier
+        (any.Date - monday.Date).TotalDays.Should().BeInRange(0, 6);
     }
 
     [Fact]
