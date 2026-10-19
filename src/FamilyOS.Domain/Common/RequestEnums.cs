@@ -24,6 +24,7 @@ public enum RequestTypeCode
     Purchase = 2,
     Grocery = 3,
     Snack = 4,
+    SnackFood = 4,
     Ride = 5,
     School = 6,
     Medical = 7,

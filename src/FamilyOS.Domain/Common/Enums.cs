@@ -83,7 +83,9 @@ public enum NotificationType
     RequestSubmitted = 2,
     RequestApproved = 3,
     RequestDenied = 4,
-    ConditionPending = 5
+    ConditionPending = 5,
+    CalendarReminder = 6,
+    ProcurementChanged = 7
 }
 
 public enum CalendarEventStatus
