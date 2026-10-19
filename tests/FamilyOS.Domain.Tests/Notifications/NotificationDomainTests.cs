@@ -29,7 +29,7 @@ public class NotificationDomainTests
     }
 
     [Fact]
-    public void DeviceRegistration_create_and_touch()
+    public void DeviceRegistration_create_touch_deactivate()
     {
         var d = DeviceRegistration.Create(
             FamilyId,
@@ -38,19 +38,16 @@ public class NotificationDomainTests
             platform: "android",
             deviceName: "Pixel");
 
-        d.PushToken.Should().StartWith("ExponentPushToken");
+        d.ExpoPushToken.Should().StartWith("ExponentPushToken");
         d.Platform.Should().Be("android");
         d.IsActive.Should().BeTrue();
 
-        var before = d.LastSeenAtUtc;
         d.Touch();
-        d.LastSeenAtUtc.Should().BeOnOrAfter(before ?? DateTime.MinValue);
-    }
+        d.LastSeenAtUtc.Should().NotBeNull();
 
-    [Fact]
-    public void DeviceRegistration_Deactivate()
-    {
-        var d = DeviceRegistration.Create(FamilyId, MemberId, "token-1", "ios");
+        d.UpdateToken("ExponentPushToken[yyy]");
+        d.ExpoPushToken.Should().Contain("yyy");
+
         d.Deactivate();
         d.IsActive.Should().BeFalse();
     }

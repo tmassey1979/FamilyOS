@@ -7,50 +7,45 @@ namespace FamilyOS.Domain.Tests.Family;
 public class FamilyAggregateTests
 {
     [Fact]
-    public void Family_Create_and_Rename()
+    public void Family_Create_UpdateName_Timezone()
     {
-        var f = Domain.Family.Family.Create("Henderson", createdByUserId: Guid.NewGuid());
+        var f = Domain.Family.Family.Create("Henderson");
         f.Name.Should().Be("Henderson");
-        f.Rename("Henderson Family");
+        f.UpdateName("Henderson Family");
         f.Name.Should().Be("Henderson Family");
+        f.SetTimezone("America/Chicago");
+        f.Timezone.Should().Be("America/Chicago");
     }
 
     [Fact]
-    public void FamilyMember_Create_with_role_and_quiet_hours()
+    public void FamilyMember_Create_quiet_hours_and_roles()
     {
         var familyId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var m = FamilyMember.Create(familyId, userId, "Alex", FamilyRole.Teen);
+        var m = FamilyMember.Create(familyId, "Alex", FamilyRole.Teen);
 
         m.DisplayName.Should().Be("Alex");
         m.Role.Should().Be(FamilyRole.Teen);
         m.IsActive.Should().BeTrue();
 
-        m.SetQuietHours(enabled: true, startHour: 21, endHour: 7);
-        m.QuietHoursEnabled.Should().BeTrue();
-        m.QuietHoursStartHour.Should().Be(21);
-        m.QuietHoursEndHour.Should().Be(7);
-    }
+        m.UpdateQuietHours(startMinute: 21 * 60, endMinute: 7 * 60);
+        m.QuietHoursStartMinute.Should().Be(21 * 60);
+        m.QuietHoursEndMinute.Should().Be(7 * 60);
 
-    [Fact]
-    public void FamilyMember_IsInQuietHours_overnight_window()
-    {
-        var m = FamilyMember.Create(Guid.NewGuid(), Guid.NewGuid(), "Kid", FamilyRole.Child);
-        m.SetQuietHours(true, 22, 7);
+        // 23:00 → in overnight quiet hours
+        m.IsInQuietHours(TimeSpan.FromHours(23)).Should().BeTrue();
+        // 10:00 → not
+        m.IsInQuietHours(TimeSpan.FromHours(10)).Should().BeFalse();
 
-        // 23:00 local-as-utc → in quiet hours
-        var late = new DateTime(2026, 10, 19, 23, 0, 0, DateTimeKind.Utc);
-        m.IsInQuietHours(late).Should().BeTrue();
+        m.ChangeRole(FamilyRole.Adult);
+        m.Role.Should().Be(FamilyRole.Adult);
 
-        // 10:00 → not in quiet hours
-        var morning = new DateTime(2026, 10, 19, 10, 0, 0, DateTimeKind.Utc);
-        m.IsInQuietHours(morning).Should().BeFalse();
-    }
+        m.UpdateDisplayName("Alex H");
+        m.DisplayName.Should().Be("Alex H");
 
-    [Fact]
-    public void FamilyMember_Deactivate()
-    {
-        var m = FamilyMember.Create(Guid.NewGuid(), Guid.NewGuid(), "Gone", FamilyRole.Adult);
+        var userId = Guid.NewGuid();
+        m.LinkUser(userId);
+        m.UserId.Should().Be(userId);
+
         m.Deactivate();
         m.IsActive.Should().BeFalse();
     }
@@ -62,13 +57,14 @@ public class FamilyAggregateTests
         var inviter = Guid.NewGuid();
         var invite = FamilyInvite.Create(familyId, inviter, FamilyRole.Adult, email: "new@example.com");
 
-        invite.Code.Should().NotBeNullOrWhiteSpace();
-        invite.IsAccepted.Should().BeFalse();
-        invite.IsRevoked.Should().BeFalse();
+        invite.Token.Should().NotBeNullOrWhiteSpace();
+        invite.Status.Should().Be(InviteStatus.Pending);
+        invite.IsUsable().Should().BeTrue();
 
         invite.Accept(acceptedByUserId: Guid.NewGuid());
-        invite.IsAccepted.Should().BeTrue();
+        invite.Status.Should().Be(InviteStatus.Accepted);
         invite.AcceptedAtUtc.Should().NotBeNull();
+        invite.IsUsable().Should().BeFalse();
     }
 
     [Fact]
@@ -76,8 +72,19 @@ public class FamilyAggregateTests
     {
         var invite = FamilyInvite.Create(Guid.NewGuid(), Guid.NewGuid(), FamilyRole.Teen);
         invite.Revoke();
-        invite.IsRevoked.Should().BeTrue();
+        invite.Status.Should().Be(InviteStatus.Revoked);
         var act = () => invite.Accept(Guid.NewGuid());
         act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void FamilyInvite_expired_not_usable()
+    {
+        var invite = FamilyInvite.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            FamilyRole.Child,
+            expiresAtUtc: DateTime.UtcNow.AddDays(-1));
+        invite.IsUsable(DateTime.UtcNow).Should().BeFalse();
     }
 }

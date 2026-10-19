@@ -1,3 +1,4 @@
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Conditions;
 using FluentAssertions;
 
@@ -9,25 +10,35 @@ public class ConditionDomainTests
     public void Create_pending_then_Satisfy()
     {
         var requestId = Guid.NewGuid();
-        var owner = Guid.NewGuid();
-        var c = Condition.Create(requestId, "Finish homework first", ownerMemberId: owner);
+        var familyId = Guid.NewGuid();
+        var assignee = Guid.NewGuid();
+        var c = Condition.Create(requestId, familyId, "Finish homework first", assignee);
 
-        c.IsSatisfied.Should().BeFalse();
+        c.Status.Should().Be(ConditionStatus.Pending);
         c.Description.Should().Be("Finish homework first");
+        c.AssignedToMemberId.Should().Be(assignee);
 
-        c.Satisfy(satisfiedByMemberId: Guid.NewGuid());
-        c.IsSatisfied.Should().BeTrue();
+        var actor = Guid.NewGuid();
+        c.Satisfy(actor);
+        c.Status.Should().Be(ConditionStatus.Satisfied);
         c.SatisfiedAtUtc.Should().NotBeNull();
+        c.SatisfiedByMemberId.Should().Be(actor);
     }
 
     [Fact]
-    public void Satisfy_is_idempotent()
+    public void Satisfy_twice_throws()
     {
-        var c = Condition.Create(Guid.NewGuid(), "Clean room", Guid.NewGuid());
+        var c = Condition.Create(Guid.NewGuid(), Guid.NewGuid(), "Clean room", Guid.NewGuid());
         c.Satisfy(Guid.NewGuid());
-        var first = c.SatisfiedAtUtc;
-        c.Satisfy(Guid.NewGuid()); // second call should not throw
-        c.IsSatisfied.Should().BeTrue();
-        c.SatisfiedAtUtc.Should().Be(first);
+        var act = () => c.Satisfy(Guid.NewGuid());
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Cancel_pending()
+    {
+        var c = Condition.Create(Guid.NewGuid(), Guid.NewGuid(), "Optional chore", Guid.NewGuid());
+        c.Cancel();
+        c.Status.Should().Be(ConditionStatus.Cancelled);
     }
 }
