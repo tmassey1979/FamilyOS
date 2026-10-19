@@ -18,7 +18,7 @@ public class ConditionTests
         c.RequestId.Should().Be(RequestId);
         c.Description.Should().Be("Bring report card");
         c.CreatedByMemberId.Should().Be(Creator);
-        c.Status.Should().Be(ConditionStatus.Pending);
+        c.Status.Should().Be(ConditionState.Pending);
         c.SatisfiedAtUtc.Should().BeNull();
     }
 
@@ -30,12 +30,12 @@ public class ConditionTests
     }
 
     [Fact]
-    public void Satisfy_marks_satisfied()
+    public void Satisfy_marks_met()
     {
         var c = Condition.Create(FamilyId, RequestId, "Clean room", Creator);
         var actor = Guid.NewGuid();
-        c.Satisfy(actor, "Done");
-        c.Status.Should().Be(ConditionStatus.Satisfied);
+        c.Satisfy(actor);
+        c.Status.Should().Be(ConditionState.Met);
         c.SatisfiedByMemberId.Should().Be(actor);
         c.SatisfiedAtUtc.Should().NotBeNull();
     }
@@ -54,8 +54,9 @@ public class ConditionTests
     {
         var c = Condition.Create(FamilyId, RequestId, "X", Creator);
         var owner = Guid.NewGuid();
-        c.Waive(owner, "Not needed");
-        c.Status.Should().Be(ConditionStatus.Waived);
+        c.Waive(owner);
+        c.Status.Should().Be(ConditionState.Waived);
         c.SatisfiedByMemberId.Should().Be(owner);
+        c.SatisfiedAtUtc.Should().NotBeNull();
     }
 }

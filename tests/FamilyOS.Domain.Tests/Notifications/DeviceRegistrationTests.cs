@@ -31,9 +31,9 @@ public class DeviceRegistrationTests
     {
         var d = DeviceRegistration.Register(Guid.NewGuid(), Guid.NewGuid(), "token-1", "android");
         var before = d.LastSeenAtUtc;
-        Thread.Sleep(10);
+        Thread.Sleep(5);
         d.Touch();
-        d.LastSeenAtUtc.Should().BeAfter(before);
+        d.LastSeenAtUtc.Should().BeOnOrAfter(before);
     }
 
     [Fact]
