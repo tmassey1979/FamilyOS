@@ -1,49 +1,41 @@
-using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Notifications;
-using Xunit;
+using FluentAssertions;
 
 namespace FamilyOS.Domain.Tests.Notifications;
 
 public class NotificationTests
 {
-    private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid MemberId = Guid.NewGuid();
-    private static readonly Guid EntityId = Guid.NewGuid();
-
     [Fact]
     public void Create_sets_fields_and_unread()
     {
+        var familyId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var related = Guid.NewGuid();
         var n = Notification.Create(
-            FamilyId, MemberId, NotificationType.RequestSubmitted,
-            " New request ", "  Needs approval  ", EntityId, "Request");
+            familyId,
+            memberId,
+            "Task assigned",
+            "You have a new chore",
+            relatedEntityType: "Task",
+            relatedEntityId: related);
 
-        Assert.Equal(FamilyId, n.FamilyId);
-        Assert.Equal(MemberId, n.RecipientMemberId);
-        Assert.Equal("New request", n.Title);
-        Assert.Equal("Needs approval", n.Body);
-        Assert.Equal(EntityId, n.RelatedEntityId);
-        Assert.Equal("Request", n.RelatedEntityType);
-        Assert.False(n.IsRead);
-        Assert.False(n.IsActioned);
-        Assert.Null(n.ReadAtUtc);
+        n.FamilyId.Should().Be(familyId);
+        n.MemberId.Should().Be(memberId);
+        n.Title.Should().Be("Task assigned");
+        n.Body.Should().Be("You have a new chore");
+        n.RelatedEntityType.Should().Be("Task");
+        n.RelatedEntityId.Should().Be(related);
+        n.IsRead.Should().BeFalse();
+        n.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public void MarkRead_sets_flag_and_time()
+    public void MarkRead_sets_flag()
     {
-        var n = Notification.Create(FamilyId, MemberId, NotificationType.TaskAssigned, "T", "B");
+        var n = Notification.Create(Guid.NewGuid(), Guid.NewGuid(), "Hi", null);
         n.MarkRead();
-        Assert.True(n.IsRead);
-        Assert.NotNull(n.ReadAtUtc);
-    }
-
-    [Fact]
-    public void MarkActioned_also_marks_read()
-    {
-        var n = Notification.Create(FamilyId, MemberId, NotificationType.RequestApproved, "T", "B");
-        n.MarkActioned();
-        Assert.True(n.IsActioned);
-        Assert.True(n.IsRead);
-        Assert.NotNull(n.ReadAtUtc);
+        n.IsRead.Should().BeTrue();
+        n.MarkRead(); // idempotent
+        n.IsRead.Should().BeTrue();
     }
 }
