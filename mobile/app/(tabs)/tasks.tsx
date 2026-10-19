@@ -1,94 +1,52 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View,
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { Badge, Button, Card, EmptyState } from '../../src/components/ui';
-import {
-  familyApi, tasksApi,
-  type DeclineReasonDto, type TaskDto, type TaskHistoryDto,
-} from '../../src/api/client';
+import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
+import { tasksApi, type TaskDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 
-type Member = { id: string; displayName: string; role: string };
-
-function statusTone(status: string): 'default' | 'warning' | 'success' | 'danger' {
-  if (status === 'Assigned' || status === 'Reassigned') return 'warning';
-  if (status === 'Accepted' || status === 'InProgress') return 'success';
-  if (status === 'Declined' || status === 'Cancelled' || status === 'Skipped') return 'danger';
-  return 'default';
+function priorityColor(p?: string | null): string {
+  const v = (p ?? '').toLowerCase();
+  if (v === 'urgent' || v === 'high') return '#FBBF24';
+  if (v === 'low') return colors.textMuted;
+  return colors.primary;
 }
-
-function priorityTone(priority: string): 'default' | 'warning' | 'success' | 'danger' {
-  if (priority === 'Urgent') return 'danger';
-  if (priority === 'High') return 'warning';
-  if (priority === 'Low') return 'default';
-  return 'success';
-}
-
-const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'] as const;
-const FREQUENCIES = [
-  { key: 'None', label: 'Once' },
-  { key: 'Daily', label: 'Daily' },
-  { key: 'Weekly', label: 'Weekly' },
-  { key: 'BiWeekly', label: 'Biweekly' },
-  { key: 'Monthly', label: 'Monthly' },
-] as const;
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [reasons, setReasons] = useState<DeclineReasonDto[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [scope, setScope] = useState<'mine' | 'family'>('mine');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('Chores');
-  const [priority, setPriority] = useState<'Low' | 'Normal' | 'High' | 'Urgent'>('Normal');
-  const [frequency, setFrequency] = useState<(typeof FREQUENCIES)[number]['key']>('None');
-  const [estMin, setEstMin] = useState('');
-  const [assignTo, setAssignTo] = useState<string | undefined>();
-  const [creating, setCreating] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<TaskHistoryDto[]>([]);
-  const [historyTitle, setHistoryTitle] = useState('');
-
-  const [declineTask, setDeclineTask] = useState<TaskDto | null>(null);
-  const [declineReasonId, setDeclineReasonId] = useState<string | undefined>();
-  const [declineNote, setDeclineNote] = useState('');
-  const [declining, setDeclining] = useState(false);
-
-  const [reassignTask, setReassignTask] = useState<TaskDto | null>(null);
-  const [reassignTo, setReassignTo] = useState<string | undefined>();
-  const [reassigning, setReassigning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const [data, mems, rs] = await Promise.all([
-        scope === 'mine' ? tasksApi.mine() : tasksApi.family(),
-        familyApi.members().catch(() => [] as Member[]),
-        familyApi.declineReasons().catch(() => [] as DeclineReasonDto[]),
-      ]);
-      setTasks(data);
-      setMembers(mems);
-      setReasons(rs.filter((r) => r.isEnabled !== false));
-      setError(null);
-    } catch {
-      setError('Could not load tasks — check API / DevBypass');
-      setTasks([]);
+      const list = await tasksApi.list();
+      setTasks(list);
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not load tasks');
     } finally {
       setLoading(false);
     }
-  }, [scope]);
+  }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const run = async (id: string, action: () => Promise<unknown>) => {
+  const run = async (id: string, fn: () => Promise<unknown>) => {
     setBusyId(id);
+    setError(null);
     try {
-      await action();
+      await fn();
       await load();
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Action failed');
@@ -97,378 +55,55 @@ export default function TasksScreen() {
     }
   };
 
-  const openHistory = async (task: TaskDto) => {
-    setHistoryTitle(task.title);
-    setHistoryOpen(true);
-    try { setHistory(await tasksApi.history(task.id)); }
-    catch { setHistory([]); }
-  };
-
-  const createTask = async () => {
-    if (!title.trim()) return;
-    setCreating(true);
-    try {
-      const est = parseInt(estMin, 10);
-      if (frequency !== 'None') {
-        // Dedicated recurrence API advances schedule correctly on first instance
-        await tasksApi.createRecurrence({
-          title: title.trim(),
-          frequency,
-          interval: 1,
-          category: category.trim() || undefined,
-          defaultAssigneeMemberId: assignTo,
-          generateFirstInstance: true,
-        });
-      } else {
-        await tasksApi.create({
-          title: title.trim(),
-          category: category.trim() || undefined,
-          assignToMemberId: assignTo,
-          priority,
-          estimatedDurationMinutes: Number.isFinite(est) && est > 0 ? est : undefined,
-        });
-      }
-      setTitle('');
-      setPriority('Normal');
-      setFrequency('None');
-      setEstMin('');
-      setCreateOpen(false);
-      await load();
-    } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Create failed');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const submitDecline = async () => {
-    if (!declineTask) return;
-    setDeclining(true);
-    try {
-      await tasksApi.decline(declineTask.id, {
-        reasonId: declineReasonId,
-        note: declineNote.trim() || undefined,
-      });
-      setDeclineTask(null);
-      setDeclineReasonId(undefined);
-      setDeclineNote('');
-      await load();
-    } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Decline failed');
-    } finally {
-      setDeclining(false);
-    }
-  };
-
-  const submitReassign = async () => {
-    if (!reassignTask || !reassignTo) return;
-    setReassigning(true);
-    try {
-      await tasksApi.reassign(reassignTask.id, reassignTo);
-      setReassignTask(null);
-      setReassignTo(undefined);
-      await load();
-    } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Reassign failed');
-    } finally {
-      setReassigning(false);
-    }
-  };
-
-  const actionsFor = (item: TaskDto) => {
-    const s = item.status;
-    const nodes: React.ReactNode[] = [];
-    if (s === 'Assigned' || s === 'Reassigned') {
-      nodes.push(<Button key="a" title="Accept" onPress={() => run(item.id, () => tasksApi.accept(item.id))} />);
-      nodes.push(
-        <Button
-          key="d"
-          title="Decline"
-          variant="secondary"
-          onPress={() => {
-            setDeclineReasonId(reasons[0]?.id);
-            setDeclineNote('');
-            setDeclineTask(item);
-          }}
-        />,
-      );
-    }
-    if (s === 'Accepted' || s === 'Deferred') {
-      nodes.push(<Button key="s" title="Start" onPress={() => run(item.id, () => tasksApi.start(item.id))} />);
-    }
-    if (s === 'InProgress') {
-      nodes.push(<Button key="p" title="Pause" variant="secondary" onPress={() => run(item.id, () => tasksApi.pause(item.id))} />);
-      nodes.push(<Button key="c" title="Complete" onPress={() => run(item.id, () => tasksApi.complete(item.id))} />);
-    }
-    if (s === 'Paused') {
-      nodes.push(<Button key="r" title="Resume" onPress={() => run(item.id, () => tasksApi.resume(item.id))} />);
-      nodes.push(<Button key="c2" title="Complete" onPress={() => run(item.id, () => tasksApi.complete(item.id))} />);
-    }
-    if (s === 'Accepted' || s === 'InProgress' || s === 'Paused') {
-      nodes.push(<Button key="df" title="Defer" variant="secondary" onPress={() => run(item.id, () => tasksApi.defer(item.id, 'Deferred from app'))} />);
-    }
-    if (s !== 'Completed' && s !== 'Cancelled' && s !== 'Declined' && s !== 'Skipped') {
-      nodes.push(
-        <Button
-          key="ra"
-          title="Reassign"
-          variant="secondary"
-          onPress={() => {
-            setReassignTo(members.find((m) => m.id !== item.assignedToMemberId)?.id);
-            setReassignTask(item);
-          }}
-        />,
-      );
-    }
-    if (s !== 'Completed' && s !== 'Cancelled' && s !== 'Skipped') {
-      nodes.push(<Button key="x" title="Cancel" variant="secondary" onPress={() => run(item.id, () => tasksApi.cancel(item.id, 'Cancelled from app'))} />);
-      nodes.push(<Button key="sk" title="Skip" variant="secondary" onPress={() => run(item.id, () => tasksApi.skip(item.id, 'Skipped from app'))} />);
-    }
-    nodes.push(<Button key="h" title="History" variant="secondary" onPress={() => openHistory(item)} />);
-    return nodes;
-  };
-
   return (
-    <View style={styles.container}>
-      <View style={styles.toolbar}>
-        <View style={styles.scopeRow}>
-          <Pressable onPress={() => setScope('mine')} style={[styles.chip, scope === 'mine' && styles.chipOn]}>
-            <Text style={styles.chipText}>Mine</Text>
-          </Pressable>
-          <Pressable onPress={() => setScope('family')} style={[styles.chip, scope === 'family' && styles.chipOn]}>
-            <Text style={styles.chipText}>Family</Text>
-          </Pressable>
-        </View>
-        <Button title="New task" onPress={() => setCreateOpen(true)} />
-      </View>
-      {error ? <Text style={styles.hint}>{error}</Text> : null}
-      {loading ? <ActivityIndicator style={{ marginTop: spacing.lg }} color={colors.primary} /> : null}
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={!loading ? <EmptyState title="No tasks" subtitle="Create one or switch scope." /> : null}
-        renderItem={({ item }) => (
-          <Card style={styles.card}>
-            <Text style={typography.heading}>{item.title}</Text>
-            {item.description ? <Text style={typography.caption}>{item.description}</Text> : null}
-            <View style={styles.row}>
-              <Badge label={item.status} tone={statusTone(item.status)} />
-              {item.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
-              <Badge label={item.priority || 'Normal'} tone={priorityTone(item.priority || 'Normal')} />
-              {item.isRecurring || item.recurrenceDefinitionId ? (
-                <Badge label={item.recurrenceFrequency ? `↻ ${item.recurrenceFrequency}` : '↻ Recurring'} tone="warning" />
-              ) : null}
-              {item.category ? <Badge label={item.category} /> : null}
-              {item.assignedToName ? <Badge label={item.assignedToName} /> : null}
-            </View>
-            {item.dueDate ? (
-              <Text style={typography.caption}>
-                Due {new Date(item.dueDate).toLocaleDateString()}
-                {item.isOverdue ? ' · overdue' : ''}
-              </Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
+    >
+      <SectionTitle>Tasks</SectionTitle>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {loading && tasks.length === 0 ? <ActivityIndicator color={colors.primary} /> : null}
+      {!loading && tasks.length === 0 ? (
+        <EmptyState title="No tasks" subtitle="Create a task from the + flow or wait for an assignment." />
+      ) : null}
+      {tasks.map((t) => (
+        <Card key={t.id} style={styles.card}>
+          <View style={styles.row}>
+            <Text style={[typography.heading, { flex: 1 }]}>{t.title}</Text>
+            {t.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
+            {t.priority ? (
+              <Badge label={t.priority} tone="warning" />
             ) : null}
-            {(item.estimatedDurationMinutes != null || item.actualDurationMinutes != null) ? (
-              <Text style={typography.caption}>
-                {item.plannedStartTime && item.plannedEndTime
-                  ? `Planned ${item.plannedStartTime}–${item.plannedEndTime}`
-                  : item.estimatedDurationMinutes != null
-                    ? `Est ${item.estimatedDurationMinutes}m`
-                    : ''}
-                {item.actualDurationMinutes != null
-                  ? ` · Actual ${item.actualDurationMinutes}m`
-                  : ''}
-                {item.varianceMinutes != null
-                  ? ` · ${item.varianceMinutes > 0 ? '+' : ''}${item.varianceMinutes}m`
-                  : ''}
-              </Text>
-            ) : null}
-            <View style={styles.actions}>
-              {busyId === item.id ? <ActivityIndicator color={colors.primary} /> : actionsFor(item)}
-            </View>
-          </Card>
-        )}
-      />
-
-      <Modal visible={createOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={typography.heading}>New task</Text>
-            <TextInput style={styles.input} placeholder="Title" placeholderTextColor={colors.textMuted} value={title} onChangeText={setTitle} />
-            <TextInput style={styles.input} placeholder="Category" placeholderTextColor={colors.textMuted} value={category} onChangeText={setCategory} />
-            <TextInput
-              style={styles.input}
-              placeholder="Est. minutes (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={estMin}
-              onChangeText={setEstMin}
-              keyboardType="number-pad"
+          </View>
+          {t.description ? <Text style={typography.caption}>{t.description}</Text> : null}
+          <Text style={typography.caption}>
+            {t.status}
+            {t.dueDate ? ` · due ${new Date(t.dueDate).toLocaleDateString()}` : ''}
+          </Text>
+          <View style={styles.row}>
+            <Button
+              title={busyId === t.id ? '…' : 'Accept'}
+              variant="secondary"
+              onPress={() => void run(t.id, () => tasksApi.accept(t.id))}
             />
-            <Text style={typography.caption}>Priority</Text>
-            <View style={styles.memberRow}>
-              {PRIORITIES.map((p) => (
-                <Pressable key={p} style={[styles.chip, priority === p && styles.chipOn]} onPress={() => setPriority(p)}>
-                  <Text style={styles.chipText}>{p}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={typography.caption}>Repeat</Text>
-            <View style={styles.memberRow}>
-              {FREQUENCIES.map((f) => (
-                <Pressable
-                  key={f.key}
-                  style={[styles.chip, frequency === f.key && styles.chipOn]}
-                  onPress={() => setFrequency(f.key)}
-                >
-                  <Text style={styles.chipText}>{f.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {members.length > 0 ? (
-              <View style={styles.memberRow}>
-                <Pressable style={[styles.chip, !assignTo && styles.chipOn]} onPress={() => setAssignTo(undefined)}>
-                  <Text style={styles.chipText}>Unassigned</Text>
-                </Pressable>
-                {members.map((m) => (
-                  <Pressable key={m.id} style={[styles.chip, assignTo === m.id && styles.chipOn]} onPress={() => setAssignTo(m.id)}>
-                    <Text style={styles.chipText}>{m.displayName}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.modalActions}>
-              <Button title="Cancel" variant="secondary" onPress={() => setCreateOpen(false)} />
-              <Button title={creating ? 'Saving…' : 'Create'} onPress={() => void createTask()} />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={!!declineTask} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={typography.heading}>Decline · {declineTask?.title}</Text>
-            <Text style={typography.caption}>Pick a reason (optional note)</Text>
-            <View style={styles.memberRow}>
-              {reasons.length === 0 ? (
-                <Text style={typography.caption}>No seeded reasons — note only.</Text>
-              ) : (
-                reasons.map((r) => (
-                  <Pressable
-                    key={r.id}
-                    style={[styles.chip, declineReasonId === r.id && styles.chipOn]}
-                    onPress={() => setDeclineReasonId(r.id)}
-                  >
-                    <Text style={styles.chipText}>{r.text}</Text>
-                  </Pressable>
-                ))
-              )}
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Note (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={declineNote}
-              onChangeText={setDeclineNote}
+            <Button
+              title="Start"
+              variant="secondary"
+              onPress={() => void run(t.id, () => tasksApi.start(t.id))}
             />
-            <View style={styles.modalActions}>
-              <Button title="Cancel" variant="secondary" onPress={() => setDeclineTask(null)} />
-              <Button title={declining ? 'Declining…' : 'Decline'} onPress={() => void submitDecline()} />
-            </View>
+            <Button title="Done" onPress={() => void run(t.id, () => tasksApi.complete(t.id))} />
           </View>
-        </View>
-      </Modal>
-
-      <Modal visible={!!reassignTask} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={typography.heading}>Reassign · {reassignTask?.title}</Text>
-            <Text style={typography.caption}>Choose a family member</Text>
-            <View style={styles.memberRow}>
-              {members.map((m) => (
-                <Pressable
-                  key={m.id}
-                  style={[styles.chip, reassignTo === m.id && styles.chipOn]}
-                  onPress={() => setReassignTo(m.id)}
-                >
-                  <Text style={styles.chipText}>{m.displayName}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.modalActions}>
-              <Button title="Cancel" variant="secondary" onPress={() => setReassignTask(null)} />
-              <Button
-                title={reassigning ? 'Saving…' : 'Reassign'}
-                onPress={() => void submitReassign()}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={historyOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={typography.heading}>Timeline · {historyTitle}</Text>
-            <Text style={typography.caption}>Status changes in order</Text>
-            {history.length === 0 ? (
-              <Text style={typography.caption}>No history entries.</Text>
-            ) : (
-              history.map((h, idx) => (
-                <View key={h.id} style={styles.timelineRow}>
-                  <View style={styles.timelineRail}>
-                    <View style={styles.timelineDot} />
-                    {idx < history.length - 1 ? <View style={styles.timelineLine} /> : null}
-                  </View>
-                  <View style={styles.timelineBody}>
-                    <Badge label={h.status} tone={statusTone(h.status)} />
-                    <Text style={typography.body}>{h.detail}</Text>
-                    <Text style={styles.histTime}>{new Date(h.timestampUtc).toLocaleString()}</Text>
-                  </View>
-                </View>
-              ))
-            )}
-            <Button title="Close" onPress={() => setHistoryOpen(false)} />
-          </View>
-        </View>
-      </Modal>
-    </View>
+        </Card>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  timelineRow: { flexDirection: 'row', gap: spacing.sm, minHeight: 56 },
-  timelineRail: { width: 16, alignItems: 'center' },
-  timelineDot: {
-    width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4,
-  },
-  timelineLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
-  timelineBody: { flex: 1, gap: 4, paddingBottom: spacing.md },
   container: { flex: 1, backgroundColor: colors.bg },
-  toolbar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm,
-  },
-  scopeRow: { flexDirection: 'row', gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.surface },
-  chipOn: { backgroundColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.text },
-  list: { padding: spacing.md, gap: spacing.md },
-  card: { marginBottom: spacing.md, gap: spacing.sm },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
-  hint: { ...typography.caption, paddingHorizontal: spacing.md, color: colors.danger },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: {
-    backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    padding: spacing.lg, gap: spacing.md, maxHeight: '85%',
-  },
-  input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm,
-    color: colors.text, backgroundColor: colors.bg,
-  },
-  memberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
-  histRow: { gap: 4, marginBottom: spacing.sm },
-  histTime: { ...typography.caption, opacity: 0.7 },
+  content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.sm },
+  card: { gap: spacing.xs, marginBottom: spacing.sm },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' },
+  error: { ...typography.caption, color: colors.danger },
 });

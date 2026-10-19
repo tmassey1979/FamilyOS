@@ -16,8 +16,8 @@ public class NotificationTests
             memberId,
             "Task assigned",
             "You have a new chore",
-            relatedEntityType: "Task",
-            relatedEntityId: related);
+            relatedType: "Task",
+            relatedId: related);
 
         n.FamilyId.Should().Be(familyId);
         n.MemberId.Should().Be(memberId);
@@ -36,7 +36,7 @@ public class NotificationTests
         n.MarkRead();
         n.IsRead.Should().BeTrue();
         n.ReadAtUtc.Should().NotBeNull();
-        n.MarkRead(); // idempotent
+        n.MarkRead();
         n.IsRead.Should().BeTrue();
     }
 }
