@@ -7,7 +7,7 @@ namespace FamilyOS.Domain.Tests.Tasks;
 public class TaskHistoryEntryTests
 {
     [Fact]
-    public void Create_records_status_and_note()
+    public void Create_records_status_and_detail()
     {
         var taskId = Guid.NewGuid();
         var actor = Guid.NewGuid();
@@ -15,8 +15,8 @@ public class TaskHistoryEntryTests
         h.TaskId.Should().Be(taskId);
         h.Status.Should().Be(FamilyTaskStatus.Assigned);
         h.ActorMemberId.Should().Be(actor);
-        h.Note.Should().Be("Assigned to kid");
-        h.OccurredUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        h.Detail.Should().Be("Assigned to kid");
+        h.TimestampUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 }
 
