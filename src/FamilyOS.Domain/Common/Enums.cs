@@ -101,14 +101,6 @@ public enum ConditionState
     Waived = 2
 }
 
-public enum FamilyInviteStatus
-{
-    Pending = 0,
-    Accepted = 1,
-    Revoked = 2,
-    Expired = 3
-}
-
 public enum PolicyDecisionKind
 {
     Approve = 0,
