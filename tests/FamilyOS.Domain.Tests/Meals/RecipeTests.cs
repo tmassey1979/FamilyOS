@@ -6,29 +6,29 @@ namespace FamilyOS.Domain.Tests.Meals;
 public class RecipeTests
 {
     private static readonly Guid FamilyId = Guid.NewGuid();
-    private static readonly Guid Creator = Guid.NewGuid();
 
     [Fact]
-    public void Create_trims_and_defaults_servings()
+    public void Create_trims_and_requires_servings()
     {
-        var r = Recipe.Create(FamilyId, "  Pasta  ", Creator, servings: 0, ingredientsCsv: " eggs , milk ");
+        var r = Recipe.Create(FamilyId, "  Pasta  ", servings: 2, ingredientsCsv: " eggs , milk ");
         r.Name.Should().Be("Pasta");
-        r.Servings.Should().Be(1);
+        r.Servings.Should().Be(2);
         r.IngredientsCsv.Should().Be("eggs, milk");
-        r.CreatedByMemberId.Should().Be(Creator);
     }
 
     [Fact]
-    public void Create_rejects_empty_name()
+    public void Create_rejects_empty_name_or_zero_servings()
     {
-        var act = () => Recipe.Create(FamilyId, "  ", Creator);
-        act.Should().Throw<ArgumentException>();
+        var a = () => Recipe.Create(FamilyId, "  ");
+        a.Should().Throw<ArgumentException>();
+        var b = () => Recipe.Create(FamilyId, "Soup", servings: 0);
+        b.Should().Throw<ArgumentException>();
     }
 
     [Fact]
     public void Update_changes_fields()
     {
-        var r = Recipe.Create(FamilyId, "Soup", Creator, servings: 2);
+        var r = Recipe.Create(FamilyId, "Soup", servings: 2);
         r.Update("Chili", 6, "beans, beef", "Simmer");
         r.Name.Should().Be("Chili");
         r.Servings.Should().Be(6);
@@ -37,27 +37,26 @@ public class RecipeTests
     }
 
     [Fact]
-    public void ParseIngredients_splits_and_trims()
+    public void IngredientList_splits_and_trims()
     {
-        var r = Recipe.Create(FamilyId, "Tacos", Creator, ingredientsCsv: "tortilla, cheese,, salsa");
-        r.ParseIngredients().Should().Equal("tortilla", "cheese", "salsa");
+        var r = Recipe.Create(FamilyId, "Tacos", ingredientsCsv: "tortilla, cheese,, salsa");
+        r.IngredientList().Should().Equal("tortilla", "cheese", "salsa");
     }
 
     [Fact]
-    public void ScaledIngredients_scales_leading_quantities()
+    public void ScaleIngredientsForServings_scales_leading_quantities()
     {
-        var r = Recipe.Create(FamilyId, "Pancakes", Creator, servings: 2, ingredientsCsv: "2 cup flour, butter, 1 tsp salt");
-        // target 4 servings => 2x
-        var scaled = r.ScaledIngredients(4);
+        var r = Recipe.Create(FamilyId, "Pancakes", servings: 2, ingredientsCsv: "2 cup flour, butter, 1 tsp salt");
+        var scaled = r.ScaleIngredientsForServings(4);
         scaled.Should().Contain("4 cup flour");
-        scaled.Should().Contain("butter"); // no leading number
+        scaled.Should().Contain("butter");
         scaled.Should().Contain("2 tsp salt");
     }
 
     [Fact]
-    public void ScaledIngredients_same_servings_returns_unscaled()
+    public void ScaleIngredientsForServings_same_servings_unchanged()
     {
-        var r = Recipe.Create(FamilyId, "Salad", Creator, servings: 4, ingredientsCsv: "2 cup lettuce");
-        r.ScaledIngredients(4).Should().Equal("2 cup lettuce");
+        var r = Recipe.Create(FamilyId, "Salad", servings: 4, ingredientsCsv: "2 cup lettuce");
+        r.ScaleIngredientsForServings(4).Should().Equal("2 cup lettuce");
     }
 }

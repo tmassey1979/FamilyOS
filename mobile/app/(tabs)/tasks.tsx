@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,13 +10,6 @@ import {
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { tasksApi, type TaskDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
-
-function priorityColor(p?: string | null): string {
-  const v = (p ?? '').toLowerCase();
-  if (v === 'urgent' || v === 'high') return '#FBBF24';
-  if (v === 'low') return colors.textMuted;
-  return colors.primary;
-}
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
@@ -29,7 +21,7 @@ export default function TasksScreen() {
     setLoading(true);
     setError(null);
     try {
-      const list = await tasksApi.list();
+      const list = await tasksApi.mine();
       setTasks(list);
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not load tasks');
@@ -72,9 +64,7 @@ export default function TasksScreen() {
           <View style={styles.row}>
             <Text style={[typography.heading, { flex: 1 }]}>{t.title}</Text>
             {t.isOverdue ? <Badge label="Overdue" tone="danger" /> : null}
-            {t.priority ? (
-              <Badge label={t.priority} tone="warning" />
-            ) : null}
+            {t.priority ? <Badge label={t.priority} tone="warning" /> : null}
           </View>
           {t.description ? <Text style={typography.caption}>{t.description}</Text> : null}
           <Text style={typography.caption}>
