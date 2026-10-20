@@ -38,7 +38,12 @@ public enum QuestionType
     Boolean = 2,
     Choice = 3,
     DateTime = 4,
-    Multiline = 5
+    Multiline = 5,
+    PersonSelection = 6,
+    Location = 7,
+    YesNo = 8,
+    MoneyAmount = 9,
+    Date = 10
 }
 
 public enum ProcurementItemStatus
@@ -104,7 +109,8 @@ public enum NotificationType
     ConditionPending = 5,
     CalendarReminder = 6,
     ProcurementChanged = 7,
-    TaskDeclined = 8
+    TaskDeclined = 8,
+    RequestQuestionAsked = 9
 }
 
 public enum CalendarEventStatus
