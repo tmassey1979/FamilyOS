@@ -93,7 +93,7 @@ public partial class FamilyOsDbContext : DbContext, FamilyOS.Application.Interfa
         {
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.FamilyId);
-            e.HasIndex(x => new { x.FamilyId, x.AssignedToMemberId, x.Status });
+            e.HasIndex(x => new { x.FamilyId, x.AssigneeMemberId, x.Status });
             e.Property(x => x.Title).HasMaxLength(300).IsRequired();
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
             e.Property(x => x.Priority).HasConversion<string>().HasMaxLength(20);
