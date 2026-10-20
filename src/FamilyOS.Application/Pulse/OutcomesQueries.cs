@@ -59,8 +59,15 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
                 or FamilyTaskStatus.Created or FamilyTaskStatus.Reassigned);
 
         var durations = tasks
-            .Where(t => t.Status == FamilyTaskStatus.Completed && t.ActualDurationMinutes is > 0)
-            .Select(t => (double)t.ActualDurationMinutes!)
+            .Where(t => t.Status == FamilyTaskStatus.Completed)
+            .Select(t =>
+            {
+                var fromSegments = t.TimeSegments?.Where(s => s.EndedAtUtc.HasValue).Sum(s => s.DurationMinutes) ?? 0;
+                if (fromSegments > 0) return (double?)fromSegments;
+                return t.EstimatedMinutes is int e && e > 0 ? (double?)e : null;
+            })
+            .Where(d => d is > 0)
+            .Select(d => d!.Value)
             .ToList();
         double? avg = durations.Count > 0 ? durations.Average() : null;
 
@@ -99,7 +106,6 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
             i.Status is ProcurementItemStatus.Queued or ProcurementItemStatus.InCart
                 or ProcurementItemStatus.Approved);
 
-        // 8 week buckets ending this week (oldest → newest)
         var weeklyTasks = new int[8];
         var weeklyApproved = new int[8];
         var weeklyShop = new int[8];
@@ -119,20 +125,8 @@ public class OutcomesQueryHandler : IRequestHandler<GetOutcomesQuery, OutcomesDt
         }
 
         return new OutcomesDto(
-            completed7,
-            completed30,
-            approved7,
-            denied7,
-            approved30,
-            denied30,
-            purchased7,
-            avg,
-            approvalRate7,
-            open,
-            pending,
-            queued,
-            weeklyTasks,
-            weeklyApproved,
-            weeklyShop);
+            completed7, completed30, approved7, denied7, approved30, denied30,
+            purchased7, avg, approvalRate7, open, pending, queued,
+            weeklyTasks, weeklyApproved, weeklyShop);
     }
 }
