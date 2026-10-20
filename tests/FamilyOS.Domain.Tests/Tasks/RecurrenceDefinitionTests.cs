@@ -20,8 +20,7 @@ public class RecurrenceDefinitionTests
     [Fact]
     public void Create_snaps_first_occurrence_to_weekday()
     {
-        // Pick a known Monday so we can assert Thursday snap
-        var monday = new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc); // Monday
+        var monday = new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc);
         var def = RecurrenceDefinition.Create(
             FamilyId, "Trash", RecurrenceFrequency.Weekly, 1, DayOfWeek.Thursday,
             firstOccurrenceUtc: monday);
@@ -39,12 +38,11 @@ public class RecurrenceDefinitionTests
             FamilyId, "Trash", RecurrenceFrequency.Weekly, 1, DayOfWeek.Thursday,
             defaultAssignee: AssigneeId, category: "Chores", firstOccurrenceUtc: start);
 
-        // Force a stable Id for assertions (Entity creates its own Id on construction)
         var first = def.GenerateInstance(CreatorId);
         first.RecurrenceDefinitionId.Should().Be(def.Id);
         first.Title.Should().Be("Trash");
         first.Category.Should().Be("Chores");
-        first.AssignedToMemberId.Should().Be(AssigneeId);
+        first.AssigneeMemberId.Should().Be(AssigneeId);
         first.Status.Should().Be(FamilyTaskStatus.Assigned);
         first.DueDate.Should().NotBeNull();
 

@@ -1,3 +1,4 @@
+using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Procurement;
 using FluentAssertions;
 
@@ -61,7 +62,7 @@ public class ProcurementDomainTests
     public void RemoveFromCart_only_when_in_cart()
     {
         var item = ProcurementItem.Create(FamilyId, "Bread", Approver);
-        item.RemoveFromCart(); // no-op while queued
+        item.RemoveFromCart();
         item.Status.Should().Be(ProcurementItemStatus.Queued);
 
         item.AddToCart(Guid.NewGuid());
