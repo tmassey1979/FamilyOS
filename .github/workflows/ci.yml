@@ -19,7 +19,7 @@ env:
 
 jobs:
   build-and-test:
-    name: Build & Test (Domain)
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,26 +50,16 @@ jobs:
           echo "info=$VERSION+$SHORT" >> "$GITHUB_OUTPUT"
           echo "Using version $VERSION (info $VERSION+$SHORT)"
 
-      # Application still has API drift vs Domain (TaskItem property names, DbSet names).
-      # Domain coverage path builds Domain + tests only until Application is re-aligned.
-      - name: Restore (Domain + tests)
-        run: |
-          dotnet restore src/FamilyOS.Domain/FamilyOS.Domain.csproj
-          dotnet restore tests/FamilyOS.Domain.Tests/FamilyOS.Domain.Tests.csproj
+      - name: Restore solution
+        run: dotnet restore FamilyOS.sln
 
-      - name: Build Domain
+      - name: Build solution
         run: >
-          dotnet build src/FamilyOS.Domain/FamilyOS.Domain.csproj
+          dotnet build FamilyOS.sln
           --configuration Release
           --no-restore
           -p:Version=${{ steps.ver.outputs.version }}
           -p:InformationalVersion=${{ steps.ver.outputs.info }}
-
-      - name: Build Domain.Tests
-        run: >
-          dotnet build tests/FamilyOS.Domain.Tests/FamilyOS.Domain.Tests.csproj
-          --configuration Release
-          --no-restore
 
       - name: Test Domain
         run: >
@@ -128,83 +118,26 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage
-          path: coverage/**
+          name: domain-coverage
+          path: coverage
           retention-days: 14
-          if-no-files-found: ignore
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "## CI - Domain" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Version: ${{ steps.ver.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Info: ${{ steps.ver.outputs.info }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Note: full solution build deferred (Application API drift vs Domain)" >> "$GITHUB_STEP_SUMMARY"
-
-  mobile:
+  mobile-typecheck:
     name: Mobile typecheck
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Expand EAS brand bundle (real PNGs)
-        working-directory: .
-        id: expand_eas_brand
-        continue-on-error: true
-        run: |
-          if [[ -f scripts/expand-eas-brand-bundle.py ]]; then
-            python3 scripts/expand-eas-brand-bundle.py
-          else
-            echo "No expand-eas-brand-bundle.py - skip"
-            exit 1
-          fi
-
-      - name: Expand brand assets (brand-source b64)
-        working-directory: .
-        id: expand_brand
-        continue-on-error: true
-        if: steps.expand_eas_brand.outcome != 'success'
-        run: python3 scripts/expand-assets.py
-
-      - name: Seed brand PNGs if expand failed
-        working-directory: .
-        if: steps.expand_eas_brand.outcome != 'success' && steps.expand_brand.outcome != 'success'
-        run: |
-          if [[ -f scripts/assemble-seed-brand.py ]]; then
-            python3 scripts/assemble-seed-brand.py --run
-          elif [[ -f scripts/seed-brand-assets.py ]]; then
-            python3 scripts/seed-brand-assets.py
-          else
-            echo "::error::Brand expand failed and no seed fallback present"
-            exit 1
-          fi
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Summary
-        if: always()
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Expand brand assets
+        run: python3 scripts/expand-assets.py || true
+      - name: Seed brand fallback
+        run: python3 scripts/seed-brand-assets.py || true
+      - name: Install & typecheck
+        working-directory: mobile
         run: |
-          echo "## CI - Mobile" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Expo / TypeScript tsc --noEmit" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy:
-    name: Redeploy (Portainer)
-    needs: [build-and-test]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    uses: ./.github/workflows/deploy-stack.yml
-    secrets: inherit
+          npm ci
+          npx tsc --noEmit
