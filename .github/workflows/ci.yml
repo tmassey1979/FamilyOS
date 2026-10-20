@@ -130,8 +130,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
       - name: Expand brand assets
         run: python3 scripts/expand-assets.py || true
       - name: Seed brand fallback
@@ -139,5 +137,5 @@ jobs:
       - name: Install & typecheck
         working-directory: mobile
         run: |
-          npm ci
+          npm install
           npx tsc --noEmit
