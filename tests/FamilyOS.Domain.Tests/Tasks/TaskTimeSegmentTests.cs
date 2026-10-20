@@ -15,21 +15,28 @@ public class TaskTimeSegmentTests
         seg.MemberId.Should().Be(memberId);
         seg.StartedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         seg.EndedAtUtc.Should().BeNull();
-        seg.Duration.Should().BeNull();
 
-        seg.End();
+        seg.End(memberId);
         seg.EndedAtUtc.Should().NotBeNull();
-        seg.Duration.Should().NotBeNull();
-        seg.Duration!.Value.Should().BeGreaterThanOrEqualTo(0);
+        seg.DurationMinutes.Should().BeGreaterThanOrEqualTo(0);
     }
 
     [Fact]
-    public void End_is_idempotent()
+    public void End_wrong_member_throws()
     {
-        var seg = TaskTimeSegment.Start(Guid.NewGuid(), Guid.NewGuid());
-        seg.End();
-        var ended = seg.EndedAtUtc;
-        seg.End();
-        seg.EndedAtUtc.Should().Be(ended);
+        var memberId = Guid.NewGuid();
+        var seg = TaskTimeSegment.Start(Guid.NewGuid(), memberId);
+        var act = () => seg.End(Guid.NewGuid());
+        act.Should().Throw<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public void End_twice_throws()
+    {
+        var memberId = Guid.NewGuid();
+        var seg = TaskTimeSegment.Start(Guid.NewGuid(), memberId);
+        seg.End(memberId);
+        var act = () => seg.End(memberId);
+        act.Should().Throw<InvalidOperationException>();
     }
 }
