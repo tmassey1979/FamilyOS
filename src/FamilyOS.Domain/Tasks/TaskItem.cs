@@ -129,7 +129,8 @@ public class TaskItem : Entity
         Status = FamilyTaskStatus.Completed;
         CompletedAtUtc = DateTime.UtcNow;
         AddHistory(FamilyTaskStatus.Completed, memberId, "Task completed");
-        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, CompletedAtUtc.Value, DateTime.UtcNow));
+        var duration = TimeSegments.Where(s => s.EndedAtUtc.HasValue).Sum(s => s.DurationMinutes);
+        AddDomainEvent(new TaskCompleted(Id, FamilyId, memberId, duration > 0 ? duration : null, DateTime.UtcNow));
         MarkUpdated();
     }
 
@@ -252,7 +253,7 @@ public class TaskItem : Entity
     private void CloseOpenSegment(Guid memberId)
     {
         var open = _timeSegments.LastOrDefault(s => s.EndedAtUtc is null);
-        open?.End();
+        open?.End(memberId);
     }
 
     private void AddHistory(FamilyTaskStatus status, Guid actorMemberId, string detail)
