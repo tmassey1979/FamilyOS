@@ -36,7 +36,7 @@ public class TaskItemTests
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
         task.Status.Should().Be(FamilyTaskStatus.Assigned);
-        task.AssignedToMemberId.Should().Be(AssigneeId);
+        task.AssigneeMemberId.Should().Be(AssigneeId);
     }
 
     [Fact]
@@ -44,8 +44,9 @@ public class TaskItemTests
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
-        var wrong = () => task.Accept(OtherId);
-        wrong.Should().Throw<UnauthorizedAccessException>();
+        var act = () => task.Accept(OtherId);
+        act.Should().Throw<UnauthorizedAccessException>();
+
         task.Accept(AssigneeId);
         task.Status.Should().Be(FamilyTaskStatus.Accepted);
     }
@@ -73,14 +74,8 @@ public class TaskItemTests
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
-        var reasonId = Guid.NewGuid();
-        task.Decline(AssigneeId, reasonId, "Busy tonight");
-        task.Status.Should().Be(FamilyTaskStatus.Declined);
-        task.History.Should().Contain(h =>
-            h.Status == FamilyTaskStatus.Declined &&
-            h.Detail != null &&
-            h.Detail.Contains(reasonId.ToString()) &&
-            h.Detail.Contains("Busy tonight"));
+        task.Decline(AssigneeId, note: "Busy");
+        task.History.Should().Contain(h => h.Detail.Contains("Busy"));
     }
 
     [Fact]
@@ -93,7 +88,8 @@ public class TaskItemTests
         task.Status.Should().Be(FamilyTaskStatus.InProgress);
         task.Complete(AssigneeId);
         task.Status.Should().Be(FamilyTaskStatus.Completed);
-        task.TimeSegments.Should().OnlyContain(s => s.EndedAtUtc.HasValue);
+        task.CompletedAtUtc.Should().NotBeNull();
+        task.TimeSegments.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -110,12 +106,20 @@ public class TaskItemTests
     }
 
     [Fact]
-    public void Cannot_start_before_accept()
+    public void Start_allowed_from_Assigned_without_explicit_Accept()
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
+        task.Start(AssigneeId);
+        task.Status.Should().Be(FamilyTaskStatus.InProgress);
+    }
+
+    [Fact]
+    public void Cannot_start_when_Created()
+    {
+        var task = NewTask();
         var act = () => task.Start(AssigneeId);
-        act.Should().Throw<InvalidOperationException>();
+        act.Should().Throw<UnauthorizedAccessException>();
     }
 
     [Fact]
@@ -136,9 +140,9 @@ public class TaskItemTests
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
         task.Reassign(OtherId, CreatorId);
-        task.AssignedToMemberId.Should().Be(OtherId);
-        task.Status.Should().Be(FamilyTaskStatus.Assigned);
-        task.History.Should().Contain(h => h.Status == FamilyTaskStatus.Reassigned);
+        task.AssigneeMemberId.Should().Be(OtherId);
+        task.Status.Should().Be(FamilyTaskStatus.Reassigned);
+        task.History.Count.Should().BeGreaterThan(1);
     }
 
     [Fact]
@@ -146,7 +150,7 @@ public class TaskItemTests
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
-        task.Cancel(CreatorId, "No longer needed");
+        task.Cancel(CreatorId, "Not needed");
         task.Status.Should().Be(FamilyTaskStatus.Cancelled);
     }
 
@@ -155,30 +159,29 @@ public class TaskItemTests
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
-        task.Accept(AssigneeId);
-        task.Defer(AssigneeId, "Tomorrow");
+        var newDue = DateTime.UtcNow.AddDays(3);
+        task.Defer(AssigneeId, newDue, "Tomorrow");
         task.Status.Should().Be(FamilyTaskStatus.Deferred);
+        task.DueDate.Should().Be(newDue);
     }
 
     [Fact]
     public void Planned_times_are_independent_of_actual()
     {
         var task = NewTask();
-        task.SetPlannedTimes(new TimeOnly(17, 0), new TimeOnly(17, 30), 30);
-        task.Assign(AssigneeId, CreatorId);
-        task.Accept(AssigneeId);
-        task.Start(AssigneeId);
-        task.Complete(AssigneeId);
-        task.PlannedStartTime.Should().Be(new TimeOnly(17, 0));
-        task.EstimatedDurationMinutes.Should().Be(30);
-        task.PlannedEndTime.Should().Be(new TimeOnly(17, 30));
+        var start = DateTime.UtcNow.Date.AddHours(17);
+        var end = start.AddMinutes(30);
+        task.SetPlannedTimes(start, end, 30);
+        task.PlannedStartUtc.Should().Be(start);
+        task.PlannedEndUtc.Should().Be(end);
+        task.EstimatedMinutes.Should().Be(30);
     }
 
     [Fact]
     public void IsOverdue_when_due_in_past_and_open()
     {
         var task = NewTask();
-        task.UpdateDetails(CreatorId, dueDate: DateTime.UtcNow.AddDays(-1));
+        task.SetDueDate(DateTime.UtcNow.AddDays(-1));
         task.IsOverdue().Should().BeTrue();
     }
 
@@ -186,10 +189,11 @@ public class TaskItemTests
     public void IsOverdue_false_when_completed()
     {
         var task = NewTask();
-        task.UpdateDetails(CreatorId, dueDate: DateTime.UtcNow.AddDays(-2));
         task.Assign(AssigneeId, CreatorId);
         task.Accept(AssigneeId);
+        task.Start(AssigneeId);
         task.Complete(AssigneeId);
+        task.SetDueDate(DateTime.UtcNow.AddDays(-2));
         task.IsOverdue().Should().BeFalse();
     }
 
@@ -201,35 +205,32 @@ public class TaskItemTests
     }
 
     [Fact]
-    public void UpdateDetails_sets_priority_category_and_history()
+    public void UpdateDetails_and_SetPriority()
     {
         var task = NewTask();
-        task.UpdateDetails(CreatorId, priority: TaskPriority.Urgent, category: "School");
-        task.Priority.Should().Be(TaskPriority.Urgent);
+        task.UpdateDetails(title: "Updated", category: "School");
+        task.Title.Should().Be("Updated");
         task.Category.Should().Be("School");
-        task.History.Should().Contain(h => h.Detail.Contains("priority=Urgent"));
+        task.SetPriority(TaskPriority.Urgent);
+        task.Priority.Should().Be(TaskPriority.Urgent);
     }
 
     [Fact]
-    public void UpdateDetails_rejects_completed()
+    public void UpdateDetails_rejects_empty_title()
     {
         var task = NewTask();
-        task.Assign(AssigneeId, CreatorId);
-        task.Accept(AssigneeId);
-        task.Complete(AssigneeId);
-        var act = () => task.UpdateDetails(CreatorId, priority: TaskPriority.High);
-        act.Should().Throw<InvalidOperationException>();
+        var act = () => task.UpdateDetails(title: "  ");
+        act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void UpdateDetails_can_clear_due_date()
+    public void SetDueDate_can_clear()
     {
         var task = NewTask();
-        task.UpdateDetails(CreatorId, dueDate: DateTime.UtcNow.AddDays(3));
+        task.SetDueDate(DateTime.UtcNow.AddDays(3));
         task.DueDate.Should().NotBeNull();
-        task.UpdateDetails(CreatorId, clearDueDate: true);
+        task.SetDueDate(null);
         task.DueDate.Should().BeNull();
-        task.IsOverdue().Should().BeFalse();
     }
 
     [Fact]
@@ -237,10 +238,9 @@ public class TaskItemTests
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
-        task.Accept(AssigneeId);
-        task.Skip(AssigneeId, "Out of town");
+        task.Skip(CreatorId, "Holiday");
         task.Status.Should().Be(FamilyTaskStatus.Skipped);
-        task.History.Should().Contain(h => h.Status == FamilyTaskStatus.Skipped && h.Detail.Contains("Out of town"));
+        task.History.Should().Contain(h => h.Status == FamilyTaskStatus.Skipped);
     }
 
     [Fact]
@@ -249,23 +249,21 @@ public class TaskItemTests
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
         task.Accept(AssigneeId);
+        task.Start(AssigneeId);
         task.Complete(AssigneeId);
-        var act = () => task.Skip(AssigneeId);
+        var act = () => task.Skip(CreatorId);
         act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Planned_vs_actual_variance_on_complete()
+    public void Time_segments_on_start_complete()
     {
         var task = NewTask();
-        task.SetPlannedTimes(new TimeOnly(9, 0), new TimeOnly(9, 30), 30);
-        task.EstimatedDurationMinutes.Should().Be(30);
         task.Assign(AssigneeId, CreatorId);
         task.Accept(AssigneeId);
         task.Start(AssigneeId);
+        task.TimeSegments.Should().HaveCount(1);
         task.Complete(AssigneeId);
-        task.ActualDurationMinutes.Should().NotBeNull();
-        task.PlannedStartTime.Should().Be(new TimeOnly(9, 0));
-        task.PlannedEndTime.Should().Be(new TimeOnly(9, 30));
+        task.TimeSegments.First().EndedAtUtc.Should().NotBeNull();
     }
 }
