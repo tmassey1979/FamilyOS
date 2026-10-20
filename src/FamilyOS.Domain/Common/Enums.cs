@@ -60,20 +60,38 @@ public enum CartStatus
     Abandoned = 2
 }
 
-public enum MealSlot
-{
-    Breakfast = 0,
-    Lunch = 1,
-    Dinner = 2,
-    Snack = 3
-}
-
 public enum RecurrenceFrequency
 {
+    None = -1,
     Daily = 0,
     Weekly = 1,
     BiWeekly = 2,
-    Monthly = 3
+    Monthly = 3,
+    Yearly = 4
+}
+
+public enum DeclinePolicy
+{
+    NoChange = 0,
+    OfferReassignment = 1,
+    SkipInstance = 2,
+    CancelSeries = 3
+}
+
+public enum ExecutionPlanStatus
+{
+    Draft = 0,
+    Proposed = 1,
+    Committed = 2,
+    Completed = 3,
+    Cancelled = 4
+}
+
+public enum ExecutionItemType
+{
+    Task = 0,
+    CalendarEvent = 1,
+    ProcurementItem = 2
 }
 
 public enum NotificationType
