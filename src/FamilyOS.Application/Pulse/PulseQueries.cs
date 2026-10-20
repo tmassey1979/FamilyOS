@@ -3,6 +3,7 @@ using FamilyOS.Application.Interfaces;
 using FamilyOS.Domain.Common;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using FamilyOS.Domain.Conditions;
 
 namespace FamilyOS.Application.Pulse;
 
@@ -92,7 +93,7 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
         }
 
         var inProgress = await _db.Tasks.AsNoTracking()
-            .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId && t.Status == FamilyTaskStatus.InProgress)
+            .Where(t => t.FamilyId == familyId && t.AssigneeMemberId == memberId && t.Status == FamilyTaskStatus.InProgress)
             .OrderBy(t => t.DueDate)
             .FirstOrDefaultAsync(ct);
 
@@ -105,7 +106,7 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
         {
             var today = DateTime.UtcNow.Date;
             var dueTask = await _db.Tasks.AsNoTracking()
-                .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId &&
+                .Where(t => t.FamilyId == familyId && t.AssigneeMemberId == memberId &&
                             (t.Status == FamilyTaskStatus.Accepted || t.Status == FamilyTaskStatus.Assigned) &&
                             t.DueDate != null && t.DueDate <= today.AddDays(1))
                 .OrderBy(t => t.DueDate)
@@ -144,7 +145,7 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
             attention.Add(new AttentionItemDto("Request", r.Id, r.Title, "Waiting for your answer", "Answer"));
 
         var needsAccept = await _db.Tasks.AsNoTracking()
-            .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId && t.Status == FamilyTaskStatus.Assigned)
+            .Where(t => t.FamilyId == familyId && t.AssigneeMemberId == memberId && t.Status == FamilyTaskStatus.Assigned)
             .Take(5)
             .ToListAsync(ct);
 
@@ -167,7 +168,7 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
             upcoming.Add(new UpcomingItemDto("Calendar", e.Id, e.Title, e.StartUtc, e.Location));
 
         var soonTasks = await _db.Tasks.AsNoTracking()
-            .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId &&
+            .Where(t => t.FamilyId == familyId && t.AssigneeMemberId == memberId &&
                         t.DueDate != null && t.DueDate > DateTime.UtcNow && t.DueDate <= window &&
                         t.Status != FamilyTaskStatus.Completed && t.Status != FamilyTaskStatus.Cancelled)
             .OrderBy(t => t.DueDate)
@@ -226,7 +227,7 @@ public class PulseQueryHandler : IRequestHandler<GetPulseQuery, PulseDto>
                 "Satisfy"));
 
         var overdueMine = await _db.Tasks.AsNoTracking()
-            .Where(t => t.FamilyId == familyId && t.AssignedToMemberId == memberId &&
+            .Where(t => t.FamilyId == familyId && t.AssigneeMemberId == memberId &&
                         t.DueDate != null && t.DueDate < DateTime.UtcNow &&
                         t.Status != FamilyTaskStatus.Completed && t.Status != FamilyTaskStatus.Cancelled &&
                         t.Status != FamilyTaskStatus.Skipped)
