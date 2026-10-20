@@ -228,4 +228,41 @@ public partial class TaskCommandHandlers :
         return await ToDto(task, ct);
     }
 
+    public async Task<TaskDto> Handle(DeclineTaskCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        var task = await GetTaskForFamily(cmd.TaskId, ct);
+        task.Decline(_current.MemberId!.Value, cmd.ReasonId, cmd.Note);
+
+        string? dlTitle = null;
+        string? dlBody = null;
+        if (task.CreatedByMemberId != _current.MemberId)
+        {
+            dlTitle = $"Declined: {task.Title}";
+            dlBody = string.IsNullOrWhiteSpace(cmd.Note) ? "Task was declined." : cmd.Note;
+            _db.Notifications.Add(Notification.Create(
+                _current.FamilyId!.Value,
+                task.CreatedByMemberId,
+                NotificationType.TaskDeclined,
+                dlTitle,
+                dlBody,
+                task.Id,
+                "Task"));
+        }
+
+        await _db.SaveChangesAsync(ct);
+        if (dlTitle is not null && dlBody is not null)
+            await TryPushAsync(task.CreatedByMemberId, dlTitle, dlBody, task.Id, "Task", ct);
+        return await ToDto(task, ct);
+    }
+
+    public async Task<TaskDto> Handle(StartTaskCommand cmd, CancellationToken ct)
+    {
+        await _current.EnsureLoadedAsync(ct);
+        var task = await GetTaskForFamily(cmd.TaskId, ct);
+        task.Start(_current.MemberId!.Value);
+        await _db.SaveChangesAsync(ct);
+        return await ToDto(task, ct);
+    }
+
 }
