@@ -85,10 +85,12 @@ public static class SeedData
         kitchen.Assign(michelle.Id, michelle.Id);
         kitchen.Accept(michelle.Id);
         var pickup = TaskItem.Create(family.Id, "Pick up Eli from school", michelle.Id, category: "Transport",
-            dueDate: DateTime.UtcNow.Date, calendarBacked: true);
+            dueDate: DateTime.UtcNow.Date);
         pickup.Assign(michelle.Id, michelle.Id);
         pickup.Accept(michelle.Id);
-        pickup.SetPlannedTimes(new TimeOnly(15, 30), new TimeOnly(16, 0), 30);
+        var planStart = DateTime.UtcNow.Date.AddHours(15).AddMinutes(30);
+        var planEnd = DateTime.UtcNow.Date.AddHours(16);
+        pickup.SetPlannedTimes(planStart, planEnd, 30);
         db.Tasks.AddRange(trash, laundry, kitchen, pickup);
 
         db.RecurrenceDefinitions.Add(RecurrenceDefinition.Create(
