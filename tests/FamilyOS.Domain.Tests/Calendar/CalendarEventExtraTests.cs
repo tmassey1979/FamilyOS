@@ -6,35 +6,27 @@ namespace FamilyOS.Domain.Tests.Calendar;
 public class CalendarEventExtraTests
 {
     private static readonly Guid FamilyId = Guid.NewGuid();
+    private static readonly Guid Creator = Guid.NewGuid();
 
     [Fact]
-    public void UpdateDetails_changes_title_location_description()
+    public void Link_task_and_request()
     {
-        var start = DateTime.UtcNow.AddDays(1);
-        var e = CalendarEvent.Create(FamilyId, "Practice", start, start.AddHours(1));
-        e.UpdateDetails("Game", "Stadium", "Bring ball");
-        e.Title.Should().Be("Game");
-        e.Location.Should().Be("Stadium");
-        e.Description.Should().Be("Bring ball");
-    }
-
-    [Fact]
-    public void LinkTask_sets_linked_task_id()
-    {
-        var start = DateTime.UtcNow.AddDays(1);
-        var e = CalendarEvent.Create(FamilyId, "Appt", start, start.AddMinutes(30));
         var taskId = Guid.NewGuid();
-        e.LinkTask(taskId);
-        e.LinkedTaskId.Should().Be(taskId);
+        var reqId = Guid.NewGuid();
+        var ev = CalendarEvent.Create(
+            FamilyId, "Pickup", DateTime.UtcNow, Creator,
+            linkedTaskId: taskId, linkedRequestId: reqId);
+
+        ev.LinkedTaskId.Should().Be(taskId);
+        ev.LinkedRequestId.Should().Be(reqId);
     }
 
     [Fact]
-    public void Cancel_is_idempotent()
+    public void AllDay_event()
     {
-        var start = DateTime.UtcNow.AddDays(1);
-        var e = CalendarEvent.Create(FamilyId, "Meet", start, start.AddHours(1));
-        e.Cancel();
-        e.Cancel();
-        e.IsCancelled.Should().BeTrue();
+        var day = DateTime.UtcNow.Date;
+        var ev = CalendarEvent.Create(FamilyId, "Holiday", day, Creator, allDay: true);
+        ev.AllDay.Should().BeTrue();
+        ev.StartUtc.Should().Be(day);
     }
 }

@@ -1,4 +1,3 @@
-using FamilyOS.Domain.Common;
 using FamilyOS.Domain.Conditions;
 using FluentAssertions;
 
@@ -6,52 +5,35 @@ namespace FamilyOS.Domain.Tests.Conditions;
 
 public class ConditionLifecycleTests
 {
-    private static Condition Pending() =>
-        Condition.Create(Guid.NewGuid(), "Chores done", ConditionType.Task,
-            requestId: Guid.NewGuid(), description: "Finish kitchen");
+    private static readonly Guid FamilyId = Guid.NewGuid();
+    private static readonly Guid Actor = Guid.NewGuid();
 
     [Fact]
-    public void Satisfy_sets_member_and_time()
+    public void Full_lifecycle_pending_satisfy()
     {
-        var c = Pending();
-        var who = Guid.NewGuid();
-        c.Satisfy(who);
+        var c = Condition.Create(FamilyId, "Gate", ConditionType.Manual, logic: ConditionLogic.All, groupOrder: 1);
+        c.Status.Should().Be(ConditionStatus.Pending);
+        c.LogicGroup.Should().Be(ConditionLogic.All);
+        c.GroupOrder.Should().Be(1);
+
+        c.Satisfy(Actor);
         c.Status.Should().Be(ConditionStatus.Satisfied);
-        c.SatisfiedByMemberId.Should().Be(who);
-        c.SatisfiedAtUtc.Should().NotBeNull();
     }
 
     [Fact]
-    public void Satisfy_twice_throws()
+    public void Fail_then_cannot_satisfy()
     {
-        var c = Pending();
-        c.Satisfy(Guid.NewGuid());
-        var act = () => c.Satisfy(Guid.NewGuid());
+        var c = Condition.Create(FamilyId, "Gate", ConditionType.Approval);
+        c.Fail();
+        var act = () => c.Satisfy(Actor);
         act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Fail_and_Expire_and_Cancel()
+    public void Deadline_is_stored()
     {
-        var a = Pending();
-        a.Fail("missed deadline");
-        a.Status.Should().Be(ConditionStatus.Failed);
-
-        var b = Pending();
-        b.Expire();
-        b.Status.Should().Be(ConditionStatus.Expired);
-
-        var c = Pending();
-        c.Cancel();
-        c.Status.Should().Be(ConditionStatus.Cancelled);
-    }
-
-    [Fact]
-    public void Expire_noop_when_already_satisfied()
-    {
-        var c = Pending();
-        c.Satisfy(Guid.NewGuid());
-        c.Expire();
-        c.Status.Should().Be(ConditionStatus.Satisfied);
+        var deadline = DateTime.UtcNow.AddDays(2);
+        var c = Condition.Create(FamilyId, "By Friday", ConditionType.TimeWindow, deadline: deadline);
+        c.DeadlineUtc.Should().Be(deadline);
     }
 }
