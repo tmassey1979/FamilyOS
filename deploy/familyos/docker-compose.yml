@@ -59,6 +59,7 @@ services:
       KC_HOSTNAME: auth.${DOMAIN}
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_PORT: 9000
       KC_SPI_THEME_CACHE_THEMES: "false"
       KC_SPI_THEME_CACHE_TEMPLATES: "false"
     volumes:
@@ -68,16 +69,17 @@ services:
       - internal
       - proxy
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000"]
       interval: 15s
       timeout: 5s
-      retries: 20
-      start_period: 60s
+      retries: 30
+      start_period: 90s
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
       - traefik.http.routers.keycloak.rule=Host(`auth.${DOMAIN}`)
       - traefik.http.routers.keycloak.entrypoints=websecure
+      - traefik.http.routers.keycloak.tls.certresolver=le
       - traefik.http.services.keycloak.loadbalancer.server.port=8080
       - traefik.http.routers.keycloak.middlewares=sec-headers@file
 
@@ -94,6 +96,7 @@ services:
       ASPNETCORE_URLS: http://+:5080
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-familyos};Username=${POSTGRES_USER:-familyos};Password=${POSTGRES_PASSWORD}"
       Keycloak__Authority: "https://auth.${DOMAIN}/realms/familyos"
+      Keycloak__MetadataAddress: "http://keycloak:8080/realms/familyos/.well-known/openid-configuration"
       Keycloak__Audience: familyos-mobile
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: ${RABBITMQ_USER:-familyos}
@@ -106,9 +109,9 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
+        condition: service_started
       keycloak:
-        condition: service_healthy
+        condition: service_started
     networks:
       - internal
       - proxy
@@ -116,13 +119,14 @@ services:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5080/health"]
       interval: 15s
       timeout: 5s
-      retries: 12
-      start_period: 60s
+      retries: 20
+      start_period: 120s
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
       - traefik.http.routers.familyos-api.rule=Host(`api.${DOMAIN}`)
       - traefik.http.routers.familyos-api.entrypoints=websecure
+      - traefik.http.routers.familyos-api.tls.certresolver=le
       - traefik.http.services.familyos-api.loadbalancer.server.port=5080
       - traefik.http.routers.familyos-api.middlewares=sec-headers@file
 
