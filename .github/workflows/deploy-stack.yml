@@ -76,7 +76,7 @@ jobs:
               python3 -c "import json;from pathlib import Path;env=json.loads(Path('/tmp/stack_env.json').read_text());Path('/tmp/redeploy_body.json').write_text(json.dumps({'PullImage':True,'RepositoryAuthentication':False,'Env':env}))"
               echo "git/redeploy stack=$STACK_ID endpoint=$EP"
               code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT "${BASE}/api/stacks/${STACK_ID}/git/redeploy?endpointId=${EP}" -H "X-API-Key: ${PORTAINER_API_KEY}" -H "Content-Type: application/json" --data-binary @/tmp/redeploy_body.json --max-time 300 || echo "000")
-              echo "HTTP $code"; head -c 500 /tmp/pa.out 2>/dev/null || true; echo
+              echo "HTTP $code"; head -c 2000 /tmp/pa.out 2>/dev/null || true; echo
               if [ "$code" = "200" ] || [ "$code" = "204" ]; then MODE=api-git; else echo "::warning::API HTTP $code"; fi
             fi
           fi

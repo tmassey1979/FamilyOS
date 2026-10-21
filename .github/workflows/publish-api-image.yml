@@ -1,0 +1,47 @@
+# Build Family OS API image and push to GHCR so Portainer can pull it.
+name: Publish API image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Dockerfile'
+      - 'Directory.Build.props'
+      - 'scripts/expand-migrations.py'
+      - 'scripts/migrations/**'
+      - '.github/workflows/publish-api-image.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tags
+        id: meta
+        run: |
+          SHA_SHORT="${GITHUB_SHA::7}"
+          echo "tags=ghcr.io/${{ github.repository_owner }}/familyos-api:latest,ghcr.io/${{ github.repository_owner }}/familyos-api:${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=0.1.0
