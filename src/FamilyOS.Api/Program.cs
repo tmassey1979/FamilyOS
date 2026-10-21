@@ -106,6 +106,10 @@ try
     {
         options.Authority = keycloakAuthority;
         options.RequireHttpsMetadata = false;
+        // Docker: authority is the public issuer (https://auth…); metadata is fetched on the internal network
+        var metadata = builder.Configuration["Keycloak:MetadataAddress"];
+        if (!string.IsNullOrWhiteSpace(metadata))
+            options.MetadataAddress = metadata;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
