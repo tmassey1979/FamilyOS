@@ -8,7 +8,10 @@
 #
 # AWS free tier note: t2.micro/t3.micro (1GB) is tight for this stack.
 # Prefer t3.small (2GB) or enable 2GB swap on micro. See deploy/AWS.md.
-# Grafana/Prometheus add ~300–500MB — optional on small VMs.
+# Grafana/Prometheus: compose profile `observability` (off by default).
+# Recovery if API 502:
+#   docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d --build api
+#   docker compose ... logs -f api keycloak postgres
 
 name: familyos
 
@@ -16,6 +19,7 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    shm_size: 128mb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-familyos}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
@@ -30,12 +34,14 @@ services:
       timeout: 5s
       retries: 12
 
+  # Optional broker: --profile messaging (API defaults to in-memory MassTransit)
   rabbitmq:
+    profiles: ["messaging"]
     image: rabbitmq:3.13-management-alpine
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-familyos}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-familyos}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -60,6 +66,9 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: 9000
+      # Cap heap so Keycloak fits on 1–2GB hosts with Postgres+API
+      JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx256m"
+      JAVA_OPTS: "-Xms64m -Xmx256m"
       KC_SPI_THEME_CACHE_THEMES: "false"
       KC_SPI_THEME_CACHE_TEMPLATES: "false"
     volumes:
@@ -69,7 +78,7 @@ services:
       - internal
       - proxy
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
       interval: 15s
       timeout: 5s
       retries: 30
@@ -100,7 +109,7 @@ services:
       Keycloak__Audience: familyos-mobile
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: ${RABBITMQ_USER:-familyos}
-      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-}
       Seed__Enabled: ${SEED_ENABLED:-true}
       Auth__UseDevBypass: ${AUTH_USE_DEV_BYPASS:-false}
       PostHog__ApiKey: ${POSTHOG_API_KEY:-}
@@ -108,8 +117,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      rabbitmq:
-        condition: service_started
       keycloak:
         condition: service_started
     networks:
@@ -130,7 +137,9 @@ services:
       - traefik.http.services.familyos-api.loadbalancer.server.port=5080
       - traefik.http.routers.familyos-api.middlewares=sec-headers@file
 
+  # Optional: docker compose --profile observability up -d
   prometheus:
+    profiles: ["observability"]
     image: prom/prometheus:v2.54.1
     restart: unless-stopped
     command:
@@ -145,6 +154,7 @@ services:
       - api
 
   grafana:
+    profiles: ["observability"]
     image: grafana/grafana:11.2.0
     restart: unless-stopped
     environment:
