@@ -1,21 +1,10 @@
 # Family OS production stack behind Traefik (proxy network).
 # Prerequisites:
-#   docker network create proxy   # already created by traefik bootstrap
-#   cp deploy/familyos/.env.example deploy/familyos/.env  # edit secrets
+#   docker network create proxy
+#   cp deploy/familyos/.env.example deploy/familyos/.env
 #
-# From repo root:
-#   docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d --build
-#
-# AWS free tier note: t2.micro/t3.micro (1GB) is tight for this stack.
-# Prefer t3.small (2GB) or enable 2GB swap on micro. See deploy/AWS.md.
-# Grafana/Prometheus: compose profile `observability` (off by default).
-# Recovery if API 502:
-#   docker compose -f deploy/familyos/docker-compose.yml --env-file deploy/familyos/.env up -d api
-#   docker compose ... logs -f api keycloak postgres
-#
-# API image is published by .github/workflows/publish-api-image.yml to GHCR.
-# Make the package Public (GitHub → Packages → familyos-api → Package settings)
-# so Portainer can pull without a registry login.
+# API image: ghcr.io/tmassey1979/familyos-api:latest (publish-api-image.yml)
+# Keycloak realm: deploy/familyos/keycloak/realm-export.json (must import on boot)
 
 name: familyos
 
@@ -38,7 +27,6 @@ services:
       timeout: 5s
       retries: 12
 
-  # Optional broker: --profile messaging (API defaults to in-memory MassTransit)
   rabbitmq:
     profiles: ["messaging"]
     image: rabbitmq:3.13-management-alpine
@@ -59,7 +47,8 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
-    command: start-dev --import-realm --hostname-strict=false
+    # import realm JSON from ./keycloak (path relative to this compose file — Portainer-safe)
+    command: ["start-dev", "--import-realm", "--hostname-strict=false"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
@@ -72,11 +61,11 @@ services:
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx256m"
       JAVA_OPTS: "-Xms64m -Xmx256m"
-      KC_SPI_THEME_CACHE_THEMES: "false"
-      KC_SPI_THEME_CACHE_TEMPLATES: "false"
+      # bump to force container recreate when realm import is fixed
+      FAMILYOS_KC_IMPORT_REV: "2"
     volumes:
-      - ../../docker/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
-      - ../../docker/keycloak/themes:/opt/keycloak/themes:ro
+      # Co-located with compose so Portainer Git stack always mounts the file
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     networks:
       - internal
       - proxy
@@ -85,7 +74,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 30
-      start_period: 90s
+      start_period: 120s
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
@@ -96,7 +85,6 @@ services:
       - traefik.http.routers.keycloak.middlewares=sec-headers@file
 
   api:
-    # Published by .github/workflows/publish-api-image.yml (GHCR)
     image: ghcr.io/tmassey1979/familyos-api:latest
     restart: unless-stopped
     environment:
