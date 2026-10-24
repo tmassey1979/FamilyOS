@@ -2,9 +2,8 @@
   "realm": "familyos",
   "enabled": true,
   "displayName": "Family OS",
-  "displayNameHtml": "<strong>Family OS</strong>",
-  "sslRequired": "external",
-  "registrationAllowed": false,
+  "sslRequired": "none",
+  "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
@@ -13,7 +12,6 @@
   "loginTheme": "keycloak.v2",
   "accountTheme": "keycloak.v2",
   "emailTheme": "keycloak",
-  "internationalizationEnabled": false,
   "defaultSignatureAlgorithm": "RS256",
   "clients": [
     {
@@ -23,19 +21,21 @@
       "publicClient": true,
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
-      "implicitFlowEnabled": false,
-      "serviceAccountsEnabled": false,
       "protocol": "openid-connect",
-      "rootUrl": "https://18.226.226.118.sslip.io",
-      "baseUrl": "/",
+      "rootUrl": "familyos://",
+      "baseUrl": "familyos://auth",
       "redirectUris": [
-        "exp://*",
         "familyos://*",
         "familyos://auth",
         "familyos://auth/*",
+        "exp://*",
         "http://localhost:*",
+        "http://127.0.0.1:*",
         "https://*.sslip.io/*",
-        "https://18.226.226.118.sslip.io/*"
+        "https://18.226.226.118.sslip.io/*",
+        "https://auth.expo.io/*",
+        "https://*.expo.dev/*",
+        "https://*.exp.direct/*"
       ],
       "webOrigins": ["*"],
       "attributes": {
@@ -48,13 +48,11 @@
     },
     {
       "clientId": "familyos-api",
-      "name": "Family OS API",
       "enabled": true,
       "publicClient": false,
       "secret": "familyos-api-secret-change-in-prod",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
       "protocol": "openid-connect",
       "bearerOnly": true
     }
