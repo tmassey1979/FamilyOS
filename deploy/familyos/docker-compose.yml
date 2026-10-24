@@ -1,4 +1,5 @@
-# Family OS — Keycloak from quay; realm via base64 (YAML-safe)
+# Family OS production stack
+# Keycloak: official quay image, plain start-dev (stable). Import realm via admin UI or later job.
 
 name: familyos
 
@@ -36,13 +37,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        set -e
-        mkdir -p /opt/keycloak/data/import
-        echo 'eyJyZWFsbSI6ImZhbWlseW9zIiwiZW5hYmxlZCI6dHJ1ZSwiZGlzcGxheU5hbWUiOiJGYW1pbHkgT1MiLCJzc2xSZXF1aXJlZCI6Im5vbmUiLCJyZWdpc3RyYXRpb25BbGxvd2VkIjp0cnVlLCJsb2dpbldpdGhFbWFpbEFsbG93ZWQiOnRydWUsImR1cGxpY2F0ZUVtYWlsc0FsbG93ZWQiOmZhbHNlLCJyZXNldFBhc3N3b3JkQWxsb3dlZCI6dHJ1ZSwiZWRpdFVzZXJuYW1lQWxsb3dlZCI6ZmFsc2UsImJydXRlRm9yY2VQcm90ZWN0ZWQiOnRydWUsImxvZ2luVGhlbWUiOiJrZXljbG9hay52MiIsImFjY291bnRUaGVtZSI6ImtleWNsb2FrLnYyIiwiZW1haWxUaGVtZSI6ImtleWNsb2FrIiwiZGVmYXVsdFNpZ25hdHVyZUFsZ29yaXRobSI6IlJTMjU2IiwiY2xpZW50cyI6W3siY2xpZW50SWQiOiJmYW1pbHlvcy1tb2JpbGUiLCJuYW1lIjoiRmFtaWx5IE9TIE1vYmlsZSIsImVuYWJsZWQiOnRydWUsInB1YmxpY0NsaWVudCI6dHJ1ZSwiZGlyZWN0QWNjZXNzR3JhbnRzRW5hYmxlZCI6dHJ1ZSwic3RhbmRhcmRGbG93RW5hYmxlZCI6dHJ1ZSwicHJvdG9jb2wiOiJvcGVuaWQtY29ubmVjdCIsInJvb3RVcmwiOiJmYW1pbHlvczovLyIsImJhc2VVcmwiOiJmYW1pbHlvczovL2F1dGgiLCJyZWRpcmVjdFVyaXMiOlsiZmFtaWx5b3M6Ly8qIiwiZmFtaWx5b3M6Ly9hdXRoIiwiZmFtaWx5b3M6Ly9hdXRoLyoiLCJleHA6Ly8qIiwiaHR0cDovL2xvY2FsaG9zdDoqIiwiaHR0cDovLzEyNy4wLjAuMToqIiwiaHR0cHM6Ly8qLnNzbGlwLmlvLyoiLCJodHRwczovLzE4LjIyNi4yMjYuMTE4LnNzbGlwLmlvLyoiLCJodHRwczovL2F1dGguZXhwby5pby8qIiwiaHR0cHM6Ly8qLmV4cG8uZGV2LyoiLCJodHRwczovLyouZXhwLmRpcmVjdC8qIl0sIndlYk9yaWdpbnMiOlsiKiJdLCJhdHRyaWJ1dGVzIjp7InBrY2UuY29kZS5jaGFsbGVuZ2UubWV0aG9kIjoiUzI1NiIsInBvc3QubG9nb3V0LnJlZGlyZWN0LnVyaXMiOiIrIn0sImZ1bGxTY29wZUFsbG93ZWQiOnRydWUsImRlZmF1bHRDbGllbnRTY29wZXMiOlsid2ViLW9yaWdpbnMiLCJhY3IiLCJwcm9maWxlIiwicm9sZXMiLCJlbWFpbCJdLCJvcHRpb25hbENsaWVudFNjb3BlcyI6WyJhZGRyZXNzIiwicGhvbmUiLCJvZmZsaW5lX2FjY2VzcyIsIm1pY3JvcHJvZmlsZS1qd3QiXX0seyJjbGllbnRJZCI6ImZhbWlseW9zLWFwaSIsImVuYWJsZWQiOnRydWUsInB1YmxpY0NsaWVudCI6ZmFsc2UsInNlY3JldCI6ImZhbWlseW9zLWFwaS1zZWNyZXQtY2hhbmdlLWluLXByb2QiLCJzZXJ2aWNlQWNjb3VudHNFbmFibGVkIjp0cnVlLCJzdGFuZGFyZEZsb3dFbmFibGVkIjpmYWxzZSwicHJvdG9jb2wiOiJvcGVuaWQtY29ubmVjdCIsImJlYXJlck9ubHkiOnRydWV9XSwidXNlcnMiOlt7InVzZXJuYW1lIjoidGVycnkub3duZXIiLCJlbWFpbCI6InRlcnJ5QGZhbWlseW9zLmxvY2FsIiwiZmlyc3ROYW1lIjoiVGVycnkiLCJsYXN0TmFtZSI6Ik93bmVyIiwiZW5hYmxlZCI6dHJ1ZSwiZW1haWxWZXJpZmllZCI6dHJ1ZSwiY3JlZGVudGlhbHMiOlt7InR5cGUiOiJwYXNzd29yZCIsInZhbHVlIjoicGFzc3dvcmQiLCJ0ZW1wb3JhcnkiOmZhbHNlfV19LHsidXNlcm5hbWUiOiJtaWNoZWxsZS5hZHVsdCIsImVtYWlsIjoibWljaGVsbGVAZmFtaWx5b3MubG9jYWwiLCJmaXJzdE5hbWUiOiJNaWNoZWxsZSIsImxhc3ROYW1lIjoiQWR1bHQiLCJlbmFibGVkIjp0cnVlLCJlbWFpbFZlcmlmaWVkIjp0cnVlLCJjcmVkZW50aWFscyI6W3sidHlwZSI6InBhc3N3b3JkIiwidmFsdWUiOiJwYXNzd29yZCIsInRlbXBvcmFyeSI6ZmFsc2V9XX0seyJ1c2VybmFtZSI6Im1pYS50ZWVuIiwiZW1haWwiOiJtaWFAZmFtaWx5b3MubG9jYWwiLCJmaXJzdE5hbWUiOiJNaWEiLCJsYXN0TmFtZSI6IlRlZW4iLCJlbmFibGVkIjp0cnVlLCJlbWFpbFZlcmlmaWVkIjp0cnVlLCJjcmVkZW50aWFscyI6W3sidHlwZSI6InBhc3N3b3JkIiwidmFsdWUiOiJwYXNzd29yZCIsInRlbXBvcmFyeSI6ZmFsc2V9XX0seyJ1c2VybmFtZSI6ImVsaS5jaGlsZCIsImVtYWlsIjoiZWxpQGZhbWlseW9zLmxvY2FsIiwiZmlyc3ROYW1lIjoiRWxpIiwibGFzdE5hbWUiOiJDaGlsZCIsImVuYWJsZWQiOnRydWUsImVtYWlsVmVyaWZpZWQiOnRydWUsImNyZWRlbnRpYWxzIjpbeyJ0eXBlIjoicGFzc3dvcmQiLCJ2YWx1ZSI6InBhc3N3b3JkIiwidGVtcG9yYXJ5IjpmYWxzZX1dfV0sInJvbGVzIjp7InJlYWxtIjpbeyJuYW1lIjoidXNlciIsImRlc2NyaXB0aW9uIjoiU3RhbmRhcmQgRmFtaWx5IE9TIHVzZXIifV19fQ==' | base64 -d > /opt/keycloak/data/import/realm-export.json
-        exec /opt/keycloak/bin/kc.sh start-dev --import-realm --hostname-strict=false
+    command: ["start-dev", "--hostname-strict=false"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
@@ -56,14 +51,13 @@ services:
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: 9000
-      JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx256m"
-      JAVA_OPTS: "-Xms64m -Xmx256m"
-      FAMILYOS_KC_IMPORT_REV: "8"
+      JAVA_OPTS_APPEND: "-Xms64m -Xmx384m"
+      FAMILYOS_KC_IMPORT_REV: "9"
     networks:
       - internal
       - proxy
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 40
