@@ -1,5 +1,5 @@
 # Family OS production stack
-# Keycloak image includes realm-export (ghcr, public)
+# Keycloak: quay.io official — working. Import familyos realm from Admin UI (see docs/KEYCLOAK.md).
 
 name: familyos
 
@@ -35,9 +35,9 @@ services:
       - internal
 
   keycloak:
-    image: ghcr.io/tmassey1979/familyos-keycloak:latest
+    image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
-    command: ["start-dev", "--import-realm", "--hostname-strict=false"]
+    command: ["start-dev", "--hostname-strict=false"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
@@ -52,7 +52,7 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_APPEND: "-Xms64m -Xmx384m"
-      FAMILYOS_KC_IMPORT_REV: "10"
+      FAMILYOS_KC_IMPORT_REV: "11"
     networks:
       - internal
       - proxy
