@@ -1,6 +1,6 @@
 # Family OS production stack behind Traefik (proxy network).
-# API: ghcr.io/tmassey1979/familyos-api:latest
-# Keycloak: ghcr.io/tmassey1979/familyos-keycloak:latest (realm baked in)
+# API: ghcr.io/tmassey1979/familyos-api:latest (make package Public if pull fails)
+# Keycloak: official image + realm from public GitHub raw (avoids private GHCR)
 
 name: familyos
 
@@ -40,8 +40,23 @@ services:
       timeout: 5s
       retries: 12
 
+  # Fetch realm JSON into a shared volume (public GitHub raw — no GHCR auth)
+  keycloak-realm:
+    image: curlimages/curl:8.10.1
+    restart: "no"
+    volumes:
+      - keycloak_import:/import
+    command:
+      - -fsSL
+      - -o
+      - /import/realm-export.json
+      - https://raw.githubusercontent.com/tmassey1979/FamilyOS/main/docker/keycloak/realm-export.json
+    # needs outbound HTTPS to GitHub (internal network blocks egress)
+    networks:
+      - proxy
+
   keycloak:
-    image: ghcr.io/tmassey1979/familyos-keycloak:latest
+    image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
     command: ["start-dev", "--import-realm", "--hostname-strict=false"]
     environment:
@@ -59,7 +74,12 @@ services:
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx256m"
       JAVA_OPTS: "-Xms64m -Xmx256m"
-      FAMILYOS_KC_IMPORT_REV: "4"
+      FAMILYOS_KC_IMPORT_REV: "5"
+    volumes:
+      - keycloak_import:/opt/keycloak/data/import:ro
+    depends_on:
+      keycloak-realm:
+        condition: service_completed_successfully
     networks:
       - internal
       - proxy
@@ -165,6 +185,7 @@ volumes:
   rabbitmq_data:
   prometheus_data:
   grafana_data:
+  keycloak_import:
 
 networks:
   proxy:
