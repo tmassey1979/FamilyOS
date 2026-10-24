@@ -1,6 +1,6 @@
-# Family OS production stack behind Traefik (proxy network).
-# API: ghcr.io/tmassey1979/familyos-api:latest (make package Public if pull fails)
-# Keycloak: official image + realm from public GitHub raw (avoids private GHCR)
+# Family OS production stack behind Traefik.
+# Make GHCR packages Public if Portainer cannot pull:
+#   GitHub → Packages → familyos-keycloak / familyos-api → Package settings → Public
 
 name: familyos
 
@@ -34,29 +34,9 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - internal
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 15s
-      timeout: 5s
-      retries: 12
-
-  # Fetch realm JSON into a shared volume (public GitHub raw — no GHCR auth)
-  keycloak-realm:
-    image: curlimages/curl:8.10.1
-    restart: "no"
-    volumes:
-      - keycloak_import:/import
-    command:
-      - -fsSL
-      - -o
-      - /import/realm-export.json
-      - https://raw.githubusercontent.com/tmassey1979/FamilyOS/main/docker/keycloak/realm-export.json
-    # needs outbound HTTPS to GitHub (internal network blocks egress)
-    networks:
-      - proxy
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: ghcr.io/tmassey1979/familyos-keycloak:latest
     restart: unless-stopped
     command: ["start-dev", "--import-realm", "--hostname-strict=false"]
     environment:
@@ -74,12 +54,7 @@ services:
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx256m"
       JAVA_OPTS: "-Xms64m -Xmx256m"
-      FAMILYOS_KC_IMPORT_REV: "5"
-    volumes:
-      - keycloak_import:/opt/keycloak/data/import:ro
-    depends_on:
-      keycloak-realm:
-        condition: service_completed_successfully
+      FAMILYOS_KC_IMPORT_REV: "6"
     networks:
       - internal
       - proxy
@@ -108,13 +83,8 @@ services:
       Keycloak__Authority: "https://auth.${DOMAIN}/realms/familyos"
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/familyos/.well-known/openid-configuration"
       Keycloak__Audience: familyos-mobile
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: ${RABBITMQ_USER:-familyos}
-      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-}
       Seed__Enabled: ${SEED_ENABLED:-true}
       Auth__UseDevBypass: ${AUTH_USE_DEV_BYPASS:-false}
-      PostHog__ApiKey: ${POSTHOG_API_KEY:-}
-      PostHog__Host: ${POSTHOG_HOST:-https://us.i.posthog.com}
     depends_on:
       postgres:
         condition: service_healthy
@@ -138,54 +108,9 @@ services:
       - traefik.http.services.familyos-api.loadbalancer.server.port=5080
       - traefik.http.routers.familyos-api.middlewares=sec-headers@file
 
-  prometheus:
-    profiles: ["observability"]
-    image: prom/prometheus:v2.54.1
-    restart: unless-stopped
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=15d
-    volumes:
-      - ../../deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    networks:
-      - internal
-    depends_on:
-      - api
-
-  grafana:
-    profiles: ["observability"]
-    image: grafana/grafana:11.2.0
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ../../deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../../deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks:
-      - internal
-      - proxy
-    depends_on:
-      - prometheus
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=proxy
-      - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)
-      - traefik.http.routers.grafana.entrypoints=websecure
-      - traefik.http.routers.grafana.tls.certresolver=le
-      - traefik.http.services.grafana.loadbalancer.server.port=3000
-      - traefik.http.routers.grafana.middlewares=sec-headers@file
-
 volumes:
   postgres_data:
   rabbitmq_data:
-  prometheus_data:
-  grafana_data:
-  keycloak_import:
 
 networks:
   proxy:

@@ -44,3 +44,17 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/familyos-keycloak:latest
             ghcr.io/${{ github.repository_owner }}/familyos-keycloak:${{ github.sha }}
+
+      - name: Make package public (Portainer can pull without login)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/user/packages/container/familyos-keycloak/visibility" \
+            -f visibility=public || \
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/orgs/${{ github.repository_owner }}/packages/container/familyos-keycloak/visibility" \
+            -f visibility=public || true
