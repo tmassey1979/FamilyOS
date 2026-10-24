@@ -6,8 +6,7 @@
 #   PORTAINER_STACK_ID     2
 #   PORTAINER_ENDPOINT_ID  2
 #
-# Webhook setup (once): Portainer → Stacks → familyos → Editor →
-#   GitOps / Automatic updates → Enable webhook → copy URL → secret above.
+# GHCR: make familyos-api + familyos-keycloak packages Public so the host can pull.
 
 name: Deploy stack (Portainer)
 
@@ -73,7 +72,7 @@ jobs:
             fi
             if [ -n "$STACK_ID" ]; then
               if [ ! -f /tmp/stack_env.json ]; then echo '[]' > /tmp/stack_env.json; fi
-              python3 -c "import json;from pathlib import Path;env=json.loads(Path('/tmp/stack_env.json').read_text());Path('/tmp/redeploy_body.json').write_text(json.dumps({'PullImage':True,'RepositoryAuthentication':False,'Env':env}))"
+              python3 -c "import json;from pathlib import Path;env=json.loads(Path('/tmp/stack_env.json').read_text());Path('/tmp/redeploy_body.json').write_text(json.dumps({'PullImage':False,'RepositoryAuthentication':False,'Env':env}))"
               echo "git/redeploy stack=$STACK_ID endpoint=$EP"
               code=$(curl -sS -o /tmp/pa.out -w "%{http_code}" -X PUT "${BASE}/api/stacks/${STACK_ID}/git/redeploy?endpointId=${EP}" -H "X-API-Key: ${PORTAINER_API_KEY}" -H "Content-Type: application/json" --data-binary @/tmp/redeploy_body.json --max-time 300 || echo "000")
               echo "HTTP $code"; head -c 2000 /tmp/pa.out 2>/dev/null || true; echo
