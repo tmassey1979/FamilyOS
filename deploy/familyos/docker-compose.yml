@@ -3,8 +3,8 @@
 #   docker network create proxy
 #   cp deploy/familyos/.env.example deploy/familyos/.env
 #
-# API image: ghcr.io/tmassey1979/familyos-api:latest (publish-api-image.yml)
-# Keycloak realm: deploy/familyos/keycloak/realm-export.json (must import on boot)
+# API image: ghcr.io/tmassey1979/familyos-api:latest
+# Keycloak image: ghcr.io/tmassey1979/familyos-keycloak:latest (realm baked in)
 
 name: familyos
 
@@ -45,9 +45,8 @@ services:
       retries: 12
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: ghcr.io/tmassey1979/familyos-keycloak:latest
     restart: unless-stopped
-    # import realm JSON from ./keycloak (path relative to this compose file — Portainer-safe)
     command: ["start-dev", "--import-realm", "--hostname-strict=false"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
@@ -61,11 +60,8 @@ services:
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx256m"
       JAVA_OPTS: "-Xms64m -Xmx256m"
-      # bump to force container recreate when realm import is fixed
-      FAMILYOS_KC_IMPORT_REV: "2"
-    volumes:
-      # Co-located with compose so Portainer Git stack always mounts the file
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      FAMILYOS_KC_IMPORT_REV: "3"
+    # Realm JSON is baked into the image (see docker/keycloak/Dockerfile)
     networks:
       - internal
       - proxy
