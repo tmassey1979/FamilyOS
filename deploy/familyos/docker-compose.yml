@@ -1,5 +1,5 @@
 # Family OS production stack
-# Keycloak: quay.io official — working. Import familyos realm from Admin UI (see docs/KEYCLOAK.md).
+# Keycloak: no Traefik sec-headers (KC sets its own; frameDeny breaks admin console SPA)
 
 name: familyos
 
@@ -52,7 +52,7 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_APPEND: "-Xms64m -Xmx384m"
-      FAMILYOS_KC_IMPORT_REV: "11"
+      FAMILYOS_KC_IMPORT_REV: "12"
     networks:
       - internal
       - proxy
@@ -69,7 +69,7 @@ services:
       - traefik.http.routers.keycloak.entrypoints=websecure
       - traefik.http.routers.keycloak.tls.certresolver=le
       - traefik.http.services.keycloak.loadbalancer.server.port=8080
-      - traefik.http.routers.keycloak.middlewares=sec-headers@file
+      # Do NOT attach sec-headers@file — X-Frame-Options DENY + stacked CSP break admin console after login
 
   api:
     image: ghcr.io/tmassey1979/familyos-api:latest
