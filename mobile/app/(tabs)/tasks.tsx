@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
-import { familyApi, tasksApi, type TaskDto } from '../../src/api/client';
+import { familyApi, meApi, tasksApi, type TaskDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 
 type Member = { id: string; displayName: string; role: string; isActive: boolean };
@@ -31,7 +31,7 @@ function dueLabel(value?: string) {
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);\n  const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
