@@ -49,12 +49,14 @@ export default function TasksScreen() {
     setLoading(true);
     setError(null);
     try {
-      const [list, familyMembers] = await Promise.all([
-        tasksApi.mine(),
+      const [list, familyMembers, me] = await Promise.all([
+        tasksApi.family(),
         familyApi.members(),
+        meApi.get(),
       ]);
       setTasks(list);
       setMembers(familyMembers);
+      setCurrentMemberId(me.memberId ?? null);
     } catch (e: unknown) {
       setError((e as { error?: string })?.error ?? 'Could not load tasks');
     } finally {
@@ -129,6 +131,7 @@ export default function TasksScreen() {
   };
 
   const actionsFor = (task: TaskDto) => {
+    if (!currentMemberId || task.assignedToMemberId !== currentMemberId) return [];
     const status = task.status;
     const actions: Array<{ label: string; run: () => Promise<unknown>; primary?: boolean }> = [];
 
