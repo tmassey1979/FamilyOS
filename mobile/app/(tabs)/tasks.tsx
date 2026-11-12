@@ -31,7 +31,8 @@ function dueLabel(value?: string) {
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);\n  const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
