@@ -221,7 +221,8 @@ export default function TasksScreen() {
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">\n            {error ? <Text style={styles.error}>{error}</Text> : null}
+          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+            {error ? <Text style={styles.error}>{error}</Text> : null}
             <Text style={styles.label}>Task title *</Text>
             <TextInput
               value={title}
