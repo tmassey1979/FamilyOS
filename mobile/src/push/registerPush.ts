@@ -10,6 +10,8 @@ const EXPO_PUSH_TOKEN_KEY = 'familyos.device.expoPushToken';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),

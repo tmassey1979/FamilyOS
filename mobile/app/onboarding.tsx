@@ -69,7 +69,7 @@ export default function OnboardingScreen() {
   }, [params.code]);
 
   useEffect(() => {
-    const applyUrl = (url: string | null) => {
+    const applyUrl = (url: string | null | undefined) => {
       if (!url) return;
       const c = extractInviteCode(url);
       if (c) {
