@@ -42,9 +42,9 @@ appsettings.*.local.json
 
 ## Node / Expo
 node_modules/
-.expo/
-dist/
-web-build/
+**/.expo/
+**/dist/
+**/web-build/
 *.jks
 *.p8
 *.p12
