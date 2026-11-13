@@ -23,13 +23,14 @@ git add app.json eas.json && git commit -m "chore(mobile): link EAS project"
 |---------|-----|
 | `development` | Dev client / simulator |
 | `preview` | Internal APK / ad-hoc |
-| `production` | Store AAB + iOS release (auto-increment) |
+| `production` | Store AAB |
+| `production-apk` | Production-configured, directly installable Android APK |
 
 ## CI / Release
 
 - **CI** (`ci.yml`): `npm ci` + `tsc --noEmit` on every push/PR.
-- **Release** (`release.yml`): after API publish + mobile typecheck, runs  
-  `eas build --profile production --platform all` when `EXPO_TOKEN` and `projectId` are present.
+- **Release** (`release.yml`): API release pipeline and optional store builds.
+- **Android APK Release** (`android-apk-release.yml`): APK-only EAS build from `main`; publishes the verified APK as a GitHub Release asset.
 
 Manual:
 
@@ -59,3 +60,10 @@ npx --yes eas-cli@27.4.1 observe:events
 ```
 
 Custom events intentionally contain aggregate counts and coarse workflow outcomes only. Do not add family/member names, emails, chat contents, invite codes, auth tokens, API request bodies, or other personal data to Observe event names, attributes, or error messages.
+## Android APK release from main
+
+The dedicated **Android APK Release** GitHub Actions workflow runs automatically when mobile code is merged or pushed to `main`, and can also be started manually from Actions while selecting the `main` branch.
+
+It runs mobile typecheck, Expo dependency/config checks, Expo Doctor, and an Android JS export before building with the EAS `production-apk` profile. It then verifies the APK, uploads it as a 30-day Actions artifact, and publishes it as an asset on a GitHub Release. Each workflow run receives a monotonically increasing Android `versionCode`. This workflow does not build iOS, create a Play Store AAB, submit to Google Play, or redeploy the API stack.
+
+Required repository secret: `EXPO_TOKEN`. The APK release page is under GitHub Releases with tags like `android-v0.1.1-build123`.

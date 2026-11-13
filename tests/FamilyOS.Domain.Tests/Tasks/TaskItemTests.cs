@@ -106,10 +106,13 @@ public class TaskItemTests
     }
 
     [Fact]
-    public void Start_allowed_from_Assigned_without_explicit_Accept()
+    public void Start_requires_explicit_acceptance()
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
+        var act = () => task.Start(AssigneeId);
+        act.Should().Throw<InvalidOperationException>();
+        task.Accept(AssigneeId);
         task.Start(AssigneeId);
         task.Status.Should().Be(FamilyTaskStatus.InProgress);
     }
