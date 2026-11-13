@@ -35,6 +35,20 @@
           "data": [
             {
               "scheme": "familyos",
+              "host": "auth"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "familyos",
               "host": "invite",
               "pathPrefix": "/"
             },
