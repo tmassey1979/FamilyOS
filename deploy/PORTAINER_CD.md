@@ -10,6 +10,28 @@ Backend runs on EC2 behind Traefik; Portainer manages the **familyos** Git stack
 | Keycloak | https://auth.18.226.226.118.sslip.io |
 | Portainer | https://portainer.18.226.226.118.sslip.io |
 
+## Free HTTPS certificates (Let's Encrypt)
+
+- Traefik obtains and renews trusted TLS certificates automatically using the free Let's Encrypt ACME HTTP-01 challenge.
+- `deploy/traefik/docker-compose.yml` passes the ACME email, persistent certificate store (`traefik_letsencrypt`), and HTTP challenge entrypoint to Traefik.
+- Set `ACME_EMAIL` in `deploy/traefik/.env` before starting or updating the edge stack. Use an email address you can access for expiry/security notices.
+- Keep inbound TCP ports **80 and 443** open in the AWS security group and host firewall. Port 80 is required for HTTP-01 validation; Traefik redirects ordinary HTTP traffic to HTTPS after the challenge is handled.
+- The existing `*.18.226.226.118.sslip.io` service hostnames can be used without buying a domain, provided public DNS resolves to this EC2 host and Let's Encrypt can reach port 80.
+- Never delete the `traefik_letsencrypt` volume; it stores ACME account and certificate state.
+
+Create the local environment file:
+
+```bash
+cp deploy/traefik/.env.example deploy/traefik/.env
+# Edit ACME_EMAIL, DOMAIN, and any other required values
+```
+
+Then redeploy the edge stack from the directory containing the compose file so its relative mounts resolve correctly:
+
+```bash
+docker compose --env-file deploy/traefik/.env -f deploy/traefik/docker-compose.yml up -d
+```
+
 ## Stack identity
 
 | Field | Value |
