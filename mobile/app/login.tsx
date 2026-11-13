@@ -66,7 +66,6 @@ function LoginScreen() {
     if (response.type === 'error') {
       const message =
         response.params?.error_description ??
-        response.error?.message ??
         response.params?.error ??
         'The identity provider returned an authorization error.';
       setError(`Sign-in did not complete: ${message}`);
