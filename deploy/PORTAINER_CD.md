@@ -60,7 +60,7 @@ docker compose --env-file deploy/traefik/.env -f deploy/traefik/docker-compose.y
 4. Copy the webhook URL
 5. GitHub → Settings → Secrets → Actions → `PORTAINER_WEBHOOK_URL` = that URL
 
-CI on every push to `main` POSTs the webhook after a green API build.
+The coordinated `FamilyOS Coordinated Release` workflow calls the webhook only after the API tests, both GHCR image builds, and the Android APK build/verification have succeeded. It publishes the GitHub APK release only after the API and Keycloak health checks pass.
 
 ## Keycloak production database and realm
 
@@ -73,10 +73,16 @@ CI on every push to `main` POSTs the webhook after a green API build.
 
 ## How CI deploys
 
-1. Changes to `docker/keycloak/**` or `deploy/familyos/keycloak/**` build and publish the Keycloak image to GHCR.
-2. After a successful **Publish Keycloak image** run, `Deploy stack (Portainer)` automatically redeploys the stack and pulls the new image.
-3. Portainer deployment tries the **webhook** first, then falls back to **API git/redeploy** with stored stack environment values and `PullImage: true`.
-4. The workflow health-checks `https://api.18.226.226.118.sslip.io/health`.
+Every push to `main` starts one **FamilyOS Coordinated Release**:
+
+1. Restore, build, and test the .NET solution.
+2. Build and publish the API and Keycloak images to GHCR, tagged with the source commit and `latest`.
+3. Typecheck and validate the Expo Android app, build the production APK with EAS, download it, and verify the APK archive.
+4. Only after both image builds and the APK build succeed, redeploy the Portainer stack.
+5. Require HTTP 200 from both the API health endpoint and Keycloak realm discovery endpoint.
+6. Only after both health checks pass, publish the APK as a GitHub Release.
+
+A failed build or health check prevents the coordinated GitHub Release from being published. The older standalone API/Keycloak image workflows are manual-only; they do not trigger partial automatic deployments.
 
 ## Manual redeploy
 
@@ -84,5 +90,5 @@ Actions → **Deploy stack (Portainer)** → Run workflow
 
 ## Notes
 
-- `familyos-api` is **built on the host**, not pulled from a registry — do not force `PullImage: true` unless you publish the image.
+- Both `familyos-api` and `familyos-keycloak` are published to GHCR by the coordinated workflow and pulled by Portainer during redeployment.
 - Env vars (Postgres, RabbitMQ, Keycloak) live on the Portainer stack; API redeploy must include them.
