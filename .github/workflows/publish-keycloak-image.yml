@@ -2,12 +2,6 @@ name: Publish Keycloak image
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'docker/keycloak/**'
-      - 'deploy/familyos/keycloak/**'
-      - '.github/workflows/publish-keycloak-image.yml'
 
 permissions:
   contents: read
