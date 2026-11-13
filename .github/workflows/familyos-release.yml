@@ -16,7 +16,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-api:
+    name: Build and test .NET API
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Expand EF migrations
+        run: python3 scripts/expand-migrations.py
+      - name: Restore, build, and test
+        run: |
+          dotnet restore FamilyOS.sln
+          dotnet build FamilyOS.sln -c Release --no-restore
+          dotnet test FamilyOS.sln -c Release --no-build --verbosity minimal
+
   build-server-images:
+    needs: [validate-api]
     name: Build API + Keycloak images
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -130,11 +151,26 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
           packager: npm
 
-      - name: Read app version
+      - name: Prepare unique Android build number
         id: version
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          VERSION=$(node -p "require('./app.json').expo.version")
-          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const p = 'app.json';
+          const config = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const version = config.expo.version;
+          const buildNumber = 100000 + Number(process.env.GITHUB_RUN_NUMBER);
+          config.expo.android.versionCode = Math.max(
+            Number(config.expo.android.versionCode || 1),
+            buildNumber,
+          );
+          fs.writeFileSync(p, JSON.stringify(config, null, 2) + '\\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `value=${version}\\nbuild_number=${config.expo.android.versionCode}\\n`);
+          console.log(`Building FamilyOS ${version} (Android versionCode ${config.expo.android.versionCode})`);
+          NODE
 
       - name: Build production APK with EAS
         id: eas
@@ -170,8 +206,8 @@ jobs:
               print('::error::EAS did not return an APK URL')
               sys.exit(1)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write(f'build_id={build.get("id", "")}\\n')
-              out.write(f'artifact_url={url}\\n')
+              out.write(f'build_id={build.get("id", "")}\n')
+              out.write(f'artifact_url={url}\n')
           PY
 
       - name: Download and verify APK
