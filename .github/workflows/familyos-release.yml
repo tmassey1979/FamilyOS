@@ -3,6 +3,8 @@ name: FamilyOS Coordinated Release
 # One release transaction: validate/build both server images and the Android APK,
 # deploy the server, verify API + Keycloak, then publish the APK release.
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -18,7 +20,6 @@ concurrency:
 jobs:
   validate-api:
     name: Build and test .NET API
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +36,29 @@ jobs:
           dotnet restore FamilyOS.sln
           dotnet build FamilyOS.sln -c Release --no-restore
           dotnet test FamilyOS.sln -c Release --no-build --verbosity minimal
+
+  validate-mobile-pr:
+    name: Validate mobile app on pull requests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck and validate Expo
+        run: |
+          npm run typecheck
+          npx expo install --check
+          npx expo-doctor
+          npx expo export --platform android
 
   build-server-images:
     needs: [validate-api]
