@@ -18,9 +18,6 @@ on:
         required: false
         default: manual
   workflow_call:
-  workflow_run:
-    workflows: ["Publish Keycloak image"]
-    types: [completed]
 
 permissions:
   contents: read
