@@ -21,6 +21,10 @@ services:
     environment:
       - TZ=${TZ:-UTC}
       - DOCKER_API_VERSION=1.44
+    command:
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in deploy/traefik/.env}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
