@@ -3,15 +3,6 @@ name: Publish API image
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'Dockerfile'
-      - 'Directory.Build.props'
-      - 'scripts/expand-migrations.py'
-      - 'scripts/migrations/**'
-      - '.github/workflows/publish-api-image.yml'
 
 permissions:
   contents: read
