@@ -1,14 +1,6 @@
 name: Android APK Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "mobile/**"
-      - "scripts/expand-assets.py"
-      - "scripts/seed-brand-assets.py"
-      - "scripts/expand-eas-brand-bundle.py"
-      - ".github/workflows/android-apk-release.yml"
   workflow_dispatch:
 
 permissions:
