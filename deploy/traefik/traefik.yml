@@ -27,13 +27,6 @@ providers:
     directory: /etc/traefik/dynamic
     watch: true
 
-certificatesResolvers:
-  le:
-    acme:
-      email: admin@example.com  # CHANGE ME before first start
-      storage: /letsencrypt/acme.json
-      httpChallenge:
-        entryPoint: web
 
 log:
   level: INFO
