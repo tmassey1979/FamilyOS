@@ -167,8 +167,8 @@ jobs:
             Number(config.expo.android.versionCode || 1),
             buildNumber,
           );
-          fs.writeFileSync(p, JSON.stringify(config, null, 2) + '\\n');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `value=${version}\\nbuild_number=${config.expo.android.versionCode}\\n`);
+          fs.writeFileSync(p, JSON.stringify(config, null, 2) + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `value=${version}\nbuild_number=${config.expo.android.versionCode}\n`);
           console.log(`Building FamilyOS ${version} (Android versionCode ${config.expo.android.versionCode})`);
           NODE
 
