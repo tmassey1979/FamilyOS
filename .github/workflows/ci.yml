@@ -39,16 +39,30 @@ jobs:
 
       - name: Compute version
         id: ver
+        shell: bash
         run: |
+          set -euo pipefail
           if TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
-            VERSION=${TAG#v}
+            RAW_VERSION="${TAG#v}"
           else
-            VERSION=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props || echo "0.1.0")
+            RAW_VERSION=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props || echo "0.1.0")
           fi
+
+          # NuGet Version must be SemVer. Historical Android release tags such as
+          # android-v0.1.1-build1 are normalized to 0.1.1-build.1.
+          if [[ "$RAW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            VERSION="$RAW_VERSION"
+          elif [[ "$RAW_VERSION" =~ ([0-9]+\.[0-9]+\.[0-9]+)[-.]?build[-.]?([0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}-build.${BASH_REMATCH[2]}"
+          else
+            echo "::error::Cannot normalize '$RAW_VERSION' to a valid NuGet semantic version."
+            exit 1
+          fi
+
           SHORT=$(git rev-parse --short HEAD)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "info=$VERSION+$SHORT" >> "$GITHUB_OUTPUT"
-          echo "Using version $VERSION (info $VERSION+$SHORT)"
+          echo "info=$RAW_VERSION+$SHORT" >> "$GITHUB_OUTPUT"
+          echo "Using NuGet version $VERSION (informational version $RAW_VERSION+$SHORT)"
 
       - name: Restore solution
         run: dotnet restore FamilyOS.sln
