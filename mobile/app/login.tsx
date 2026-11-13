@@ -61,17 +61,48 @@ function LoginScreen() {
   );
 
   useEffect(() => {
-    if (response?.type !== 'success') return;
-    const code = response.params.code;
-    if (!code || !request?.codeVerifier) {
-      setError('Missing authorization code');
+    if (!response) return;
+
+    if (response.type === 'error') {
+      const message =
+        response.params?.error_description ??
+        response.error?.message ??
+        response.params?.error ??
+        'The identity provider returned an authorization error.';
+      setError(`Sign-in did not complete: ${message}`);
+      setBusy(false);
       return;
     }
+
+    if (response.type === 'dismiss' || response.type === 'cancel') {
+      setError('Sign-in was closed before Family OS received the authorization redirect. Try again.');
+      setBusy(false);
+      return;
+    }
+
+    if (response.type !== 'success') return;
+
+    const code = response.params.code;
+    if (!code || !request?.codeVerifier) {
+      const providerError =
+        response.params.error_description ??
+        response.params.error ??
+        'No authorization code was returned.';
+      setError(`Sign-in redirect received, but token exchange cannot start: ${providerError}`);
+      setBusy(false);
+      return;
+    }
+
     setBusy(true);
-    setError(null);
+    setError('Authorization received. Exchanging code for a token…');
     void exchangeCode(code, request.codeVerifier, cfg.redirectUri)
-      .then((tokens) => finish(tokens.access_token, tokens.refresh_token))
-      .catch((e: Error) => setError(e.message))
+      .then((tokens) => {
+        if (!tokens.access_token) {
+          throw new Error('Keycloak token response did not contain an access token.');
+        }
+        return finish(tokens.access_token, tokens.refresh_token);
+      })
+      .catch((e: Error) => setError(`Token exchange failed: ${e.message}`))
       .finally(() => setBusy(false));
   }, [response, request, cfg.redirectUri, finish]);
 
@@ -130,6 +161,9 @@ function LoginScreen() {
       <Card style={styles.card}>
         <Text style={typography.caption}>
           Authority: {getKeycloakAuthority().replace(/^https?:\/\//, '')}
+        </Text>
+        <Text style={typography.caption}>
+          Redirect URI: {cfg.redirectUri}
         </Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {busy ? (
