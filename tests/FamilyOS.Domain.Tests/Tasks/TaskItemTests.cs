@@ -162,6 +162,7 @@ public class TaskItemTests
     {
         var task = NewTask();
         task.Assign(AssigneeId, CreatorId);
+        task.Accept(AssigneeId);
         var newDue = DateTime.UtcNow.AddDays(3);
         task.Defer(AssigneeId, newDue, "Tomorrow");
         task.Status.Should().Be(FamilyTaskStatus.Deferred);
