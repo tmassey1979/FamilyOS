@@ -40,7 +40,7 @@ services:
       - -ec
       - |
         if [ "$(psql -Atqc "SELECT 1 FROM pg_database WHERE datname = 'keycloak'")" != "1" ]; then
-          createdb --owner="${PGUSER}" keycloak
+          createdb --owner="$${PGUSER}" keycloak
         fi
     depends_on:
       postgres:
