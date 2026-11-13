@@ -18,6 +18,9 @@ on:
         required: false
         default: manual
   workflow_call:
+  workflow_run:
+    workflows: ["Publish Keycloak image"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -34,8 +37,9 @@ jobs:
           EVENT="${{ github.event_name }}"
           echo "ref=$REF event=$EVENT"
           if [ "$EVENT" = "pull_request" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$EVENT" = "workflow_run" ] && [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$EVENT" = "push" ] && [ "$REF" != "refs/heads/main" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if [ "$REF" != "refs/heads/main" ] && [ "$EVENT" != "workflow_dispatch" ] && [ "$EVENT" != "workflow_call" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$REF" != "refs/heads/main" ] && [ "$EVENT" != "workflow_dispatch" ] && [ "$EVENT" != "workflow_call" ] && [ "$EVENT" != "workflow_run" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Redeploy

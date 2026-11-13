@@ -2,7 +2,7 @@
   "realm": "familyos",
   "enabled": true,
   "displayName": "Family OS",
-  "sslRequired": "none",
+  "sslRequired": "external",
   "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
@@ -37,65 +37,44 @@
         "https://*.expo.dev/*",
         "https://*.exp.direct/*"
       ],
-      "webOrigins": ["*"],
+      "webOrigins": [
+        "*"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "+"
       },
       "fullScopeAllowed": true,
-      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
-      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
     },
     {
       "clientId": "familyos-api",
       "enabled": true,
       "publicClient": false,
-      "secret": "familyos-api-secret-change-in-prod",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
       "bearerOnly": true
     }
   ],
-  "users": [
-    {
-      "username": "terry.owner",
-      "email": "terry@familyos.local",
-      "firstName": "Terry",
-      "lastName": "Owner",
-      "enabled": true,
-      "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
-    },
-    {
-      "username": "michelle.adult",
-      "email": "michelle@familyos.local",
-      "firstName": "Michelle",
-      "lastName": "Adult",
-      "enabled": true,
-      "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
-    },
-    {
-      "username": "mia.teen",
-      "email": "mia@familyos.local",
-      "firstName": "Mia",
-      "lastName": "Teen",
-      "enabled": true,
-      "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
-    },
-    {
-      "username": "eli.child",
-      "email": "eli@familyos.local",
-      "firstName": "Eli",
-      "lastName": "Child",
-      "enabled": true,
-      "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "password", "temporary": false }]
-    }
-  ],
   "roles": {
-    "realm": [{ "name": "user", "description": "Standard Family OS user" }]
+    "realm": [
+      {
+        "name": "user",
+        "description": "Standard Family OS user"
+      }
+    ]
   }
 }

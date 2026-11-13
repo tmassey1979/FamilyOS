@@ -1,5 +1,6 @@
 # Family OS production stack
-# Keycloak: no Traefik sec-headers (KC sets its own; frameDeny breaks admin console SPA)
+# Keycloak uses the shared PostgreSQL server with its own persistent database.
+# Realm import runs only when the "familyos" realm does not already exist.
 
 name: familyos
 
@@ -22,6 +23,31 @@ services:
       timeout: 5s
       retries: 12
 
+  # Idempotently provisions a separate Keycloak database on the same server.
+  # This also works with an already-initialized postgres_data volume; initdb
+  # scripts alone would not run against an existing volume.
+  keycloak-db-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-familyos}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "$(psql -Atqc "SELECT 1 FROM pg_database WHERE datname = 'keycloak'")" != "1" ]; then
+          createdb --owner="$PGUSER" keycloak
+        fi
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
   rabbitmq:
     profiles: ["messaging"]
     image: rabbitmq:3.13-management-alpine
@@ -35,12 +61,17 @@ services:
       - internal
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: ghcr.io/tmassey1979/familyos-keycloak:latest
     restart: unless-stopped
-    command: ["start-dev", "--hostname-strict=false"]
+    command: ["start", "--import-realm", "--hostname-strict=false"]
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-familyos}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      KC_DB_SCHEMA: public
       KC_HTTP_PORT: 8080
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
@@ -52,7 +83,9 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: 9000
       JAVA_OPTS_APPEND: "-Xms64m -Xmx384m"
-      FAMILYOS_KC_IMPORT_REV: "12"
+    depends_on:
+      keycloak-db-init:
+        condition: service_completed_successfully
     networks:
       - internal
       - proxy
