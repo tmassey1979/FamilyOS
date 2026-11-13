@@ -1,0 +1,245 @@
+name: FamilyOS Coordinated Release
+
+# One release transaction: validate/build both server images and the Android APK,
+# deploy the server, verify API + Keycloak, then publish the APK release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: familyos-release-main
+  cancel-in-progress: false
+
+jobs:
+  build-server-images:
+    name: Build API + Keycloak images
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('mobile/app.json'))['expo']['version'])")
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/familyos-api:latest
+            ghcr.io/${{ github.repository_owner }}/familyos-api:${{ github.sha }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.value }}
+
+      - name: Prepare Keycloak build context
+        run: |
+          set -euo pipefail
+          mkdir -p docker/keycloak
+          cp deploy/familyos/keycloak/realm-export.json docker/keycloak/realm-export.json
+          test -s docker/keycloak/realm-export.json
+          test -s docker/keycloak/Dockerfile
+
+      - name: Build and publish Keycloak image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/keycloak
+          file: docker/keycloak/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/familyos-keycloak:latest
+            ghcr.io/${{ github.repository_owner }}/familyos-keycloak:${{ github.sha }}
+
+      - name: Image summary
+        run: |
+          {
+            echo "## FamilyOS server images"
+            echo "- Version: ${{ steps.version.outputs.value }}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- API: ghcr.io/${{ github.repository_owner }}/familyos-api:${GITHUB_SHA}"
+            echo "- Keycloak: ghcr.io/${{ github.repository_owner }}/familyos-keycloak:${GITHUB_SHA}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-android:
+    name: Build and verify Android APK
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      eas_build_id: ${{ steps.eas.outputs.build_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Expand brand assets
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [[ -f scripts/expand-eas-brand-bundle.py ]]; then
+            python3 scripts/expand-eas-brand-bundle.py || true
+          fi
+          if [[ -f scripts/expand-assets.py ]]; then
+            python3 scripts/expand-assets.py || true
+          fi
+          if [[ -f scripts/assemble-seed-brand.py ]]; then
+            python3 scripts/assemble-seed-brand.py --run || python3 scripts/assemble-seed-brand.py
+          elif [[ -f scripts/seed-brand-assets.py ]]; then
+            python3 scripts/seed-brand-assets.py
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and validate Expo
+        run: |
+          npm run typecheck
+          npx expo install --check
+          npx expo-doctor
+          npx expo export --platform android
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build production APK with EAS
+        id: eas
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_TOKEN:-}" ]]; then
+            echo "::error::EXPO_TOKEN repository secret is required."
+            exit 1
+          fi
+          eas build --profile production-apk --platform android --non-interactive --wait --json > /tmp/eas-build.json
+          python3 - <<'PY'
+          import json, os, sys
+          raw = open('/tmp/eas-build.json', encoding='utf-8').read().strip()
+          try:
+              payload = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              print(f'::error::EAS returned invalid JSON: {exc}')
+              print(raw[-4000:])
+              sys.exit(1)
+          builds = payload if isinstance(payload, list) else [payload]
+          if not builds:
+              print('::error::EAS returned no build records')
+              sys.exit(1)
+          build = builds[-1]
+          status = str(build.get('status') or '').upper()
+          if status not in ('FINISHED', 'COMPLETE', 'COMPLETED'):
+              print(f'::error::EAS build failed or incomplete: {status or "unknown"}')
+              sys.exit(1)
+          url = (build.get('artifacts') or {}).get('applicationArchiveUrl')
+          if not url:
+              print('::error::EAS did not return an APK URL')
+              sys.exit(1)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'build_id={build.get("id", "")}\\n')
+              out.write(f'artifact_url={url}\\n')
+          PY
+
+      - name: Download and verify APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          APK_URL: ${{ steps.eas.outputs.artifact_url }}
+        run: |
+          set -euo pipefail
+          APK="FamilyOS-android-v${VERSION}-build${BUILD_NUMBER}.apk"
+          curl --fail --location --retry 3 --header "Authorization: Bearer ${EXPO_TOKEN}" "${APK_URL}" --output "${APK}" ||
+            curl --fail --location --retry 3 "${APK_URL}" --output "${APK}"
+          test -s "${APK}"
+          unzip -t "${APK}" >/dev/null
+          unzip -l "${APK}" | grep -q 'AndroidManifest.xml'
+          echo "Verified ${APK} ($(du -h "${APK}" | cut -f1))"
+
+      - name: Upload verified APK for final release
+        uses: actions/upload-artifact@v4
+        with:
+          name: familyos-android-apk-${{ github.run_id }}
+          path: mobile/FamilyOS-android-v${{ steps.version.outputs.value }}-build${{ github.run_number }}.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-server:
+    name: Deploy and verify AWS server
+    needs: [build-server-images, build-android]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy-stack.yml
+    secrets: inherit
+
+  publish-coordinated-release:
+    name: Publish release after server deployment
+    needs: [build-server-images, build-android, deploy-server]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: familyos-android-apk-${{ github.run_id }}
+          path: release-assets
+
+      - name: Publish coordinated GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build-android.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          APK=$(find release-assets -maxdepth 1 -type f -name '*.apk' -print -quit)
+          test -n "$APK"
+          TAG="familyos-android-v${VERSION}-build${BUILD_NUMBER}"
+          gh release create "$TAG" "$APK" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "FamilyOS v${VERSION} (build ${BUILD_NUMBER})" \
+            --notes "Coordinated FamilyOS release. The Android APK was built and verified, and the matching API and Keycloak images were deployed to AWS with successful health checks. Source commit: ${GITHUB_SHA}." \
+            --latest
+
+      - name: Release summary
+        run: |
+          {
+            echo "## FamilyOS coordinated release"
+            echo "- App version: ${{ needs.build-android.outputs.version }}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- EAS build: https://expo.dev/accounts/tmassey1979/projects/familyos/builds/${{ needs.build-android.outputs.eas_build_id }}"
+            echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/familyos-android-v${{ needs.build-android.outputs.version }}-build${{ github.run_number }}"
+            echo "- Server deployment and health checks completed before publishing this release."
+          } >> "$GITHUB_STEP_SUMMARY"
