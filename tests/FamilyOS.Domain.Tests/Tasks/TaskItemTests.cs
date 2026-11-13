@@ -93,6 +93,19 @@ public class TaskItemTests
     }
 
     [Fact]
+    public void Complete_requires_explicit_acceptance()
+    {
+        var task = NewTask();
+        task.Assign(AssigneeId, CreatorId);
+        var act = () => task.Complete(AssigneeId);
+        act.Should().Throw<InvalidOperationException>();
+
+        task.Accept(AssigneeId);
+        task.Complete(AssigneeId);
+        task.Status.Should().Be(FamilyTaskStatus.Completed);
+    }
+
+    [Fact]
     public void Pause_and_Resume()
     {
         var task = NewTask();

@@ -128,6 +128,8 @@ public class TaskItem : Entity
             throw new UnauthorizedAccessException("Only the assignee can complete this task.");
         if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
             throw new InvalidOperationException($"Task is already {Status}.");
+        if (Status is not (FamilyTaskStatus.Accepted or FamilyTaskStatus.InProgress or FamilyTaskStatus.Paused or FamilyTaskStatus.Deferred))
+            throw new InvalidOperationException($"Cannot complete task in status {Status}; the assignee must accept it first.");
 
         CloseOpenSegment(memberId);
         Status = FamilyTaskStatus.Completed;
