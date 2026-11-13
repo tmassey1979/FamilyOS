@@ -21,6 +21,7 @@ import {
   getKeycloakAuthority,
 } from '../src/auth/keycloak';
 import { meApi, setAccessToken, setDevUser } from '../src/api/client';
+import { withObserveScreen } from '../src/analytics/withObserveScreen';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -29,7 +30,7 @@ const USE_DEV =
   __DEV__ &&
   process.env.EXPO_PUBLIC_ALLOW_DEV_LOGIN !== '0';
 
-export default function LoginScreen() {
+function LoginScreen() {
   const router = useRouter();
   const cfg = useAuthRequestConfig();
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
@@ -187,3 +188,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 });
+
+export default withObserveScreen(LoginScreen);

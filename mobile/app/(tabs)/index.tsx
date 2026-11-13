@@ -12,8 +12,9 @@ import { useRouter } from 'expo-router';
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { pulseApi, type PulseDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
-export default function HomeScreen() {
+function HomeScreen() {
   const router = useRouter();
   const [pulse, setPulse] = useState<PulseDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,3 +151,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' },
   error: { ...typography.caption, color: colors.danger },
 });
+
+export default withObserveScreen(HomeScreen);

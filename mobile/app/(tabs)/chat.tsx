@@ -14,9 +14,10 @@ import { meApi } from '../../src/api/client';
 import { chatApi, type ChatMessageDto } from '../../src/api/chatApi';
 import { isChatHubConnected, startChatHub, stopChatHub } from '../../src/api/chatHub';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
 /** Family chat — SignalR when JWT available; REST poll fallback. */
-export default function ChatScreen() {
+function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [text, setText] = useState('');
   const [memberId, setMemberId] = useState<string | null>(null);
@@ -213,3 +214,5 @@ const styles = StyleSheet.create({
   },
   sendLabel: { color: '#fff', fontWeight: '700' },
 });
+
+export default withObserveScreen(ChatScreen);

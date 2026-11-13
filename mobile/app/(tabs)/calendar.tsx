@@ -5,8 +5,9 @@ import {
 import { Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { calendarApi, type CalendarEventDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
-export default function CalendarScreen() {
+function CalendarScreen() {
   const [events, setEvents] = useState<CalendarEventDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -150,3 +151,5 @@ const styles = StyleSheet.create({
   },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 });
+
+export default withObserveScreen(CalendarScreen);
