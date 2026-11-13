@@ -22,8 +22,6 @@
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
       "protocol": "openid-connect",
-      "rootUrl": "familyos://",
-      "baseUrl": "familyos://auth",
       "redirectUris": [
         "familyos://*",
         "familyos://auth",
