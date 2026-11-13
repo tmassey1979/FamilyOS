@@ -28,7 +28,7 @@ public class FamilyController : ControllerBase
             body.OwnerEmail ?? "owner@familyos.local",
             body.OwnerFirstName,
             body.OwnerLastName), ct);
-        return CreatedAtAction(nameof(Get), dto);
+        return Ok(dto);
     }
 
     [HttpGet]
@@ -52,7 +52,7 @@ public class FamilyController : ControllerBase
             body.ExternalIdentityId,
             body.FirstName,
             body.LastName), ct);
-        return CreatedAtAction(nameof(Members), dto);
+        return Ok(dto);
     }
 
 
