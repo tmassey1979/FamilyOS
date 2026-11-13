@@ -41,6 +41,24 @@ public class TaskItemControlFlowTests
         t.TimeSegments.Should().Contain(s => !s.EndedAtUtc.HasValue);
     }
 
+
+    [Fact]
+    public void Only_assignee_can_pause_or_complete()
+    {
+        var t = AcceptedTask();
+        t.Start(Assignee);
+
+        var pause = () => t.Pause(Creator);
+        pause.Should().Throw<UnauthorizedAccessException>();
+
+        var complete = () => t.Complete(Creator);
+        complete.Should().Throw<UnauthorizedAccessException>();
+
+        t.Pause(Assignee);
+        t.Complete(Assignee);
+        t.Status.Should().Be(FamilyTaskStatus.Completed);
+    }
+
     [Fact]
     public void SetPriority_and_UpdateDetails()
     {
@@ -70,10 +88,15 @@ public class TaskItemControlFlowTests
     }
 
     [Fact]
-    public void Defer_from_Assigned()
+    public void Defer_requires_assignee_and_an_accepted_task()
     {
         var t = AssignedTask();
         var until = DateTime.UtcNow.AddDays(3);
+        var notAccepted = () => t.Defer(Assignee, until, "Busy");
+        notAccepted.Should().Throw<InvalidOperationException>();
+        t.Accept(Assignee);
+        var notAssignee = () => t.Defer(Creator, until, "Busy");
+        notAssignee.Should().Throw<UnauthorizedAccessException>();
         t.Defer(Assignee, until, "Busy");
         t.Status.Should().Be(FamilyTaskStatus.Deferred);
         t.DueDate.Should().Be(until);

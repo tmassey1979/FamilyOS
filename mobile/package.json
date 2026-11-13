@@ -1,6 +1,6 @@
 {
   "name": "familyos-mobile",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -36,6 +36,7 @@
     "expo-symbols": "~58.0.5",
     "expo-system-ui": "~58.0.7",
     "expo-web-browser": "~58.0.8",
+    "lucide-react-native": "^1.72.0",
     "posthog-react-native": "^3.3.0",
     "query-string": "^9.1.1",
     "react": "19.3.0",

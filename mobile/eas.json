@@ -55,7 +55,8 @@
         "EXPO_PUBLIC_API_URL": "https://api.18.226.226.118.sslip.io",
         "EXPO_PUBLIC_KEYCLOAK_AUTHORITY": "https://auth.18.226.226.118.sslip.io/realms/familyos",
         "EXPO_PUBLIC_KEYCLOAK_CLIENT_ID": "familyos-mobile"
-      }
+      },
+      "uploadSourceMaps": true
     }
   },
   "submit": {

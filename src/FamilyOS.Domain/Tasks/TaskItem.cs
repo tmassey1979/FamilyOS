@@ -89,7 +89,7 @@ public class TaskItem : Entity
     {
         if (AssigneeMemberId != memberId)
             throw new UnauthorizedAccessException("Only the assignee can start this task.");
-        if (Status is not (FamilyTaskStatus.Accepted or FamilyTaskStatus.Assigned or FamilyTaskStatus.Deferred))
+        if (Status is not (FamilyTaskStatus.Accepted or FamilyTaskStatus.Deferred))
             throw new InvalidOperationException($"Cannot start task in status {Status}.");
 
         Status = FamilyTaskStatus.InProgress;
@@ -100,6 +100,8 @@ public class TaskItem : Entity
 
     public void Pause(Guid memberId)
     {
+        if (AssigneeMemberId != memberId)
+            throw new UnauthorizedAccessException("Only the assignee can pause this task.");
         if (Status != FamilyTaskStatus.InProgress)
             throw new InvalidOperationException($"Cannot pause task in status {Status}.");
         CloseOpenSegment(memberId);
@@ -122,8 +124,12 @@ public class TaskItem : Entity
 
     public void Complete(Guid memberId)
     {
+        if (AssigneeMemberId != memberId)
+            throw new UnauthorizedAccessException("Only the assignee can complete this task.");
         if (Status is FamilyTaskStatus.Completed or FamilyTaskStatus.Cancelled)
             throw new InvalidOperationException($"Task is already {Status}.");
+        if (Status is not (FamilyTaskStatus.Accepted or FamilyTaskStatus.InProgress or FamilyTaskStatus.Paused or FamilyTaskStatus.Deferred))
+            throw new InvalidOperationException($"Cannot complete task in status {Status}; the assignee must accept it first.");
 
         CloseOpenSegment(memberId);
         Status = FamilyTaskStatus.Completed;
@@ -149,7 +155,9 @@ public class TaskItem : Entity
 
     public void Defer(Guid memberId, DateTime newDueDate, string? note = null)
     {
-        if (Status != FamilyTaskStatus.Assigned && Status != FamilyTaskStatus.Accepted && Status != FamilyTaskStatus.InProgress)
+        if (AssigneeMemberId != memberId)
+            throw new UnauthorizedAccessException("Only the assignee can defer this task.");
+        if (Status != FamilyTaskStatus.Accepted && Status != FamilyTaskStatus.InProgress)
             throw new InvalidOperationException($"Cannot defer task in status {Status}.");
 
         DueDate = newDueDate;

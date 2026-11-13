@@ -13,7 +13,7 @@ Lightweight smoke flows for closed stories. Requires:
 maestro test mobile/e2e/smoke.yaml
 ```
 
-Flows assume tab labels match the app (Home / Tasks / Requests / Meals / Family / Settings).
+The primary bottom tabs are Home / Tasks / Calendar / Family / More. Requests, Meals, Chat, and Settings are available from More.
 Adjust selectors if UI copy changes.
 
 ## CI
