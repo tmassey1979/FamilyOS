@@ -3,6 +3,7 @@
  * Uses NetInfo when available; otherwise infers from fetch failures.
  */
 import NetInfo from '@react-native-community/netinfo';
+import { Observe } from 'expo-observe';
 
 type NetListener = (online: boolean) => void;
 
@@ -13,6 +14,7 @@ let started = false;
 function setOnline(value: boolean) {
   if (online === value) return;
   online = value;
+  Observe.logEvent('network.connectivity.changed', { attributes: { online: value } });
   listeners.forEach((l) => {
     try {
       l(online);

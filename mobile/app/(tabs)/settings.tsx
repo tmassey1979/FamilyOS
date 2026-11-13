@@ -23,8 +23,9 @@ import {
 } from '../../src/auth/keycloak';
 import { getStoredDeviceToken, resolveDevicePushToken } from '../../src/push/registerPush';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
-export default function SettingsScreen() {
+function SettingsScreen() {
   const router = useRouter();
   const [me, setMe] = useState<MeDto | null>(null);
   const [familyName, setFamilyName] = useState('');
@@ -500,3 +501,5 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   hint: { ...typography.caption, color: colors.danger, marginBottom: spacing.sm },
 });
+
+export default withObserveScreen(SettingsScreen);

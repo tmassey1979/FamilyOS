@@ -20,13 +20,14 @@ import {
   type RequestTypeDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
 type Tab = 'mine' | 'queue';
 
 const OPEN = new Set(['Draft', 'Submitted', 'UnderReview', 'WaitingForInformation']);
 const PLANABLE = new Set(['Approved', 'ConditionallyApproved', 'Executable']);
 
-export default function RequestsScreen() {
+function RequestsScreen() {
   const [types, setTypes] = useState<RequestTypeDto[]>([]);
   const [mine, setMine] = useState<RequestDto[]>([]);
   const [queue, setQueue] = useState<RequestDto[]>([]);
@@ -691,3 +692,5 @@ const styles = StyleSheet.create({
   },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 });
+
+export default withObserveScreen(RequestsScreen);

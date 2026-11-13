@@ -35,6 +35,7 @@
       }
     },
     "production": {
+      "uploadSourceMaps": true,
       "android": {
         "buildType": "app-bundle"
       },

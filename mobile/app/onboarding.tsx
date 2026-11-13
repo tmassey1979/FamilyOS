@@ -15,6 +15,8 @@ import { Button, Card } from '../src/components/ui';
 import { meApi } from '../src/api/client';
 import { invitesApi, onboardingFamilyApi } from '../src/api/onboarding';
 import { colors, spacing, typography } from '../src/theme';
+import { Observe } from 'expo-observe';
+import { withObserveScreen } from '../src/analytics/withObserveScreen';
 
 type Mode = 'choose' | 'create' | 'join';
 
@@ -43,7 +45,7 @@ function extractInviteCode(url: string): string | null {
   return null;
 }
 
-export default function OnboardingScreen() {
+function OnboardingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string }>();
   const [mode, setMode] = useState<Mode>('choose');
@@ -100,6 +102,7 @@ export default function OnboardingScreen() {
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       await meApi.get().catch(() => null);
+      Observe.logEvent('household.created');
       Alert.alert(
         'Household ready',
         'Invite family from Settings, or open Home to add tasks and meals.',
@@ -109,6 +112,7 @@ export default function OnboardingScreen() {
         ],
       );
     } catch (e: unknown) {
+      Observe.logEvent('household.create.failed', { severity: 'warn' });
       setError((e as { error?: string })?.error ?? 'Could not create household');
     } finally {
       setBusy(false);
@@ -141,12 +145,14 @@ export default function OnboardingScreen() {
     setError(null);
     try {
       const member = await invitesApi.accept(c, joinName.trim() || undefined);
+      Observe.logEvent('household.invite.accepted', { attributes: { role: String(member.role) } });
       Alert.alert(
         `Welcome${preview?.familyName ? ` to ${preview.familyName}` : ''}`,
         `You joined as ${member.role}. Open Home to see what needs attention.`,
         [{ text: 'Continue', onPress: goHome }],
       );
     } catch (e: unknown) {
+      Observe.logEvent('household.invite.accept.failed', { severity: 'warn' });
       setError((e as { error?: string })?.error ?? 'Could not join family');
     } finally {
       setBusy(false);
@@ -280,3 +286,5 @@ const styles = StyleSheet.create({
   error: { ...typography.caption, color: colors.danger },
   skip: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
 });
+
+export default withObserveScreen(OnboardingScreen);

@@ -19,6 +19,7 @@ export {
 
 import { getQueue, removeFromQueue, bumpAttempt, type QueuedMutation } from './queue';
 import { isOnline, markOnline, markOffline, ensureStarted } from './network';
+import { Observe } from 'expo-observe';
 
 export type FlushResult = {
   flushed: number;
@@ -67,5 +68,11 @@ export async function flushMutationQueue(executor: FlushExecutor): Promise<Flush
     flushing = false;
   }
   const remaining = (await getQueue()).length;
+  if (flushed > 0 || failed > 0) {
+    Observe.logEvent('sync.queue.flush.completed', {
+      severity: failed > 0 ? 'warn' : 'info',
+      attributes: { flushed, failed, remaining },
+    });
+  }
   return { flushed, failed, remaining };
 }

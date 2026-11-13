@@ -9,12 +9,13 @@ import {
   type CartDto, type MeDto, type ProcurementItemDto, type ProductDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
 type Member = { id: string; displayName: string; role: string; isActive: boolean };
 
 const ROLES = ['Owner', 'Adult', 'Teen', 'Child'] as const;
 
-export default function FamilyScreen() {
+function FamilyScreen() {
   const router = useRouter();
   const [familyName, setFamilyName] = useState('Family');
   const [members, setMembers] = useState<Member[]>([]);
@@ -545,3 +546,5 @@ const styles = StyleSheet.create({
   chipOn: { borderColor: colors.primary, backgroundColor: '#1E293B' },
   chipText: { ...typography.caption, color: colors.text },
 });
+
+export default withObserveScreen(FamilyScreen);

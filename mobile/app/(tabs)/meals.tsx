@@ -19,6 +19,7 @@ import {
   type RecipeDto,
 } from '../../src/api/meals';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
 const SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 
@@ -46,7 +47,7 @@ function dayLabel(d: Date): string {
   });
 }
 
-export default function MealsScreen() {
+function MealsScreen() {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [plan, setPlan] = useState<MealPlanDto | null>(null);
   const [recipes, setRecipes] = useState<RecipeDto[]>([]);
@@ -420,3 +421,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
 });
+
+export default withObserveScreen(MealsScreen);

@@ -13,6 +13,7 @@ import {
 import { Badge, Button, Card, EmptyState, SectionTitle } from '../../src/components/ui';
 import { familyApi, meApi, tasksApi, type TaskDto } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
+import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
 type Member = { id: string; displayName: string; role: string; isActive: boolean };
 type Priority = 'Low' | 'Normal' | 'High' | 'Urgent';
@@ -29,7 +30,7 @@ function dueLabel(value?: string) {
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString();
 }
 
-export default function TasksScreen() {
+function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
@@ -329,3 +330,5 @@ const styles = StyleSheet.create({
   helper: { ...typography.caption, color: colors.textMuted },
   footer: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
 });
+
+export default withObserveScreen(TasksScreen);
