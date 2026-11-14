@@ -354,7 +354,7 @@ function TasksScreen() {
           </View>
           {isAdult ? (
             <View style={styles.headerActions}>
-              <Button title="Recurring" variant="secondary" onPress={() => setRecurrenceOpen(true)} />
+              <Button title="Recurring" variant="secondary" onPress={openRecurrenceForm} />
               <Button title="+ New task" onPress={openCreate} />
             </View>
           ) : null}
