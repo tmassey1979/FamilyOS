@@ -56,6 +56,7 @@ function RequestsScreen() {
   const [conditionsByRequest, setConditionsByRequest] = useState<Record<string, ConditionDto[]>>({});
 
   const [composeFor, setComposeFor] = useState<RequestTypeDto | null>(null);
+  const [composeDraft, setComposeDraft] = useState<RequestDto | null>(null);
   const [composeTitle, setComposeTitle] = useState('');
   const [composeAnswers, setComposeAnswers] = useState<Record<string, string>>({});
   const [composeSaving, setComposeSaving] = useState(false);
@@ -102,6 +103,7 @@ function RequestsScreen() {
   }, [load]);
 
   const startCreate = (type: RequestTypeDto) => {
+    setComposeDraft(null);
     setComposeTitle('');
     setComposeAnswers({});
     setError(null);
@@ -157,13 +159,18 @@ function RequestsScreen() {
         (typeof firstAnswer === 'string' ? firstAnswer.split(/[,;\\n]/)[0].trim() : '') ||
         composeFor.name;
 
-      await requestsApi.create({
-        type: composeFor.code,
-        title,
-        amount,
-        answers,
-      });
+      if (composeDraft) {
+        await requestsApi.updateDraft(composeDraft.id, { title, amount, answers });
+      } else {
+        await requestsApi.create({
+          type: composeFor.code,
+          title,
+          amount,
+          answers,
+        });
+      }
       setComposeFor(null);
+      setComposeDraft(null);
       await load();
       setTab('mine');
     } catch (e: unknown) {
@@ -210,9 +217,19 @@ function RequestsScreen() {
           title="Edit"
           variant="secondary"
           onPress={() => {
-            setEditTitle(item.title);
-            setEditAmount(item.amount != null ? String(item.amount) : '');
-            setEditDraft(item);
+            const type = types.find((candidate) => candidate.code.toLowerCase() === item.type.toLowerCase());
+            if (type) {
+              setComposeDraft(item);
+              setComposeFor(type);
+              setComposeTitle(item.title);
+              setComposeAnswers(Object.fromEntries(
+                Object.entries(item.answers ?? {}).map(([key, value]) => [key, value == null ? '' : String(value)]),
+              ));
+            } else {
+              setEditTitle(item.title);
+              setEditAmount(item.amount != null ? String(item.amount) : '');
+              setEditDraft(item);
+            }
           }}
         />,
         <Button
@@ -401,7 +418,7 @@ function RequestsScreen() {
       <Modal visible={!!composeFor} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={typography.heading}>{composeFor?.name ?? 'New request'}</Text>
+            <Text style={typography.heading}>{composeDraft ? 'Edit request' : composeFor?.name ?? 'New request'}</Text>
             {composeFor?.description ? (
               <Text style={typography.caption}>{composeFor.description}</Text>
             ) : null}
@@ -472,7 +489,7 @@ function RequestsScreen() {
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="secondary" onPress={() => setComposeFor(null)} />
               <Button
-                title={composeSaving ? 'Saving…' : 'Create draft'}
+                title={composeSaving ? 'Saving…' : composeDraft ? 'Save draft' : 'Create draft'}
                 onPress={() => void submitCompose()}
               />
             </View>
