@@ -65,6 +65,10 @@ function TasksScreen() {
   const [assigneeId, setAssigneeId] = useState('');
   const [priority, setPriority] = useState<Priority>('Normal');
   const [dueDate, setDueDate] = useState('');
+  const [category, setCategory] = useState('');
+  const [estimatedMinutes, setEstimatedMinutes] = useState('');
+  const [plannedStart, setPlannedStart] = useState('');
+  const [plannedEnd, setPlannedEnd] = useState('');
 
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [recurrenceTitle, setRecurrenceTitle] = useState('');
@@ -143,6 +147,10 @@ function TasksScreen() {
     setAssigneeId('');
     setPriority('Normal');
     setDueDate('');
+    setCategory('');
+    setEstimatedMinutes('');
+    setPlannedStart('');
+    setPlannedEnd('');
   };
 
   const openCreate = () => {
@@ -158,6 +166,10 @@ function TasksScreen() {
     setAssigneeId(task.assignedToMemberId ?? '');
     setPriority((PRIORITIES.includes(task.priority as Priority) ? task.priority : 'Normal') as Priority);
     setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : '');
+    setCategory(task.category ?? '');
+    setEstimatedMinutes(task.estimatedDurationMinutes != null ? String(task.estimatedDurationMinutes) : '');
+    setPlannedStart(task.plannedStartTime ?? '');
+    setPlannedEnd(task.plannedEndTime ?? '');
     setError(null);
     setFormOpen(true);
   };
@@ -181,6 +193,21 @@ function TasksScreen() {
       return;
     }
 
+    const estimate = estimatedMinutes.trim() ? Number(estimatedMinutes) : undefined;
+    if (estimate !== undefined && (!Number.isInteger(estimate) || estimate < 1 || estimate > 10080)) {
+      setError('Estimated minutes must be a whole number from 1 to 10080.');
+      return;
+    }
+    const validTime = (value: string) => !value.trim() || /^([01]\\d|2[0-3]):[0-5]\\d$/.test(value.trim());
+    if (!validTime(plannedStart) || !validTime(plannedEnd)) {
+      setError('Planned times must use 24-hour HH:MM format.');
+      return;
+    }
+    if (plannedStart.trim() && plannedEnd.trim() && plannedEnd <= plannedStart) {
+      setError('Planned end must be later than planned start.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -189,21 +216,36 @@ function TasksScreen() {
           title: title.trim(),
           description: description.trim(),
           priority,
+          category: category.trim() || null,
           dueDate: parsedDue ?? null,
           clearDueDate: !parsedDue,
+        });
+        await tasksApi.setPlannedTimes(formTask.id, {
+          plannedStartTime: plannedStart.trim() || null,
+          plannedEndTime: plannedEnd.trim() || null,
+          estimatedDurationMinutes: estimate ?? null,
         });
         if (assigneeId && assigneeId !== formTask.assignedToMemberId) {
           if (formTask.assignedToMemberId) await tasksApi.reassign(formTask.id, assigneeId);
           else await tasksApi.assign(formTask.id, assigneeId);
         }
       } else {
-        await tasksApi.create({
+        const created = await tasksApi.create({
           title: title.trim(),
           description: description.trim() || undefined,
           assignToMemberId: assigneeId || undefined,
           priority,
           dueDate: parsedDue ?? undefined,
+          category: category.trim() || undefined,
+          estimatedDurationMinutes: estimate,
         });
+        if (plannedStart.trim() || plannedEnd.trim()) {
+          await tasksApi.setPlannedTimes(created.id, {
+            plannedStartTime: plannedStart.trim() || null,
+            plannedEndTime: plannedEnd.trim() || null,
+            estimatedDurationMinutes: estimate ?? null,
+          });
+        }
       }
       setFormOpen(false);
       resetForm();
@@ -437,8 +479,17 @@ function TasksScreen() {
                 />
                 <Text style={typography.caption}>{assignee}</Text>
                 {due ? <Text style={typography.caption}>Due {due}</Text> : null}
+                {task.category ? <Badge label={task.category} /> : null}
                 {task.isRecurring ? <Badge label={task.recurrenceFrequency ? `Repeats ${task.recurrenceFrequency}` : 'Recurring'} /> : null}
               </View>
+              {task.plannedStartTime || task.plannedEndTime || task.estimatedDurationMinutes != null || task.actualDurationMinutes != null ? (
+                <Text style={typography.caption}>
+                  {task.plannedStartTime || task.plannedEndTime ? 'Planned ' + (task.plannedStartTime ?? '—') + '–' + (task.plannedEndTime ?? '—') : ''}
+                  {task.estimatedDurationMinutes != null ? ' · Estimate ' + task.estimatedDurationMinutes + 'm' : ''}
+                  {task.actualDurationMinutes != null ? ' · Actual ' + task.actualDurationMinutes + 'm' : ''}
+                  {task.varianceMinutes != null ? ' · Variance ' + (task.varianceMinutes > 0 ? '+' : '') + task.varianceMinutes + 'm' : ''}
+                </Text>
+              ) : null}
               <View style={styles.actionRow}>
                 <Pressable onPress={() => void openHistory(task)} style={styles.textAction}>
                   <Text style={styles.textActionLabel}>History</Text>
@@ -494,6 +545,14 @@ function TasksScreen() {
                 </Pressable>
               ))}
             </View>
+            <Text style={styles.label}>Category</Text>
+            <TextInput value={category} onChangeText={setCategory} placeholder="e.g. Chores, School, Personal" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={60} />
+            <Text style={styles.label}>Estimated duration (minutes)</Text>
+            <TextInput value={estimatedMinutes} onChangeText={setEstimatedMinutes} placeholder="Optional estimate" placeholderTextColor={colors.textMuted} style={styles.input} keyboardType="number-pad" />
+            <Text style={styles.label}>Planned start (24-hour HH:MM)</Text>
+            <TextInput value={plannedStart} onChangeText={setPlannedStart} placeholder="e.g. 16:00" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={5} />
+            <Text style={styles.label}>Planned end (24-hour HH:MM)</Text>
+            <TextInput value={plannedEnd} onChangeText={setPlannedEnd} placeholder="e.g. 17:00" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={5} />
             <Text style={styles.label}>Due date</Text>
             <TextInput value={dueDate} onChangeText={setDueDate} placeholder="YYYY-MM-DD (optional)" placeholderTextColor={colors.textMuted} style={styles.input} keyboardType="numbers-and-punctuation" maxLength={10} />
           </ScrollView>
