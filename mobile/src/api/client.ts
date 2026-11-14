@@ -353,12 +353,24 @@ export type RequestDto = {
   pendingQuestions?: PendingQuestionDto[];
 };
 
+export type RequestQuestionDto = {
+  key: string;
+  label: string;
+  // The API currently serializes QuestionType as its numeric enum value.
+  // Accept strings as well so a future JsonStringEnumConverter is compatible.
+  type: string | number;
+  required: boolean;
+  options?: string[] | null;
+  placeholder?: string | null;
+  sortOrder: number;
+};
+
 export type RequestTypeDto = {
   id: string;
   code: string;
   name: string;
-  description?: string;
-  questions: Array<{ key: string; prompt: string; required?: boolean }>;
+  description?: string | null;
+  questions: RequestQuestionDto[];
 };
 
 export type PolicyEvaluationDto = {
