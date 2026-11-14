@@ -27,6 +27,13 @@ type Tab = 'mine' | 'queue';
 const OPEN = new Set(['Draft', 'Submitted', 'UnderReview', 'WaitingForInformation']);
 const PLANABLE = new Set(['Approved', 'ConditionallyApproved', 'Executable']);
 
+function normalizeQuestionType(type: string | number): string {
+  if (typeof type === 'number') {
+    return ['text', 'number', 'boolean', 'choice', 'datetime', 'multiline', 'personselection', 'location', 'yesno', 'moneyamount', 'date'][type] ?? 'text';
+  }
+  return type.toLowerCase().replace(/[^a-z]/g, '');
+}
+
 function RequestsScreen() {
   const [types, setTypes] = useState<RequestTypeDto[]>([]);
   const [mine, setMine] = useState<RequestDto[]>([]);
@@ -48,18 +55,9 @@ function RequestsScreen() {
   const [trail, setTrail] = useState<RequestHistoryDto[]>([]);
   const [conditionsByRequest, setConditionsByRequest] = useState<Record<string, ConditionDto[]>>({});
 
-  const [moneyFor, setMoneyFor] = useState<RequestTypeDto | null>(null);
-  const [moneyAmount, setMoneyAmount] = useState('');
-  const [moneyPurpose, setMoneyPurpose] = useState('');
-  const [moneySaving, setMoneySaving] = useState(false);
-
   const [composeFor, setComposeFor] = useState<RequestTypeDto | null>(null);
   const [composeTitle, setComposeTitle] = useState('');
-  const [composeItems, setComposeItems] = useState('');
-  const [composeStore, setComposeStore] = useState('');
-  const [composeWhere, setComposeWhere] = useState('');
-  const [composeWhen, setComposeWhen] = useState('');
-  const [composeAmount, setComposeAmount] = useState('');
+  const [composeAnswers, setComposeAnswers] = useState<Record<string, string>>({});
   const [composeSaving, setComposeSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -103,79 +101,64 @@ function RequestsScreen() {
     void load();
   }, [load]);
 
-  const startCreate = async (type: RequestTypeDto) => {
-    const code = type.code;
-    if (code === 'Money' || code.toLowerCase() === 'money') {
-      setMoneyAmount('');
-      setMoneyPurpose('');
-      setMoneyFor(type);
-      return;
-    }
-    const lower = code.toLowerCase();
-    if (
-      lower === 'grocery' ||
-      lower === 'purchase' ||
-      lower === 'snackfood' ||
-      lower === 'snack' ||
-      lower === 'ride' ||
-      lower === 'school' ||
-      lower === 'medical'
-    ) {
-      setComposeTitle('');
-      setComposeItems('');
-      setComposeStore('');
-      setComposeWhere('');
-      setComposeWhen('');
-      setComposeAmount('');
-      setComposeFor(type);
-      return;
-    }
-    setCreating(code);
-    try {
-      await requestsApi.create({
-        type: code,
-        title: type.name,
-        answers: {},
-      });
-      await load();
-      setTab('mine');
-    } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Create failed');
-    } finally {
-      setCreating(null);
-    }
+  const startCreate = (type: RequestTypeDto) => {
+    setComposeTitle('');
+    setComposeAnswers({});
+    setError(null);
+    setComposeFor(type);
   };
 
   const submitCompose = async () => {
     if (!composeFor) return;
-    const code = composeFor.code;
-    const lower = code.toLowerCase();
     setComposeSaving(true);
     setError(null);
     try {
+      const questions = [...(composeFor.questions ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
       const answers: Record<string, unknown> = {};
-      let title = composeTitle.trim();
       let amount: number | undefined;
-      if (lower === 'ride' || lower === 'school' || lower === 'medical') {
-        if (composeWhere.trim()) answers.where = composeWhere.trim();
-        if (composeWhere.trim()) answers.location = composeWhere.trim();
-        if (composeWhen.trim()) answers.when = composeWhen.trim();
-        title = title || (lower === 'ride' ? 'Ride needed' : composeFor.name);
-      } else {
-        if (composeItems.trim()) answers.items = composeItems.trim();
-        if (composeStore.trim()) {
-          answers.store = composeStore.trim();
-          answers.preferredStore = composeStore.trim();
+
+      for (const question of questions) {
+        const raw = (composeAnswers[question.key] ?? '').trim();
+        if (!raw) {
+          if (question.required) {
+            setError(`${question.label} is required`);
+            setComposeSaving(false);
+            return;
+          }
+          continue;
         }
-        const amt = parseFloat(composeAmount);
-        if (Number.isFinite(amt) && amt >= 0) {
-          amount = amt;
-          answers.amount = amt;
+
+        const kind = normalizeQuestionType(question.type);
+        if (kind === 'boolean' || kind === 'yesno') {
+          answers[question.key] = raw === 'true';
+        } else if (kind === 'number' || kind === 'moneyamount') {
+          const numeric = Number(raw);
+          if (!Number.isFinite(numeric)) {
+            setError(`${question.label} must be a valid number`);
+            setComposeSaving(false);
+            return;
+          }
+          answers[question.key] = numeric;
+          if (kind === 'moneyamount' || question.key.toLowerCase() === 'amount') amount = numeric;
+        } else {
+          answers[question.key] = raw;
         }
-        title = title || composeItems.trim().split(/[,;\n]/)[0]?.trim() || composeFor.name;
       }
+
+      // Preserve the conventional answer keys consumed by the approval workflows.
+      if (answers.where != null && answers.location == null) answers.location = answers.where;
+      if (answers.leave != null && answers.when == null) answers.when = answers.leave;
+      if (answers.item != null && answers.items == null) answers.items = answers.item;
+
+      const firstAnswer = questions
+        .map((question) => answers[question.key])
+        .find((value) => typeof value === 'string' && value.trim().length > 0);
+      const title = composeTitle.trim() ||
+        (typeof firstAnswer === 'string' ? firstAnswer.split(/[,;\\n]/)[0].trim() : '') ||
+        composeFor.name;
+
       await requestsApi.create({
-        type: code,
+        type: composeFor.code,
         title,
         amount,
         answers,
@@ -187,33 +170,6 @@ function RequestsScreen() {
       setError((e as { error?: string })?.error ?? 'Create failed');
     } finally {
       setComposeSaving(false);
-    }
-  };
-
-  const submitMoney = async () => {
-    if (!moneyFor) return;
-    const amt = parseFloat(moneyAmount);
-    if (!Number.isFinite(amt) || amt <= 0) {
-      setError('Enter a valid amount greater than 0');
-      return;
-    }
-    const purpose = moneyPurpose.trim() || 'Money request';
-    setMoneySaving(true);
-    setError(null);
-    try {
-      await requestsApi.create({
-        type: moneyFor.code,
-        title: purpose,
-        amount: amt,
-        answers: { amount: amt, purpose },
-      });
-      setMoneyFor(null);
-      await load();
-      setTab('mine');
-    } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Create failed');
-    } finally {
-      setMoneySaving(false);
     }
   };
 
@@ -446,99 +402,79 @@ function RequestsScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={typography.heading}>{composeFor?.name ?? 'New request'}</Text>
-            <Text style={typography.caption}>
-              {(composeFor?.code ?? '').toLowerCase() === 'ride' ||
-              (composeFor?.code ?? '').toLowerCase() === 'school' ||
-              (composeFor?.code ?? '').toLowerCase() === 'medical'
-                ? 'Where and when — becomes a calendar event on approve'
-                : 'Items go on the shopping list when approved'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Title (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={composeTitle}
-              onChangeText={setComposeTitle}
-            />
-            {(composeFor?.code ?? '').toLowerCase() === 'ride' ||
-            (composeFor?.code ?? '').toLowerCase() === 'school' ||
-            (composeFor?.code ?? '').toLowerCase() === 'medical' ? (
-              <>
+            {composeFor?.description ? (
+              <Text style={typography.caption}>{composeFor.description}</Text>
+            ) : null}
+            <ScrollView style={{ maxHeight: '68%' }} keyboardShouldPersistTaps="handled">
+              <View style={{ gap: spacing.sm }}>
                 <TextInput
                   style={styles.input}
-                  placeholder="Where / location"
+                  placeholder="Request title (optional)"
                   placeholderTextColor={colors.textMuted}
-                  value={composeWhere}
-                  onChangeText={setComposeWhere}
+                  value={composeTitle}
+                  onChangeText={setComposeTitle}
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="When (e.g. Tomorrow 3pm)"
-                  placeholderTextColor={colors.textMuted}
-                  value={composeWhen}
-                  onChangeText={setComposeWhen}
-                />
-              </>
-            ) : (
-              <>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Items (comma-separated)"
-                  placeholderTextColor={colors.textMuted}
-                  value={composeItems}
-                  onChangeText={setComposeItems}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Preferred store (optional)"
-                  placeholderTextColor={colors.textMuted}
-                  value={composeStore}
-                  onChangeText={setComposeStore}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Est. total (optional)"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  value={composeAmount}
-                  onChangeText={setComposeAmount}
-                />
-              </>
-            )}
+                {(composeFor?.questions ?? [])
+                  .slice()
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((question) => {
+                    const kind = normalizeQuestionType(question.type);
+                    const value = composeAnswers[question.key] ?? '';
+                    const setValue = (next: string) =>
+                      setComposeAnswers((current) => ({ ...current, [question.key]: next }));
+
+                    return (
+                      <View key={question.key} style={{ gap: spacing.xs }}>
+                        <Text style={typography.body}>
+                          {question.label}{question.required ? ' *' : ''}
+                        </Text>
+                        {kind === 'boolean' || kind === 'yesno' ? (
+                          <View style={styles.row}>
+                            {['true', 'false'].map((option) => (
+                              <Pressable
+                                key={option}
+                                onPress={() => setValue(option)}
+                                style={[styles.choice, value === option && styles.choiceActive]}
+                              >
+                                <Text style={typography.body}>{option === 'true' ? 'Yes' : 'No'}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        ) : kind === 'choice' && (question.options?.length ?? 0) > 0 ? (
+                          <View style={styles.chips}>
+                            {question.options!.map((option) => (
+                              <Pressable
+                                key={option}
+                                onPress={() => setValue(option)}
+                                style={[styles.choice, value === option && styles.choiceActive]}
+                              >
+                                <Text style={typography.body}>{option}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        ) : (
+                          <TextInput
+                            style={[styles.input, kind === 'multiline' && styles.multilineInput]}
+                            placeholder={question.placeholder ?? question.label}
+                            placeholderTextColor={colors.textMuted}
+                            value={value}
+                            onChangeText={setValue}
+                            keyboardType={kind === 'number' || kind === 'moneyamount' ? 'decimal-pad' : 'default'}
+                            multiline={kind === 'multiline'}
+                            numberOfLines={kind === 'multiline' ? 4 : 1}
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
+              </View>
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="secondary" onPress={() => setComposeFor(null)} />
               <Button
                 title={composeSaving ? 'Saving…' : 'Create draft'}
                 onPress={() => void submitCompose()}
               />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={!!moneyFor} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={typography.heading}>Request money</Text>
-            <Text style={typography.caption}>Amount and what it is for</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Amount (e.g. 20)"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={moneyAmount}
-              onChangeText={setMoneyAmount}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Purpose (e.g. Lunch money)"
-              placeholderTextColor={colors.textMuted}
-              value={moneyPurpose}
-              onChangeText={setMoneyPurpose}
-            />
-            <View style={styles.modalActions}>
-              <Button title="Cancel" variant="secondary" onPress={() => setMoneyFor(null)} />
-              <Button title={moneySaving ? 'Saving…' : 'Create draft'} onPress={() => void submitMoney()} />
             </View>
           </View>
         </View>
@@ -690,6 +626,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.bg,
   },
+  multilineInput: { minHeight: 88, textAlignVertical: 'top' },
+  choice: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  choiceActive: { borderColor: colors.primary, backgroundColor: colors.surface },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 });
 
