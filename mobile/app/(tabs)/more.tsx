@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { CalendarCheck, ChevronRight, ClipboardList, MessageCircle, Settings, Utensils } from 'lucide-react-native';
+import { CalendarCheck, ChartColumn, ChevronRight, ClipboardList, MessageCircle, Settings, Utensils } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card, SectionTitle } from '../../src/components/ui';
 import { colors, spacing, typography } from '../../src/theme';
@@ -7,6 +7,7 @@ import { withObserveScreen } from '../../src/analytics/withObserveScreen';
 
 const LINKS = [
   { title: 'Requests & approvals', description: 'Ask for something, review requests, and track decisions.', route: '/(tabs)/requests', Icon: ClipboardList },
+  { title: 'Family outcomes', description: 'See completed work, approval trends, and household workload.', route: '/(tabs)/outcomes', Icon: ChartColumn },
   { title: 'Meals', description: 'Plan meals and keep the household food plan together.', route: '/(tabs)/meals', Icon: Utensils },
   { title: 'Family chat', description: 'Keep household conversations in one place.', route: '/(tabs)/chat', Icon: MessageCircle },
   { title: 'Settings', description: 'Notifications, invites, quiet hours, and account settings.', route: '/(tabs)/settings', Icon: Settings },
