@@ -132,7 +132,17 @@ function LoginScreen() {
         `&response_type=code` +
         `&scope=${encodeURIComponent(cfg.scopes.join(' '))}` +
         `&redirect_uri=${encodeURIComponent(cfg.redirectUri)}`;
-      await WebBrowser.openBrowserAsync(url);
+      // Registration returns to the same custom-scheme URI as sign-in. Use an
+      // auth session so Android captures that redirect here instead of handing
+      // familyos://auth to Expo Router as a screen navigation (which has no route).
+      // The registration authorization code is intentionally not exchanged;
+      // the user signs in afterward through useAuthRequest, which owns its PKCE verifier.
+      const result = await WebBrowser.openAuthSessionAsync(url, cfg.redirectUri);
+      if (result.type === 'success') {
+        setError('Account registration completed. Return here and tap Sign in.');
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        setError('Registration was closed before completion. You can try again or sign in.');
+      }
     } catch (e: unknown) {
       setError((e as Error)?.message ?? 'Could not open registration');
     } finally {
