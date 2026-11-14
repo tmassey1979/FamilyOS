@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { CalendarCheck, ChartColumn, ChevronRight, ClipboardList, MessageCircle, Settings, Utensils } from 'lucide-react-native';
+import { CalendarCheck, BarChart3, ChevronRight, ClipboardList, MessageCircle, Settings, Utensils } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card, SectionTitle } from '../../src/components/ui';
 import { colors, spacing, typography } from '../../src/theme';
