@@ -7,6 +7,7 @@ using FamilyOS.Domain.Execution;
 using FamilyOS.Domain.Notifications;
 using FamilyOS.Domain.Procurement;
 using FamilyOS.Domain.Requests;
+using FamilyOS.Domain.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -425,20 +426,54 @@ public class RequestCommandHandlers :
         plan.Commit(_current.MemberId!.Value);
 
         var request = await _db.Requests.FirstOrDefaultAsync(r => r.Id == plan.RequestId, ct);
-        foreach (var item in plan.Items.Where(i => i.IsSelected && i.Type == ExecutionItemType.CalendarEvent))
+        foreach (var item in plan.Items.Where(i => i.IsSelected))
         {
-            var start = request?.NeededByUtc ?? DateTime.UtcNow.AddHours(2);
-            var ev = CalendarEvent.Create(
-                plan.FamilyId,
-                item.Title,
-                start,
-                _current.MemberId!.Value,
-                endUtc: start.AddHours(1),
-                allDay: false,
-                location: null,
-                linkedTaskId: null,
-                linkedRequestId: plan.RequestId);
-            _db.CalendarEvents.Add(ev);
+            switch (item.Type)
+            {
+                case ExecutionItemType.Task:
+                {
+                    var task = TaskItem.Create(
+                        plan.FamilyId,
+                        item.Title,
+                        _current.MemberId!.Value,
+                        description: request is null ? null : $"Created from request: {request.Title}",
+                        dueDate: request?.NeededByUtc);
+                    task.Assign(item.AssigneeMemberId ?? _current.MemberId!.Value, _current.MemberId!.Value);
+                    _db.Tasks.Add(task);
+                    item.LinkResult(task.Id);
+                    break;
+                }
+                case ExecutionItemType.CalendarEvent:
+                {
+                    var start = request?.NeededByUtc ?? DateTime.UtcNow.AddHours(2);
+                    var ev = CalendarEvent.Create(
+                        plan.FamilyId,
+                        item.Title,
+                        start,
+                        _current.MemberId!.Value,
+                        endUtc: start.AddHours(1),
+                        allDay: false,
+                        location: null,
+                        linkedTaskId: null,
+                        linkedRequestId: plan.RequestId);
+                    _db.CalendarEvents.Add(ev);
+                    item.LinkResult(ev.Id);
+                    break;
+                }
+                case ExecutionItemType.ProcurementItem:
+                {
+                    var procurementItem = ProcurementItem.Create(
+                        plan.FamilyId,
+                        item.Title,
+                        _current.MemberId!.Value,
+                        requestId: plan.RequestId,
+                        category: "Purchase",
+                        quantity: 1);
+                    _db.ProcurementItems.Add(procurementItem);
+                    item.LinkResult(procurementItem.Id);
+                    break;
+                }
+            }
         }
 
         await _db.SaveChangesAsync(ct);
