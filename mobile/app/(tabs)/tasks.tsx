@@ -17,6 +17,7 @@ import {
   tasksApi,
   type TaskDto,
   type TaskHistoryDto,
+  type RecurrenceDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 import { withObserveScreen } from '../../src/analytics/withObserveScreen';
@@ -28,6 +29,8 @@ type NoteAction = 'decline' | 'defer' | 'cancel' | 'skip';
 
 const PRIORITIES: Priority[] = ['Low', 'Normal', 'High', 'Urgent'];
 const FILTERS: TaskFilter[] = ['All', 'Mine', 'Needs acceptance', 'Active', 'Closed'];
+const RECURRENCE_FREQUENCIES = ['Daily', 'Weekly', 'BiWeekly', 'Monthly', 'Yearly'] as const;
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function statusLabel(status: string) {
   return status.replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -45,6 +48,7 @@ function isAdultRole(role?: string | null) {
 
 function TasksScreen() {
   const [tasks, setTasks] = useState<TaskDto[]>([]);
+  const [recurrences, setRecurrences] = useState<RecurrenceDto[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<string | null>(null);
@@ -61,6 +65,20 @@ function TasksScreen() {
   const [assigneeId, setAssigneeId] = useState('');
   const [priority, setPriority] = useState<Priority>('Normal');
   const [dueDate, setDueDate] = useState('');
+  const [category, setCategory] = useState('');
+  const [estimatedMinutes, setEstimatedMinutes] = useState('');
+  const [plannedStart, setPlannedStart] = useState('');
+  const [plannedEnd, setPlannedEnd] = useState('');
+
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
+  const [recurrenceTitle, setRecurrenceTitle] = useState('');
+  const [recurrenceDescription, setRecurrenceDescription] = useState('');
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<(typeof RECURRENCE_FREQUENCIES)[number]>('Weekly');
+  const [recurrenceInterval, setRecurrenceInterval] = useState('1');
+  const [recurrenceDay, setRecurrenceDay] = useState('1');
+  const [recurrenceAssignee, setRecurrenceAssignee] = useState('');
+  const [recurrenceCategory, setRecurrenceCategory] = useState('');
+  const [recurrenceSaving, setRecurrenceSaving] = useState(false);
 
   const [historyTask, setHistoryTask] = useState<TaskDto | null>(null);
   const [history, setHistory] = useState<TaskHistoryDto[]>([]);
@@ -77,12 +95,14 @@ function TasksScreen() {
     if (!quiet) setLoading(true);
     setError(null);
     try {
-      const [list, familyMembers, me] = await Promise.all([
+      const [list, familyMembers, me, recurrenceList] = await Promise.all([
         tasksApi.family(),
         familyApi.members(),
         meApi.get(),
+        tasksApi.recurrences().catch(() => [] as RecurrenceDto[]),
       ]);
       setTasks(list);
+      setRecurrences(recurrenceList);
       setMembers(familyMembers);
       setCurrentMemberId(me.memberId ?? null);
       setCurrentRole(me.role ?? null);
@@ -127,6 +147,10 @@ function TasksScreen() {
     setAssigneeId('');
     setPriority('Normal');
     setDueDate('');
+    setCategory('');
+    setEstimatedMinutes('');
+    setPlannedStart('');
+    setPlannedEnd('');
   };
 
   const openCreate = () => {
@@ -142,6 +166,10 @@ function TasksScreen() {
     setAssigneeId(task.assignedToMemberId ?? '');
     setPriority((PRIORITIES.includes(task.priority as Priority) ? task.priority : 'Normal') as Priority);
     setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : '');
+    setCategory(task.category ?? '');
+    setEstimatedMinutes(task.estimatedDurationMinutes != null ? String(task.estimatedDurationMinutes) : '');
+    setPlannedStart(task.plannedStartTime ?? '');
+    setPlannedEnd(task.plannedEndTime ?? '');
     setError(null);
     setFormOpen(true);
   };
@@ -165,6 +193,21 @@ function TasksScreen() {
       return;
     }
 
+    const estimate = estimatedMinutes.trim() ? Number(estimatedMinutes) : undefined;
+    if (estimate !== undefined && (!Number.isInteger(estimate) || estimate < 1 || estimate > 10080)) {
+      setError('Estimated minutes must be a whole number from 1 to 10080.');
+      return;
+    }
+    const validTime = (value: string) => !value.trim() || /^([01]\\d|2[0-3]):[0-5]\\d$/.test(value.trim());
+    if (!validTime(plannedStart) || !validTime(plannedEnd)) {
+      setError('Planned times must use 24-hour HH:MM format.');
+      return;
+    }
+    if (plannedStart.trim() && plannedEnd.trim() && plannedEnd <= plannedStart) {
+      setError('Planned end must be later than planned start.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -173,21 +216,36 @@ function TasksScreen() {
           title: title.trim(),
           description: description.trim(),
           priority,
+          category: category.trim() || null,
           dueDate: parsedDue ?? null,
           clearDueDate: !parsedDue,
+        });
+        await tasksApi.setPlannedTimes(formTask.id, {
+          plannedStartTime: plannedStart.trim() || null,
+          plannedEndTime: plannedEnd.trim() || null,
+          estimatedDurationMinutes: estimate ?? null,
         });
         if (assigneeId && assigneeId !== formTask.assignedToMemberId) {
           if (formTask.assignedToMemberId) await tasksApi.reassign(formTask.id, assigneeId);
           else await tasksApi.assign(formTask.id, assigneeId);
         }
       } else {
-        await tasksApi.create({
+        const created = await tasksApi.create({
           title: title.trim(),
           description: description.trim() || undefined,
           assignToMemberId: assigneeId || undefined,
           priority,
           dueDate: parsedDue ?? undefined,
+          category: category.trim() || undefined,
+          estimatedDurationMinutes: estimate,
         });
+        if (plannedStart.trim() || plannedEnd.trim()) {
+          await tasksApi.setPlannedTimes(created.id, {
+            plannedStartTime: plannedStart.trim() || null,
+            plannedEndTime: plannedEnd.trim() || null,
+            estimatedDurationMinutes: estimate ?? null,
+          });
+        }
       }
       setFormOpen(false);
       resetForm();
@@ -196,6 +254,63 @@ function TasksScreen() {
       setError((e as { error?: string })?.error ?? 'Could not save task');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openRecurrenceForm = () => {
+    setRecurrenceTitle('');
+    setRecurrenceDescription('');
+    setRecurrenceFrequency('Weekly');
+    setRecurrenceInterval('1');
+    setRecurrenceDay('1');
+    setRecurrenceAssignee('');
+    setRecurrenceCategory('');
+    setError(null);
+    setRecurrenceOpen(true);
+  };
+
+  const saveRecurrence = async () => {
+    if (!recurrenceTitle.trim()) {
+      setError('Give the recurring task a title.');
+      return;
+    }
+    const interval = Number(recurrenceInterval);
+    if (!Number.isInteger(interval) || interval < 1 || interval > 365) {
+      setError('Repeat interval must be a whole number from 1 to 365.');
+      return;
+    }
+    setRecurrenceSaving(true);
+    setError(null);
+    try {
+      await tasksApi.createRecurrence({
+        title: recurrenceTitle.trim(),
+        description: recurrenceDescription.trim() || undefined,
+        frequency: recurrenceFrequency,
+        interval,
+        dayOfWeek: recurrenceFrequency === 'Weekly' ? Number(recurrenceDay) : undefined,
+        defaultAssigneeMemberId: recurrenceAssignee || undefined,
+        category: recurrenceCategory.trim() || undefined,
+        generateFirstInstance: true,
+      });
+      setRecurrenceOpen(false);
+      await load(true);
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not create recurring task');
+    } finally {
+      setRecurrenceSaving(false);
+    }
+  };
+
+  const deactivateRecurrence = async (recurrence: RecurrenceDto) => {
+    setBusyId(recurrence.id);
+    setError(null);
+    try {
+      await tasksApi.deactivateRecurrence(recurrence.id);
+      await load(true);
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Could not stop recurring task');
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -279,7 +394,12 @@ function TasksScreen() {
             <SectionTitle>Family tasks</SectionTitle>
             <Text style={styles.subtitle}>Clear ownership. Clear next steps.</Text>
           </View>
-          {isAdult ? <Button title="+ New task" onPress={openCreate} /> : null}
+          {isAdult ? (
+            <View style={styles.headerActions}>
+              <Button title="Recurring" variant="secondary" onPress={openRecurrenceForm} />
+              <Button title="+ New task" onPress={openCreate} />
+            </View>
+          ) : null}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -298,6 +418,36 @@ function TasksScreen() {
             );
           })}
         </ScrollView>
+
+        {isAdult && recurrences.length > 0 ? (
+          <Card style={styles.recurrenceCard}>
+            <View style={styles.taskHeading}>
+              <Text style={typography.heading}>Recurring schedules</Text>
+              <Badge label={String(recurrences.filter((item) => item.isActive).length) + ' active'} />
+            </View>
+            {recurrences.map((item) => (
+              <View key={item.id} style={styles.recurrenceRow}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={typography.body}>{item.title}</Text>
+                  <Text style={typography.caption}>
+                    {item.frequency}{item.interval > 1 ? ' · every ' + item.interval : ''}
+                    {item.dayOfWeek != null ? ' · ' + DAYS[item.dayOfWeek] : ''}
+                    {item.nextOccurrenceUtc ? ' · Next ' + dueLabel(item.nextOccurrenceUtc) : ''}
+                  </Text>
+                  <Text style={typography.caption}>{item.isActive ? 'Active' : 'Stopped'}</Text>
+                </View>
+                {item.isActive ? (
+                  <Button
+                    title={busyId === item.id ? 'Stopping…' : 'Stop'}
+                    variant="secondary"
+                    disabled={busyId !== null}
+                    onPress={() => void deactivateRecurrence(item)}
+                  />
+                ) : null}
+              </View>
+            ))}
+          </Card>
+        ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loading && tasks.length === 0 ? <ActivityIndicator color={colors.primary} /> : null}
@@ -329,8 +479,17 @@ function TasksScreen() {
                 />
                 <Text style={typography.caption}>{assignee}</Text>
                 {due ? <Text style={typography.caption}>Due {due}</Text> : null}
+                {task.category ? <Badge label={task.category} /> : null}
                 {task.isRecurring ? <Badge label={task.recurrenceFrequency ? `Repeats ${task.recurrenceFrequency}` : 'Recurring'} /> : null}
               </View>
+              {task.plannedStartTime || task.plannedEndTime || task.estimatedDurationMinutes != null || task.actualDurationMinutes != null ? (
+                <Text style={typography.caption}>
+                  {task.plannedStartTime || task.plannedEndTime ? 'Planned ' + (task.plannedStartTime ?? '—') + '–' + (task.plannedEndTime ?? '—') : ''}
+                  {task.estimatedDurationMinutes != null ? ' · Estimate ' + task.estimatedDurationMinutes + 'm' : ''}
+                  {task.actualDurationMinutes != null ? ' · Actual ' + task.actualDurationMinutes + 'm' : ''}
+                  {task.varianceMinutes != null ? ' · Variance ' + (task.varianceMinutes > 0 ? '+' : '') + task.varianceMinutes + 'm' : ''}
+                </Text>
+              ) : null}
               <View style={styles.actionRow}>
                 <Pressable onPress={() => void openHistory(task)} style={styles.textAction}>
                   <Text style={styles.textActionLabel}>History</Text>
@@ -386,12 +545,78 @@ function TasksScreen() {
                 </Pressable>
               ))}
             </View>
+            <Text style={styles.label}>Category</Text>
+            <TextInput value={category} onChangeText={setCategory} placeholder="e.g. Chores, School, Personal" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={60} />
+            <Text style={styles.label}>Estimated duration (minutes)</Text>
+            <TextInput value={estimatedMinutes} onChangeText={setEstimatedMinutes} placeholder="Optional estimate" placeholderTextColor={colors.textMuted} style={styles.input} keyboardType="number-pad" />
+            <Text style={styles.label}>Planned start (24-hour HH:MM)</Text>
+            <TextInput value={plannedStart} onChangeText={setPlannedStart} placeholder="e.g. 16:00" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={5} />
+            <Text style={styles.label}>Planned end (24-hour HH:MM)</Text>
+            <TextInput value={plannedEnd} onChangeText={setPlannedEnd} placeholder="e.g. 17:00" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={5} />
             <Text style={styles.label}>Due date</Text>
             <TextInput value={dueDate} onChangeText={setDueDate} placeholder="YYYY-MM-DD (optional)" placeholderTextColor={colors.textMuted} style={styles.input} keyboardType="numbers-and-punctuation" maxLength={10} />
           </ScrollView>
           <View style={styles.footer}>
             <Button title={saving ? 'Saving…' : formTask ? 'Save changes' : 'Create task'} onPress={() => void saveTask()} disabled={saving || !title.trim()} />
             <Button title="Cancel" variant="secondary" onPress={() => setFormOpen(false)} disabled={saving} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={recurrenceOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setRecurrenceOpen(false)}>
+        <View style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={typography.heading}>New recurring task</Text>
+            <Pressable onPress={() => setRecurrenceOpen(false)} accessibilityRole="button" accessibilityLabel="Close recurring task form">
+              <Text style={styles.close}>Close</Text>
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Text style={styles.label}>Task title *</Text>
+            <TextInput value={recurrenceTitle} onChangeText={setRecurrenceTitle} placeholder="e.g. Take out trash" placeholderTextColor={colors.textMuted} style={styles.input} maxLength={120} />
+            <Text style={styles.label}>Details</Text>
+            <TextInput value={recurrenceDescription} onChangeText={setRecurrenceDescription} placeholder="Optional instructions" placeholderTextColor={colors.textMuted} style={[styles.input, styles.multiline]} multiline textAlignVertical="top" />
+            <Text style={styles.label}>Repeat</Text>
+            <View style={styles.choiceWrap}>
+              {RECURRENCE_FREQUENCIES.map((value) => (
+                <Pressable key={value} onPress={() => setRecurrenceFrequency(value)} style={[styles.choice, recurrenceFrequency === value && styles.choiceSelected]}>
+                  <Text style={[styles.choiceText, recurrenceFrequency === value && styles.choiceTextSelected]}>{value === 'BiWeekly' ? 'Every 2 weeks' : value}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>Every how many periods?</Text>
+            <TextInput value={recurrenceInterval} onChangeText={setRecurrenceInterval} keyboardType="number-pad" placeholder="1" placeholderTextColor={colors.textMuted} style={styles.input} />
+            {recurrenceFrequency === 'Weekly' ? (
+              <>
+                <Text style={styles.label}>Day of week</Text>
+                <View style={styles.choiceWrap}>
+                  {DAYS.map((day, index) => (
+                    <Pressable key={day} onPress={() => setRecurrenceDay(String(index))} style={[styles.choice, recurrenceDay === String(index) && styles.choiceSelected]}>
+                      <Text style={[styles.choiceText, recurrenceDay === String(index) && styles.choiceTextSelected]}>{day}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
+            <Text style={styles.label}>Assign to</Text>
+            <View style={styles.choiceWrap}>
+              <Pressable onPress={() => setRecurrenceAssignee('')} style={[styles.choice, !recurrenceAssignee && styles.choiceSelected]}>
+                <Text style={[styles.choiceText, !recurrenceAssignee && styles.choiceTextSelected]}>Unassigned</Text>
+              </Pressable>
+              {activeMembers.map((member) => (
+                <Pressable key={member.id} onPress={() => setRecurrenceAssignee(member.id)} style={[styles.choice, recurrenceAssignee === member.id && styles.choiceSelected]}>
+                  <Text style={[styles.choiceText, recurrenceAssignee === member.id && styles.choiceTextSelected]}>{member.displayName}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>Category</Text>
+            <TextInput value={recurrenceCategory} onChangeText={setRecurrenceCategory} placeholder="Optional category" placeholderTextColor={colors.textMuted} style={styles.input} />
+            <Text style={styles.helper}>The first occurrence will be created immediately. Later occurrences are generated as each task is completed or skipped.</Text>
+          </ScrollView>
+          <View style={styles.footer}>
+            <Button title={recurrenceSaving ? 'Creating…' : 'Create schedule'} onPress={() => void saveRecurrence()} disabled={recurrenceSaving || !recurrenceTitle.trim()} />
+            <Button title="Cancel" variant="secondary" onPress={() => setRecurrenceOpen(false)} disabled={recurrenceSaving} />
           </View>
         </View>
       </Modal>
@@ -453,6 +678,9 @@ const styles = StyleSheet.create({
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.sm },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   headerText: { flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  recurrenceCard: { gap: spacing.sm, marginBottom: spacing.sm },
+  recurrenceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border },
   subtitle: { ...typography.caption, marginTop: spacing.xs },
   filters: { gap: spacing.sm, paddingVertical: spacing.sm },
   filter: { borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface },
