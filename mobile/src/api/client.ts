@@ -449,6 +449,28 @@ export type NotificationDto = {
   createdAtUtc: string;
 };
 
+export type OutcomesDto = {
+  tasksCompletedLast7Days: number;
+  tasksCompletedLast30Days: number;
+  requestsApprovedLast7Days: number;
+  requestsDeniedLast7Days: number;
+  requestsApprovedLast30Days: number;
+  requestsDeniedLast30Days: number;
+  shoppingItemsPurchasedLast7Days: number;
+  avgTaskCompletionMinutes?: number | null;
+  approvalRateLast7Days?: number | null;
+  openTasks: number;
+  pendingRequests: number;
+  queuedShoppingItems: number;
+  weeklyTasksCompleted: number[];
+  weeklyRequestsApproved: number[];
+  weeklyShoppingPurchased: number[];
+};
+
+export const outcomesApi = {
+  get: () => api<OutcomesDto>('/api/outcomes'),
+};
+
 export const pulseApi = { get: () => api<PulseDto>('/api/pulse') };
 export const tasksApi = {
   mine: (status?: string) => api<TaskDto[]>(`/api/tasks/mine${status ? `?status=${status}` : ''}`),

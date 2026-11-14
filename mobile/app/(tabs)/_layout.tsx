@@ -73,6 +73,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="meals" options={{ href: null, title: 'Meals' }} />
         <Tabs.Screen name="chat" options={{ href: null, title: 'Chat' }} />
         <Tabs.Screen name="settings" options={{ href: null, title: 'Settings' }} />
+        <Tabs.Screen name="outcomes" options={{ href: null, title: 'Family outcomes' }} />
       </Tabs>
     </View>
   );
