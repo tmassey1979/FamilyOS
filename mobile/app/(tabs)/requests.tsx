@@ -18,6 +18,7 @@ import {
   type RequestDto,
   type RequestHistoryDto,
   type RequestTypeDto,
+  type ExecutionPlanDto,
 } from '../../src/api/client';
 import { colors, spacing, typography } from '../../src/theme';
 import { withObserveScreen } from '../../src/analytics/withObserveScreen';
@@ -54,6 +55,10 @@ function RequestsScreen() {
   const [trailFor, setTrailFor] = useState<RequestDto | null>(null);
   const [trail, setTrail] = useState<RequestHistoryDto[]>([]);
   const [conditionsByRequest, setConditionsByRequest] = useState<Record<string, ConditionDto[]>>({});
+  const [planFor, setPlanFor] = useState<RequestDto | null>(null);
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlanDto | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planSaving, setPlanSaving] = useState(false);
 
   const [composeFor, setComposeFor] = useState<RequestTypeDto | null>(null);
   const [composeDraft, setComposeDraft] = useState<RequestDto | null>(null);
@@ -203,6 +208,55 @@ function RequestsScreen() {
     }
   };
 
+  const openExecutionPlan = async (request: RequestDto) => {
+    setPlanFor(request);
+    setExecutionPlan(null);
+    setPlanLoading(true);
+    setError(null);
+    try {
+      const plan = await requestsApi.generatePlan(request.id);
+      setExecutionPlan(plan);
+    } catch (e: unknown) {
+      setPlanFor(null);
+      setError((e as { error?: string })?.error ?? 'Unable to generate execution plan');
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const togglePlanItem = (itemId: string) => {
+    setExecutionPlan((current) => current ? ({
+      ...current,
+      items: current.items.map((item) =>
+        item.id === itemId ? { ...item, isSelected: !item.isSelected } : item,
+      ),
+    }) : current);
+  };
+
+  const commitExecutionPlan = async () => {
+    if (!executionPlan) return;
+    const selectedCount = executionPlan.items.filter((item) => item.isSelected).length;
+    if (selectedCount === 0) {
+      setError('Select at least one action before committing the plan.');
+      return;
+    }
+    setPlanSaving(true);
+    setError(null);
+    try {
+      await requestsApi.commitPlan(
+        executionPlan.id,
+        executionPlan.items.filter((item) => !item.isSelected).map((item) => item.id),
+      );
+      setPlanFor(null);
+      setExecutionPlan(null);
+      await load();
+    } catch (e: unknown) {
+      setError((e as { error?: string })?.error ?? 'Unable to commit execution plan');
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
   const list = tab === 'mine' ? mine : queue;
 
   const renderCard = (item: RequestDto) => {
@@ -331,7 +385,7 @@ function RequestsScreen() {
           key="plan"
           title="Gen plan"
           variant="secondary"
-          onPress={() => void run(item.id, () => requestsApi.generatePlan(item.id))}
+          onPress={() => void openExecutionPlan(item)}
         />,
       );
     }
@@ -592,6 +646,46 @@ function RequestsScreen() {
         </View>
       </Modal>
 
+      <Modal visible={!!planFor} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.heading}>Review execution plan</Text>
+            <Text style={typography.caption}>{planFor?.title}</Text>
+            {planLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <>
+                <Text style={typography.caption}>Choose which actions should be created. At least one must remain selected.</Text>
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {(executionPlan?.items ?? []).map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => togglePlanItem(item.id)}
+                      style={[styles.planItem, !item.isSelected && styles.planItemDeselected]}
+                    >
+                      <Text style={typography.body}>
+                        {item.isSelected ? '☑' : '☐'}  {item.title}
+                      </Text>
+                      <Text style={typography.caption}>{item.type}</Text>
+                    </Pressable>
+                  ))}
+                  {executionPlan?.items.length === 0 ? (
+                    <Text style={typography.caption}>This plan has no actions to commit.</Text>
+                  ) : null}
+                </ScrollView>
+                <View style={styles.modalActions}>
+                  <Button title="Cancel" variant="secondary" onPress={() => { setPlanFor(null); setExecutionPlan(null); }} />
+                  <Button
+                    title={planSaving ? 'Committing…' : 'Commit selected'}
+                    onPress={() => void commitExecutionPlan()}
+                  />
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={!!trailFor} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -646,6 +740,8 @@ const styles = StyleSheet.create({
   multilineInput: { minHeight: 88, textAlignVertical: 'top' },
   choice: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
   choiceActive: { borderColor: colors.primary, backgroundColor: colors.surface },
+  planItem: { padding: spacing.sm, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, marginBottom: spacing.xs },
+  planItemDeselected: { opacity: 0.55, borderColor: colors.border },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 });
 
