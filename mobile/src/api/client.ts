@@ -531,8 +531,12 @@ export const familyApi = {
 };
 export const calendarApi = {
   upcoming: (days = 14) => api<CalendarEventDto[]>(`/api/calendar/upcoming?days=${days}`),
+  range: (from: string, to: string) =>
+    api<CalendarEventDto[]>(`/api/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   create: (body: Record<string, unknown>) =>
     api<CalendarEventDto>('/api/calendar', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Record<string, unknown>) =>
+    api<CalendarEventDto>(`/api/calendar/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   cancel: (id: string) => api<void>(`/api/calendar/${id}/cancel`, { method: 'POST' }),
 };
 export const conditionsApi = {

@@ -11,10 +11,12 @@ function CalendarScreen() {
   const [events, setEvents] = useState<CalendarEventDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEventDto | null>(null);
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
-  const [hoursFromNow, setHoursFromNow] = useState('2');
+  const [startLocal, setStartLocal] = useState('');
+  const [endLocal, setEndLocal] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -45,26 +47,81 @@ function CalendarScreen() {
     });
   };
 
-  const createEvent = async () => {
-    if (!title.trim()) return;
+  const toLocalInput = (value: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  };
+
+  const parseLocalInput = (value: string): string | null => {
+    const match = /^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})$/.exec(value.trim());
+    if (!match) return null;
+    const [, year, month, day, hour, minute] = match;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+    if (
+      parsed.getFullYear() !== Number(year) ||
+      parsed.getMonth() !== Number(month) - 1 ||
+      parsed.getDate() !== Number(day) ||
+      parsed.getHours() !== Number(hour) ||
+      parsed.getMinutes() !== Number(minute)
+    ) return null;
+    return parsed.toISOString();
+  };
+
+  const openCreate = () => {
+    const start = new Date(Date.now() + 2 * 3600_000);
+    const end = new Date(start.getTime() + 3600_000);
+    setEditingEvent(null);
+    setTitle('');
+    setLocation('');
+    setStartLocal(toLocalInput(start));
+    setEndLocal(toLocalInput(end));
+    setError(null);
+    setEditorOpen(true);
+  };
+
+  const openEdit = (event: CalendarEventDto) => {
+    setEditingEvent(event);
+    setTitle(event.title);
+    setLocation(event.location ?? '');
+    setStartLocal(toLocalInput(new Date(event.startUtc)));
+    setEndLocal(event.endUtc ? toLocalInput(new Date(event.endUtc)) : '');
+    setError(null);
+    setEditorOpen(true);
+  };
+
+  const saveEvent = async () => {
+    if (!title.trim()) {
+      setError('Enter an event title.');
+      return;
+    }
+    const startUtc = parseLocalInput(startLocal);
+    const endUtc = parseLocalInput(endLocal);
+    if (!startUtc || !endUtc) {
+      setError('Enter valid local dates and times using YYYY-MM-DD HH:MM.');
+      return;
+    }
+    if (new Date(endUtc).getTime() <= new Date(startUtc).getTime()) {
+      setError('The event end must be after its start.');
+      return;
+    }
+
     setSaving(true);
+    setError(null);
     try {
-      const hrs = Math.max(0, Number(hoursFromNow) || 2);
-      const start = new Date(Date.now() + hrs * 3600_000);
-      const end = new Date(start.getTime() + 3600_000);
-      await calendarApi.create({
+      const body = {
         title: title.trim(),
-        startUtc: start.toISOString(),
-        endUtc: end.toISOString(),
+        startUtc,
+        endUtc,
         allDay: false,
-        location: location.trim() || undefined,
-      });
-      setTitle('');
-      setLocation('');
-      setCreateOpen(false);
+        location: location.trim() || null,
+      };
+      if (editingEvent) await calendarApi.update(editingEvent.id, body);
+      else await calendarApi.create(body);
+      setEditorOpen(false);
+      setEditingEvent(null);
       await load();
     } catch (e: unknown) {
-      setError((e as { error?: string })?.error ?? 'Create failed');
+      setError((e as { error?: string })?.error ?? (editingEvent ? 'Update failed' : 'Create failed'));
     } finally {
       setSaving(false);
     }
@@ -84,7 +141,10 @@ function CalendarScreen() {
       <Text style={typography.heading}>{formatWhen(e.startUtc, e.allDay)} · {e.title}</Text>
       {e.location ? <Text style={typography.caption}>{e.location}</Text> : null}
       {e.linkedRequestId ? <Text style={typography.caption}>Linked request</Text> : null}
-      <Button title="Cancel event" variant="secondary" onPress={() => void cancelEvent(e.id)} />
+      <View style={styles.eventActions}>
+        <Button title="Edit" variant="secondary" onPress={() => openEdit(e)} />
+        <Button title="Cancel event" variant="secondary" onPress={() => void cancelEvent(e.id)} />
+      </View>
     </Card>
   );
 
@@ -96,7 +156,7 @@ function CalendarScreen() {
     >
       <View style={styles.toolbar}>
         <SectionTitle>Calendar</SectionTitle>
-        <Button title="New event" onPress={() => setCreateOpen(true)} />
+        <Button title="New event" onPress={openCreate} />
       </View>
       {error ? <Text style={styles.hint}>{error}</Text> : null}
       {refreshing && events.length === 0 ? <ActivityIndicator color={colors.primary} /> : null}
@@ -109,23 +169,33 @@ function CalendarScreen() {
         <EmptyState title="No upcoming events" subtitle="Next 14 days are clear — or commit a Ride plan." />
       ) : upcoming.map(renderEvent)}
 
-      <Modal visible={createOpen} animationType="slide" transparent>
+      <Modal visible={editorOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={typography.heading}>New event</Text>
+            <Text style={typography.heading}>{editingEvent ? 'Edit event' : 'New event'}</Text>
             <TextInput style={styles.input} placeholder="Title" placeholderTextColor={colors.textMuted} value={title} onChangeText={setTitle} />
             <TextInput style={styles.input} placeholder="Location (optional)" placeholderTextColor={colors.textMuted} value={location} onChangeText={setLocation} />
+            <Text style={typography.caption}>Times use your device's local time.</Text>
             <TextInput
               style={styles.input}
-              placeholder="Hours from now"
+              placeholder="Start · YYYY-MM-DD HH:MM"
               placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
-              value={hoursFromNow}
-              onChangeText={setHoursFromNow}
+              value={startLocal}
+              onChangeText={setStartLocal}
+              autoCapitalize="none"
             />
+            <TextInput
+              style={styles.input}
+              placeholder="End · YYYY-MM-DD HH:MM"
+              placeholderTextColor={colors.textMuted}
+              value={endLocal}
+              onChangeText={setEndLocal}
+              autoCapitalize="none"
+            />
+            {error ? <Text style={styles.hint}>{error}</Text> : null}
             <View style={styles.modalActions}>
-              <Button title="Cancel" variant="secondary" onPress={() => setCreateOpen(false)} />
-              <Button title={saving ? 'Saving…' : 'Create'} onPress={() => void createEvent()} />
+              <Button title="Cancel" variant="secondary" onPress={() => { setEditorOpen(false); setEditingEvent(null); }} />
+              <Button title={saving ? 'Saving…' : editingEvent ? 'Save changes' : 'Create'} onPress={() => void saveEvent()} disabled={saving} />
             </View>
           </View>
         </View>
@@ -139,6 +209,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
   toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   card: { marginBottom: spacing.md, gap: spacing.xs },
+  eventActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   hint: { ...typography.caption, marginBottom: spacing.md, color: colors.danger },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: {
